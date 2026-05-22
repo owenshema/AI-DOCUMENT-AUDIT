@@ -1,0 +1,215 @@
+╔════════════════════════════════════════════════════════════════════╗
+║                         QUICK START GUIDE                          ║
+║        AI-Powered Document Audit System - Full Stack Setup         ║
+╚════════════════════════════════════════════════════════════════════╝
+
+⏱️  ESTIMATED TIME: 10-15 minutes
+
+┌─ REQUIREMENTS CHECK ─────────────────────────────────────────────┐
+│ ✓ Node.js v16+ (check: node --version)                          │
+│ ✓ npm v7+ (check: npm --version)                                │
+│ ✓ PostgreSQL 12+ running (local or cloud)                       │
+│ ✓ Git (optional)                                                │
+└──────────────────────────────────────────────────────────────────┘
+
+┌─ STEP 1: BACKEND SETUP (2-3 minutes) ────────────────────────────┐
+│                                                                  │
+│ 1.1) Open Terminal/PowerShell in backend directory              │
+│      cd backend                                                  │
+│                                                                  │
+│ 1.2) Install dependencies                                       │
+│      npm install                                                │
+│                                                                  │
+│ 1.3) Create database (if not exists)                            │
+│      createdb AIDOCUMENT_DB                                     │
+│      (Windows: psql -U postgres -c "CREATE DATABASE AIDOCUMENT_DB")  │
+│                                                                  │
+│ 1.4) Start backend with auto-reload                             │
+│      npm run dev                                                │
+│                                                                  │
+│      Expected output:                                           │
+│      ╔════════════════════════════════════════════════════════╗ │
+│      ║  AI-Powered Document Audit System  v1.0.0             ║ │
+│      ║  Running on http://localhost:4000                     ║ │
+│      ╚════════════════════════════════════════════════════════╝ │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+┌─ STEP 2: FRONTEND SETUP (2-3 minutes) ───────────────────────────┐
+│                                                                  │
+│ 2.1) Open NEW Terminal/PowerShell in frontend directory         │
+│      cd frontend                                                │
+│                                                                  │
+│ 2.2) Install dependencies                                       │
+│      npm install                                                │
+│                                                                  │
+│ 2.3) Create environment file                                    │
+│      cp .env.example .env.local                                │
+│      (Windows: copy .env.example .env.local)                   │
+│                                                                  │
+│ 2.4) Start development server                                   │
+│      npm start                                                  │
+│                                                                  │
+│      Browser should auto-open to http://localhost:3000         │
+│      (If not, manually navigate to it)                         │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+┌─ STEP 3: VERIFY SETUP (1-2 minutes) ─────────────────────────────┐
+│                                                                  │
+│ 3.1) Check Backend Status                                       │
+│      http://localhost:4000/api/status                          │
+│      Should return JSON with status: "ok"                      │
+│                                                                  │
+│ 3.2) Check Frontend                                             │
+│      http://localhost:3000                                     │
+│      Should show landing page with "Get Started" button        │
+│                                                                  │
+│ 3.3) Test API Connection                                        │
+│      Open browser Console (F12) and check for errors           │
+│      Should show no CORS errors                                │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+┌─ STEP 4: TEST LOGIN (2-3 minutes) ───────────────────────────────┐
+│                                                                  │
+│ 4.1) Go to http://localhost:3000/login                         │
+│                                                                  │
+│ 4.2) Choose a demo account:                                     │
+│                                                                  │
+│      ADMINISTRATOR                                              │
+│      Email: admin@example.com                                   │
+│      Pass:  password123                                         │
+│      → Full system access                                       │
+│                                                                  │
+│      AUDITOR                                                    │
+│      Email: auditor@example.com                                 │
+│      Pass:  password123                                         │
+│      → Compliance & audit access                               │
+│                                                                  │
+│      DOCUMENT MANAGER                                           │
+│      Email: manager@example.com                                 │
+│      Pass:  password123                                         │
+│      → Document upload & management                            │
+│                                                                  │
+│      VIEWER                                                     │
+│      Email: viewer@example.com                                  │
+│      Pass:  password123                                         │
+│      → Read-only access                                        │
+│                                                                  │
+│ 4.3) After login, should see role-based dashboard              │
+│                                                                  │
+│ 4.4) Test dark mode: Click sun/moon icon in top-right          │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+┌─ STEP 5: EXPLORE FEATURES ───────────────────────────────────────┐
+│                                                                  │
+│ ✓ Navigation between pages                                      │
+│ ✓ Role-based menu items (admin sees extra options)             │
+│ ✓ Dark/Light mode toggle                                       │
+│ ✓ User profile in header                                       │
+│ ✓ Logout functionality                                         │
+│ ✓ Responsive design (resize window or test on mobile)         │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+┌─ AUTOMATED STARTUP (Optional) ───────────────────────────────────┐
+│                                                                  │
+│ Instead of manual steps, use provided scripts:                  │
+│                                                                  │
+│ Windows:                                                        │
+│ → Double-click: start-system.bat                               │
+│   (Opens two windows: one for frontend, one for backend)       │
+│                                                                  │
+│ Linux/Mac:                                                      │
+│ → Run: chmod +x start-system.sh && ./start-system.sh          │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+┌─ TROUBLESHOOTING ────────────────────────────────────────────────┐
+│                                                                  │
+│ ❌ "Cannot find module" errors                                  │
+│    → Solution: Delete node_modules, run npm install again      │
+│                                                                  │
+│ ❌ Port 3000/4000 already in use                                │
+│    → Solution: Kill process or use different port:            │
+│       Frontend: PORT=3001 npm start                             │
+│       Backend:  PORT=4001 npm run dev                           │
+│                                                                  │
+│ ❌ "Database connection failed"                                 │
+│    → Solution: Check PostgreSQL is running, DB exists          │
+│       Windows: psql -U postgres                                │
+│       Linux: sudo service postgresql status                    │
+│                                                                  │
+│ ❌ "Cannot GET /api/status"                                     │
+│    → Solution: Backend not running, check port 4000            │
+│                                                                  │
+│ ❌ Login fails with "Network error"                             │
+│    → Solution: Check .env.local has correct API URL            │
+│       Should be: http://localhost:4000/api                     │
+│                                                                  │
+│ ❌ Blank page or styles not showing                             │
+│    → Solution: Hard refresh browser (Ctrl+Shift+R)            │
+│       Clear browser cache                                      │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+┌─ WHAT'S NEXT? ───────────────────────────────────────────────────┐
+│                                                                  │
+│ 📖 Read these documents for deeper understanding:               │
+│    • SETUP_GUIDE.md - Detailed setup instructions              │
+│    • API_DOCUMENTATION.md - API endpoint reference             │
+│    • FRONTEND_IMPLEMENTATION.md - UI/UX details               │
+│    • INTEGRATION_GUIDE.md - System architecture               │
+│    • ARCHITECTURE_IMPLEMENTATION.md - Technical design        │
+│                                                                  │
+│ 🚀 Next Steps:                                                  │
+│    1. Test all role permissions                                │
+│    2. Try uploading a document (manager role)                  │
+│    3. Run a compliance check (auditor role)                    │
+│    4. View admin panel (admin role)                            │
+│    5. Explore the database schema                              │
+│                                                                  │
+│ 🔧 Development Tips:                                            │
+│    • Backend auto-reloads on file changes (nodemon)           │
+│    • Frontend auto-reloads on file changes (React)            │
+│    • Use React DevTools browser extension                      │
+│    • Use network tab in DevTools to monitor API calls         │
+│    • Check browser console for errors/warnings                │
+│                                                                  │
+│ 📊 Monitoring:                                                  │
+│    • Backend logs in terminal                                  │
+│    • Frontend logs in browser console (F12)                    │
+│    • Database queries in backend terminal                      │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+┌─ SYSTEM ARCHITECTURE ────────────────────────────────────────────┐
+│                                                                  │
+│  React Frontend (Port 3000)                                     │
+│       ↓ HTTP with JWT Authorization                            │
+│  Express Backend (Port 4000)                                    │
+│       ↓ Sequelize ORM                                          │
+│  PostgreSQL Database                                            │
+│                                                                  │
+│  Key Features:                                                  │
+│  • JWT Authentication (24-hour tokens)                         │
+│  • Role-Based Access Control (4 roles)                         │
+│  • Dark Mode Support                                           │
+│  • Responsive Design                                           │
+│  • Audit Logging                                               │
+│  • 13 Active Modules                                           │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+╔════════════════════════════════════════════════════════════════════╗
+║                    🎉 You're All Set! 🎉                           ║
+║                                                                    ║
+║  Your AI Document Audit System is now running at:                 ║
+║  Frontend:  http://localhost:3000                                 ║
+║  Backend:   http://localhost:4000                                 ║
+║  Database:  PostgreSQL (AIDOCUMENT_DB)                            ║
+║                                                                    ║
+║  Start exploring and testing the system!                          ║
+╚════════════════════════════════════════════════════════════════════╝
