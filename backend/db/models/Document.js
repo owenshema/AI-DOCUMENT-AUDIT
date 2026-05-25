@@ -118,6 +118,22 @@ module.exports = (sequelize) => {
       allowNull: true,
       defaultValue: {}
     },
+    archiveReason: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    legalHoldActive: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    legalHoldReason: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    legalHoldEndDate: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
     deletedAt: {
       type: DataTypes.DATE,
       allowNull: true

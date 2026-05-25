@@ -99,17 +99,41 @@ const ScoreArc = ({ score, dark }) => {
   );
 };
 
+function formatFinding(item) {
+  if (!item) return { title: '', body: '' };
+  if (typeof item === 'string') return { title: item, body: '' };
+  return {
+    title: item.title || item.code || 'Finding',
+    body: [item.summary, item.detail, item.remediation ? `Action: ${item.remediation}` : ''].filter(Boolean).join(' '),
+    code: item.code,
+    severity: item.severity,
+  };
+}
+
 const FindingCard = ({ label, items = [], color, dot, dark }) => (
   <div className={`rounded-xl border p-3 ${dark ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
     <p className={`text-[10px] font-semibold mb-2 ${color}`}>{label} ({items.length})</p>
     {items.length > 0 ? (
-      <ul className="space-y-1.5">
-        {items.slice(0, 4).map((item, i) => (
-          <li key={i} className={`flex items-start gap-1.5 text-[11px] leading-snug ${dark ? 'text-slate-300' : 'text-gray-600'}`}>
-            <span className={`mt-1 h-1.5 w-1.5 rounded-full flex-shrink-0 ${dot}`} />
-            {item}
-          </li>
-        ))}
+      <ul className="space-y-2">
+        {items.slice(0, 4).map((item, i) => {
+          const f = formatFinding(item);
+          return (
+            <li key={i} className={`text-[11px] leading-snug ${dark ? 'text-slate-300' : 'text-gray-600'}`}>
+              <div className="flex items-start gap-1.5">
+                <span className={`mt-1 h-1.5 w-1.5 rounded-full flex-shrink-0 ${dot}`} />
+                <div>
+                  {f.code && (
+                    <span className={`mr-1 rounded px-1 py-0.5 text-[9px] font-bold ${dark ? 'bg-white/10 text-slate-400' : 'bg-gray-200 text-gray-500'}`}>
+                      {f.code}
+                    </span>
+                  )}
+                  <span className="font-semibold">{f.title}</span>
+                  {f.body && <p className={`mt-0.5 ${dark ? 'text-slate-400' : 'text-gray-500'}`}>{f.body}</p>}
+                </div>
+              </div>
+            </li>
+          );
+        })}
         {items.length > 4 && <li className={`text-[10px] ${dark ? 'text-slate-600' : 'text-gray-400'}`}>+{items.length - 4} more</li>}
       </ul>
     ) : (
@@ -208,9 +232,8 @@ export default function AIAnalysisPage() {
       <div className={`mb-5 flex items-center gap-3 rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-indigo-500/20 bg-indigo-500/5' : 'border-indigo-100 bg-indigo-50'}`}>
         <Bot className="h-5 w-5 text-indigo-400 flex-shrink-0" />
         <p className={`text-xs ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-          <span className={`font-semibold ${text}`}>Lightweight AI Engine</span>
-          {' — '}Upload a document and the AI will audit it for compliance, missing fields, violations, and risk.
-          No model training · No GPU required.
+          <span className={`font-semibold ${text}`}>SIFCO ML Training Engine</span>
+          {' — '}Trained on your six SIFCO reference PDFs. Validation uses text inside the document only — you can rename the file; the audit does not depend on the file name.
         </p>
       </div>
 
@@ -219,7 +242,7 @@ export default function AIAnalysisPage() {
         <div className={`rounded-2xl border p-5 flex flex-col gap-4 ${card}`}>
           <div>
             <h2 className={`text-sm font-semibold mb-1 ${text}`}>Upload Document for Audit</h2>
-            <p className={`text-xs ${sub}`}>Upload a PDF, DOCX, or XLSX — the AI will extract content and run a full compliance audit.</p>
+            <p className={`text-xs ${sub}`}>Upload a PDF — audited against trained company papers only (structure & purpose, not exact numbers).</p>
           </div>
 
           {/* Drop zone */}
@@ -342,32 +365,85 @@ export default function AIAnalysisPage() {
               )}
 
               {/* Score */}
-              <div className={`flex items-center gap-5 rounded-xl border p-4 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
-                <ScoreArc score={score} dark={isDarkMode} />
-                <div>
-                  <p className={`text-xs mb-1 ${sub}`}>Compliance Score</p>
-                  <p className={`text-lg font-bold ${score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : 'text-red-400'}`}>
-                    {score >= 80 ? 'Compliant' : score >= 60 ? 'Partially Compliant' : 'Non-Compliant'}
-                  </p>
-                  <div className={`flex flex-wrap gap-3 mt-1 text-xs ${sub}`}>
-                    <span>Risk: <span className={`font-medium capitalize ${text}`}>{result.risk_level || result.riskLevel || 'low'}</span></span>
-                    <span>Sentiment: <span className={`font-medium capitalize ${text}`}>{result.sentiment || 'neutral'}</span></span>
+              {(() => {
+                const aiGenerated = Math.round(result?.ai_generated_percentage ?? 0);
+                return (
+                  <div className={`grid grid-cols-2 gap-4 rounded-xl border p-4 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
+                    <div className="flex items-center gap-3">
+                      <ScoreArc score={score} dark={isDarkMode} />
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${sub}`}>Compliance Score</p>
+                        <p className={`text-sm font-bold ${score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : 'text-red-400'}`}>
+                          {score >= 80 ? 'Compliant' : score >= 60 ? 'Partial' : 'Non-Compliant'}
+                        </p>
+                        <p className={`text-[10px] mt-0.5 ${sub}`}>Risk: <span className={`font-semibold capitalize ${text}`}>{result.risk_level || result.riskLevel || 'low'}</span></p>
+                      </div>
+                    </div>
+                    <div className={`flex items-center gap-3 border-l pl-3 ${isDarkMode ? 'border-white/5' : 'border-gray-200'}`}>
+                      <ScoreArc score={aiGenerated} dark={isDarkMode} />
+                      <div>
+                        <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${sub}`}>AI Written %</p>
+                        <p className={`text-sm font-bold ${aiGenerated > 25 ? 'text-red-400' : 'text-emerald-400'}`}>
+                          {aiGenerated > 25 ? 'Over 25% Limit' : 'Within 25% Limit'}
+                        </p>
+                        <p className={`text-[10px] mt-0.5 ${sub}`}>Sentiment: <span className={`font-semibold capitalize ${text}`}>{result.sentiment || 'neutral'}</span></p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
-              {result.summary && (
-                <div className={`rounded-xl border px-3 py-2.5 text-xs leading-relaxed ${isDarkMode ? 'border-white/8 bg-white/3 text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-600'}`}>
-                  {result.summary}
+              {(result.decision?.title || result.summary) && (
+                <div className={`rounded-xl border px-3 py-3 text-xs leading-relaxed ${
+                  result.decision?.status === 'approved' || result.organization_match
+                    ? (isDarkMode ? 'border-emerald-500/25 bg-emerald-500/8 text-emerald-100' : 'border-emerald-200 bg-emerald-50 text-emerald-900')
+                    : (isDarkMode ? 'border-red-500/25 bg-red-500/8 text-red-100' : 'border-red-200 bg-red-50 text-red-900')
+                }`}>
+                  <p className="font-semibold text-sm mb-1">
+                    {result.decision?.title || (result.organization_match ? 'Audit approved' : 'Audit rejected')}
+                  </p>
+                  <p>{result.decision?.reason || result.summary}</p>
+                  {result.decision?.detail && (
+                    <p className={`mt-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>{result.decision.detail}</p>
+                  )}
+                  {result.decision?.nextSteps?.length > 0 && (
+                    <ul className={`mt-2 list-disc pl-4 space-y-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>
+                      {result.decision.nextSteps.map((step, i) => <li key={i}>{step}</li>)}
+                    </ul>
+                  )}
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <FindingCard label="Missing Fields"  items={result.missing_fields  || []} color="text-amber-400"  dot="bg-amber-400"  dark={isDarkMode} />
-                <FindingCard label="Violations"       items={result.violations      || []} color="text-red-400"    dot="bg-red-400"    dark={isDarkMode} />
-                <FindingCard label="Inconsistencies"  items={result.inconsistencies || []} color="text-orange-400" dot="bg-orange-400" dark={isDarkMode} />
-                <FindingCard label="Recommendations"  items={result.recommendations || []} color="text-indigo-400" dot="bg-indigo-400" dark={isDarkMode} />
-              </div>
+              {(result.ml_training?.best_match || result.organization_training?.ml_training?.best_match || result.organization_category) && (
+                <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-emerald-200 bg-emerald-50'}`}>
+                  <p className="text-[10px] font-semibold text-emerald-500 mb-1">ML training match</p>
+                  {(() => {
+                    const ml = result.ml_training || result.organization_training?.ml_training;
+                    const bm = ml?.best_match;
+                    if (!bm) return (
+                      <p className={`text-xs font-medium ${text}`}>
+                        {result.organization_training?.paper_label || result.organization_category?.replace(/_/g, ' ')}
+                      </p>
+                    );
+                    return (
+                      <>
+                        <p className={`text-xs font-medium ${text}`}>{bm.label} — {bm.confidence_percent}% confidence</p>
+                        <p className={`text-[10px] mt-1 ${sub}`}>Reference: {bm.reference_pdf}</p>
+                        <p className={`text-[10px] mt-0.5 ${sub}`}>
+                          Similarity {bm.similarity_percent}% · Markers {bm.marker_match_percent}% ·
+                          {bm.signature_detected ? ' Signature found' : ' No signature text detected'}
+                        </p>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {(result.inconsistencies?.length > 0 && !result.organization_match) && (
+                <div className="grid grid-cols-1 gap-3">
+                  <FindingCard label="Why not accepted" items={result.inconsistencies || []} color="text-orange-400" dot="bg-orange-400" dark={isDarkMode} />
+                </div>
+              )}
 
               {result.fraud_flags?.length > 0 && (
                 <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3">
@@ -398,12 +474,9 @@ export default function AIAnalysisPage() {
                 </div>
               )}
 
-              {/* Policy rules checked */}
-              {result.policy_rules_checked && (
-                <p className="text-[10px] text-slate-600 text-right">
-                  {result.policy_rules_checked} supply chain policy rules checked · Engine: {result.engine}
-                </p>
-              )}
+              <p className={`text-[10px] text-right ${sub}`}>
+                Paper-audit engine · {result.engine || 'trained-only'} · Invoice # and billing may vary
+              </p>
 
               {/* ── Document Inspection Panel ── */}
               {result.document_inspection && (() => {

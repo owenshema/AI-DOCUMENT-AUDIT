@@ -44,6 +44,10 @@ module.exports = (sequelize) => {
     summary: {
       type: DataTypes.TEXT
     },
+    executiveSummary: {
+      type: DataTypes.TEXT,
+      field: 'executive_summary',
+    },
     riskSummary: {
       type: DataTypes.JSONB,
       defaultValue: {},

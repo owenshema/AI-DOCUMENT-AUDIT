@@ -15,6 +15,10 @@ module.exports = (sequelize) => {
       type: DataTypes.UUID,
       allowNull: true   // nullable — tasks can exist without a document
     },
+    workflowId: {
+      type: DataTypes.UUID,
+      allowNull: true
+    },
     title: {
       type: DataTypes.STRING(255),
       allowNull: false
@@ -58,8 +62,24 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(50),
       allowNull: true
     },
+    decision: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
     rejectionReason: {
       type: DataTypes.TEXT,
+      allowNull: true
+    },
+    category: {
+      type: DataTypes.STRING(100),
+      allowNull: true
+    },
+    createdBy: {
+      type: DataTypes.UUID,
+      allowNull: true
+    },
+    escalatedAt: {
+      type: DataTypes.DATE,
       allowNull: true
     }
   }, {

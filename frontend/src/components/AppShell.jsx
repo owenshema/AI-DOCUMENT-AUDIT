@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FolderOpen, Bot, FileBarChart2,
@@ -6,15 +6,17 @@ import {
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
-// ── Role-based nav config ─────────────────────────────────────────────────────
+// â”€â”€ Role-based nav config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // roles: null = all, array = restricted to those roles
 const ALL_NAV = [
-  { path: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard',      roles: null },
-  { path: '/documents',     icon: FolderOpen,      label: 'Document Hub',   roles: null },
-  { path: '/ai-analysis',   icon: Bot,             label: 'AI Analysis',    roles: ['administrator','auditor','document_manager'] },
-  { path: '/audit-reports', icon: FileBarChart2,   label: 'Audit Reports',  roles: ['administrator','auditor','document_manager'] },
-  { path: '/workflow',      icon: GitBranch,       label: 'Workflow',       roles: ['administrator','auditor','document_manager'] },
-  { path: '/users',         icon: Users,           label: 'Users & Auth',   roles: ['administrator'] },
+  { path: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard',     roles: null },
+  { path: '/documents',     icon: FolderOpen,      label: 'My Documents',  roles: ['viewer','document_manager'] },
+  { path: '/documents',     icon: FolderOpen,      label: 'Document Hub',  roles: ['administrator','auditor'] },
+  { path: '/ai-analysis',   icon: Bot,             label: 'AI Analysis',   roles: ['auditor'] },
+  { path: '/audit-reports', icon: FileBarChart2,   label: 'My Reports',    roles: ['viewer','document_manager'] },
+  { path: '/audit-reports', icon: FileBarChart2,   label: 'Audit Reports', roles: ['administrator','auditor'] },
+  { path: '/workflow',      icon: GitBranch,       label: 'Workflow',      roles: ['administrator','auditor'] },
+  { path: '/users',         icon: Users,           label: 'Users & Auth',  roles: ['administrator'] },
 ];
 
 // Role descriptions shown in sidebar
@@ -31,6 +33,7 @@ export default function AppShell({ children, title }) {
   const { pathname } = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropOpen, setDropOpen]     = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const role     = user?.role || 'viewer';
   const initials = (user?.fullName || 'U').split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
@@ -53,36 +56,44 @@ export default function AppShell({ children, title }) {
   const navIdle  = isDarkMode
     ? 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900';
-  const cardBg   = isDarkMode ? 'bg-[#111318] border-white/8'  : 'bg-white border-gray-200';
-
-  const SidebarContent = () => (
+  const SidebarContent = ({ collapsed = false }) => (
     <div className={`flex h-full flex-col border-r ${sidebar}`}>
       {/* Brand */}
-      <div className={`px-5 pt-5 pb-4 border-b ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
-        <div className="flex items-center gap-2.5">
-          <img src="/sifco/logo.png" alt="SIFCO" className="h-8 w-auto"
-            onError={e => { e.target.style.display='none'; }} />
-          <div>
-            <p className={`text-sm font-bold leading-none ${text}`}>DocAudit AI</p>
-            <p className={`text-[10px] mt-0.5 ${subtext}`}>SIFCO AE · Audit System</p>
+      <div className={`${collapsed ? 'px-3' : 'px-5'} pt-5 pb-4 border-b ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
+        {collapsed ? (
+          <div className="flex justify-center">
+            <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-sm font-bold ${isDarkMode ? 'bg-indigo-500' : 'bg-indigo-600'} text-white`}>
+              S
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-2.5">
+            <img src="/sifco/logo.png" alt="SIFCO" className="h-8 w-auto"
+              onError={e => { e.target.style.display='none'; }} />
+            <div>
+              <p className={`text-sm font-bold leading-none ${text}`}>DocAudit AI</p>
+              <p className={`text-[10px] mt-0.5 ${subtext}`}>SIFCO AE Â· Audit System</p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Role badge */}
-      <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-white/8' : 'border-gray-100'}`}>
-        <div className="flex items-center gap-2">
-          <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold ${isDarkMode ? 'bg-indigo-500' : 'bg-indigo-600'} text-white`}>
-            {initials}
-          </div>
-          <div className="min-w-0">
-            <p className={`text-xs font-semibold truncate ${text}`}>{user?.fullName || 'User'}</p>
-            <span className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold mt-0.5 ${badge.color}`}>
-              {badge.label}
-            </span>
+      {/* Role badge - hide when collapsed */}
+      {!collapsed && (
+        <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-white/8' : 'border-gray-100'}`}>
+          <div className="flex items-center gap-2">
+            <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold ${isDarkMode ? 'bg-indigo-500' : 'bg-indigo-600'} text-white`}>
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className={`text-xs font-semibold truncate ${text}`}>{user?.fullName || 'User'}</p>
+              <span className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold mt-0.5 ${badge.color}`}>
+                {badge.label}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
@@ -90,9 +101,10 @@ export default function AppShell({ children, title }) {
           const active = pathname === path;
           return (
             <Link key={path} to={path} onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all ${active ? navActive : navIdle}`}>
+              title={collapsed ? label : undefined}
+              className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-xl px-3 py-2.5 text-sm transition-all ${active ? navActive : navIdle}`}>
               <Icon className="h-4 w-4 flex-shrink-0" />
-              {label}
+              {!collapsed && label}
             </Link>
           );
         })}
@@ -101,13 +113,16 @@ export default function AppShell({ children, title }) {
       {/* Bottom */}
       <div className={`px-3 pb-4 pt-3 border-t space-y-1 ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
         <button onClick={toggleTheme}
-          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${isDarkMode ? 'text-slate-400 hover:bg-white/5 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}>
+          title={collapsed ? (isDarkMode ? 'Light mode' : 'Dark mode') : undefined}
+          className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-xl px-3 py-2 text-sm transition-colors ${isDarkMode ? 'text-slate-400 hover:bg-white/5 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}>
           {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          {isDarkMode ? 'Light mode' : 'Dark mode'}
+          {!collapsed && (isDarkMode ? 'Light mode' : 'Dark mode')}
         </button>
         <button onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors">
-          <LogOut className="h-4 w-4" /> Sign out
+          title={collapsed ? 'Sign out' : undefined}
+          className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-xl px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors`}>
+          <LogOut className="h-4 w-4" />
+          {!collapsed && 'Sign out'}
         </button>
       </div>
     </div>
@@ -116,8 +131,8 @@ export default function AppShell({ children, title }) {
   return (
     <div className={`flex h-screen ${bg} overflow-hidden`}>
       {/* Desktop sidebar */}
-      <aside className="hidden lg:block w-60 flex-shrink-0">
-        <SidebarContent />
+      <aside className={`hidden lg:block flex-shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
+        <SidebarContent collapsed={sidebarCollapsed} />
       </aside>
 
       {/* Mobile overlay */}
@@ -135,7 +150,14 @@ export default function AppShell({ children, title }) {
         {/* Topbar */}
         <header className={`flex items-center justify-between border-b px-5 py-3 ${topbar}`}>
           <div className="flex items-center gap-3">
-            <button className={`lg:hidden ${subtext} hover:${text}`} onClick={() => setMobileOpen(true)}>
+            <button className={`${subtext} hover:${text} transition-colors`} 
+              onClick={() => {
+                if (window.innerWidth < 1024) {
+                  setMobileOpen(true);
+                } else {
+                  setSidebarCollapsed(p => !p);
+                }
+              }}>
               <Menu className="h-5 w-5" />
             </button>
             <h1 className={`text-base font-semibold ${text}`}>{title || 'Dashboard'}</h1>

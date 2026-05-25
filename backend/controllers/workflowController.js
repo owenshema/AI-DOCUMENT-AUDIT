@@ -143,27 +143,143 @@ const startWorkflow = async (req, res) => {
 
 const getTaskQueue = async (req, res) => {
   try {
-    const { status = 'pending', limit = 20, page = 1 } = req.query;
-    const { Task, User, Workflow } = req.app.locals.models;
+    const { status, limit = 50, page = 1 } = req.query;
+    const { Task, User, Workflow, Document, DocumentAnalysis } = req.app.locals.models;
+    const { Op } = require('sequelize');
     const userId = req.user?.id;
+    const role = req.user?.role || 'viewer';
 
-    const where = { assignedTo: userId };
-    if (status) where.status = status;
+    const taskWhere = {};
+    if (!['administrator', 'auditor'].includes(role)) taskWhere.assignedTo = userId;
+    if (status && status !== 'all') taskWhere.status = status;
 
     const { count, rows } = await Task.findAndCountAll({
-      where,
+      where: taskWhere,
       include: [
         { model: Workflow, as: 'workflow', attributes: ['name', 'workflowType'] },
-        { model: User, as: 'assignee', attributes: ['fullName', 'email'] }
+        { model: User, as: 'assignee', attributes: ['id', 'fullName', 'email'] }
       ],
       limit: parseInt(limit),
       offset: (page - 1) * limit,
       order: [['dueDate', 'ASC']]
     });
 
+    const docWhere = {};
+    if (['viewer', 'document_manager'].includes(role)) {
+      docWhere[Op.or] = [
+        { uploadedBy: userId },
+        req.app.locals.sequelize.literal(`"metadata"->>'sharing' LIKE '%${userId}%'`)
+      ];
+    } else if (status && status !== 'all') {
+      docWhere.status = status;
+    }
+
+    const documents = await Document.findAll({
+      where: docWhere,
+      include: [{ model: User, as: 'uploader', attributes: ['id', 'fullName', 'email'] }],
+      order: [['updatedAt', 'DESC']],
+      limit: parseInt(limit),
+    });
+
+    const docIds = documents.map(doc => doc.id);
+    const analyses = docIds.length > 0 ? await DocumentAnalysis.findAll({
+      where: { documentId: { [Op.in]: docIds } },
+      order: [['completedAt', 'DESC'], ['updatedAt', 'DESC']],
+    }) : [];
+    const latestAnalysisByDocument = {};
+    analyses.forEach(analysis => {
+      if (!latestAnalysisByDocument[analysis.documentId]) {
+        latestAnalysisByDocument[analysis.documentId] = analysis;
+      }
+    });
+
+    const documentItems = documents.map(doc => {
+      const latestAnalysis = latestAnalysisByDocument[doc.id];
+      const analysisResults = latestAnalysis?.results || {};
+      const auditStatus = latestAnalysis?.status === 'completed' ? 'Audit completed' : null;
+      const uploaderName = doc.uploader?.fullName || doc.uploader?.email || (doc.uploadedBy ? `User ${String(doc.uploadedBy).slice(0, 8)}` : 'Unknown uploader');
+      const complianceScore = doc.metadata?.latestComplianceScore ?? analysisResults.compliance_score ?? null;
+      const aiGeneratedPercentage = doc.metadata?.latestAiGeneratedPercentage ?? analysisResults.ai_generated_percentage ?? null;
+      const riskLevel = analysisResults.risk_level || latestAnalysis?.riskFactors?.level || null;
+      const missingCount = Array.isArray(analysisResults.missing_fields) ? analysisResults.missing_fields.length : 0;
+      const violationCount = Array.isArray(analysisResults.violations) ? analysisResults.violations.length : 0;
+
+      return {
+        id: `document:${doc.id}`,
+        itemType: 'document',
+        documentId: doc.id,
+        analysisId: latestAnalysis?.id || null,
+        title: doc.title || doc.fileName,
+        description: latestAnalysis?.summary || doc.metadata?.latestAuditSummary || doc.description || 'Uploaded document awaiting audit workflow.',
+        status: doc.status || (latestAnalysis ? 'reviewed' : 'uploaded'),
+        auditMade: Boolean(latestAnalysis),
+        auditStatus,
+        priority: doc.status === 'rejected' || riskLevel === 'high' ? 'high' : doc.status === 'changes_requested' || riskLevel === 'medium' ? 'medium' : 'normal',
+        assignee: ['administrator', 'auditor'].includes(role) ? 'Auditor' : 'Audit team',
+        assigneeEmail: null,
+        owner: uploaderName,
+        uploadedBy: doc.uploadedBy || null,
+        uploadedByName: uploaderName,
+        uploaderName,
+        uploaderEmail: doc.uploader?.email || null,
+        uploadedAt: doc.uploadedAt || doc.createdAt,
+        dueDate: latestAnalysis?.completedAt || doc.expiryDate || doc.updatedAt,
+        comments: [
+          doc.metadata?.statusReason,
+          doc.metadata?.latestAuditDecision?.reason,
+          latestAnalysis?.summary,
+        ].filter(Boolean),
+        complianceScore,
+        aiGeneratedPercentage,
+        riskLevel,
+        missingFieldsCount: missingCount,
+        violationsCount: violationCount,
+        recommendations: latestAnalysis?.recommendations || [],
+        analyzedAt: latestAnalysis?.completedAt || null,
+        actionUrl: `/documents?documentId=${doc.id}`,
+        createdAt: doc.createdAt,
+        updatedAt: latestAnalysis?.completedAt || doc.updatedAt,
+      };
+    });
+
+    const taskItems = rows.map(task => ({
+      id: `task:${task.id}`,
+      itemType: 'task',
+      taskId: task.id,
+      documentId: task.documentId,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      assignee: task.assignee?.fullName || task.assignee?.email || 'Unassigned',
+      assigneeEmail: task.assignee?.email || null,
+      owner: task.assignee?.fullName || task.assignee?.email || 'Unassigned',
+      dueDate: task.dueDate,
+      comments: Array.isArray(task.comments) ? task.comments : [],
+      workflowName: task.workflow?.name || null,
+      workflowType: task.workflow?.workflowType || null,
+      actionUrl: task.documentId ? `/documents?documentId=${task.documentId}` : '/workflow',
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
+    }));
+
+    const items = [...documentItems, ...taskItems]
+      .sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
+
+    const statusCounts = items.reduce((acc, item) => {
+      const key = item.status || 'pending';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
     res.json({
-      tasks: rows,
-      total: count,
+      tasks: taskItems,
+      documents: documentItems,
+      items,
+      statusCounts,
+      total: items.length,
+      taskTotal: count,
+      documentTotal: documentItems.length,
       page: parseInt(page),
       limit: parseInt(limit)
     });

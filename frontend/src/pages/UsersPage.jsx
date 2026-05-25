@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, CheckCircle2, XCircle, Edit2, Shield } from 'lucide-react';
+import { RefreshCw, CheckCircle2, XCircle, Edit2, Shield, Trash2 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { authAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
@@ -69,6 +69,18 @@ export default function UsersPage() {
     setTimeout(() => setMsg(''), 3000);
   };
 
+  const handleDelete = async (u) => {
+    if (!window.confirm(`Permanently delete ${u.fullName || u.email}? This removes the user from the database.`)) return;
+    try {
+      await authAPI.deleteUser(u.id);
+      setMsg(`${u.fullName || u.email} deleted permanently`);
+      load();
+    } catch (e) {
+      setMsg(e?.response?.data?.error || 'Delete failed');
+    }
+    setTimeout(() => setMsg(''), 3000);
+  };
+
   return (
     <AppShell title="Users & Auth">
       {/* Role permissions */}
@@ -126,7 +138,7 @@ export default function UsersPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className={`border-b text-xs ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
-                  {['Name', 'Email', 'Role', 'Status', 'Last Login', me?.role === 'administrator' ? 'Actions' : ''].filter(Boolean).map(h => (
+                  {['Name', 'Email', 'Role', 'Status', 'Approval', 'Last Login', me?.role === 'administrator' ? 'Actions' : ''].filter(Boolean).map(h => (
                     <th key={h} className={`px-5 py-3 text-left font-medium ${sub}`}>{h}</th>
                   ))}
                 </tr>
@@ -153,6 +165,15 @@ export default function UsersPage() {
                         ? <span className="flex items-center gap-1 text-xs text-emerald-400"><CheckCircle2 className="h-3 w-3" /> Active</span>
                         : <span className="flex items-center gap-1 text-xs text-red-400"><XCircle className="h-3 w-3" /> Inactive</span>}
                     </td>
+                    <td className="px-5 py-3">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        u.approvalStatus === 'pending' ? 'bg-amber-500/15 text-amber-400'
+                        : u.approvalStatus === 'rejected' ? 'bg-red-500/15 text-red-400'
+                        : 'bg-emerald-500/15 text-emerald-400'
+                      }`}>
+                        {u.approvalStatus || 'approved'}
+                      </span>
+                    </td>
                     <td className={`px-5 py-3 text-xs ${sub}`}>{u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : 'Never'}</td>
                     {me?.role === 'administrator' && (
                       <td className="px-5 py-3">
@@ -165,8 +186,14 @@ export default function UsersPage() {
                             className={`rounded-lg px-2 py-1 text-[10px] font-medium border transition-colors ${u.isActive
                               ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'
                               : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'}`}>
-                            {u.isActive ? 'Deactivate' : 'Activate'}
+                            {u.isActive ? 'Deactivate' : u.approvalStatus === 'pending' ? 'Approve' : 'Activate'}
                           </button>
+                          {u.id !== me?.id && u.role !== 'administrator' && (
+                            <button onClick={() => handleDelete(u)}
+                              className="rounded-lg px-2 py-1 text-[10px] font-medium border bg-red-600/10 border-red-600/20 text-red-400 hover:bg-red-600/20 transition-colors">
+                              <span className="inline-flex items-center gap-1"><Trash2 className="h-3 w-3" /> Delete</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     )}

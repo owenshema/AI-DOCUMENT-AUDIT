@@ -106,26 +106,6 @@ The app uses JWT token-based authentication:
 4. Token automatically added to API requests
 5. Token validated on protected routes
 
-### Demo Credentials
-
-```
-Admin Account:
-Email: admin@example.com
-Password: password123
-
-Auditor Account:
-Email: auditor@example.com
-Password: password123
-
-Manager Account:
-Email: manager@example.com
-Password: password123
-
-Viewer Account:
-Email: viewer@example.com
-Password: password123
-```
-
 ## State Management
 
 Uses **Zustand** for state management:

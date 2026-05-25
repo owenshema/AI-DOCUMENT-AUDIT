@@ -5,7 +5,7 @@
 
 const jwt = require('jsonwebtoken');
 
-const verifyToken = (req, res, next) => {
+const verifyToken = async (req, res, next) => {
   // Support token in Authorization header OR as ?token= query param (for file downloads)
   const authHeader = req.headers.authorization;
   const queryToken = req.query.token;
@@ -19,13 +19,27 @@ const verifyToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(
       raw,
-      process.env.JWT_SECRET || 'your-secret-key'
+      process.env.JWT_SECRET || 'change-this-secret'
     );
+
+    // Verify user exists in database to prevent stale token database foreign key crashes
+    const { User } = require('../db/models');
+    const user = await User.findByPk(decoded.id);
+    if (!user) {
+      return res.status(401).json({ error: 'User session invalid. Please sign out and sign in again.' });
+    }
+    if (!user.isActive) {
+      return res.status(403).json({
+        error: user.approvalStatus === 'pending'
+          ? 'Account pending administrator approval.'
+          : 'Account deactivated. Contact your administrator.'
+      });
+    }
 
     req.user = {
       id: decoded.id,
       email: decoded.email,
-      role: decoded.role
+      role: user.role
     };
 
     next();
@@ -33,7 +47,7 @@ const verifyToken = (req, res, next) => {
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expired' });
     }
-    return res.status(403).json({ error: 'Invalid token' });
+    return res.status(401).json({ error: 'Invalid token' });
   }
 };
 
@@ -78,7 +92,7 @@ const optionalAuth = (req, res, next) => {
   try {
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET || 'your-secret-key'
+      process.env.JWT_SECRET || 'change-this-secret'
     );
 
     req.user = {

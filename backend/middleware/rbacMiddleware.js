@@ -31,10 +31,10 @@ const verifyRolePermissions = (allowedRoles) => {
 
 // Role permission mappings
 const rolePermissions = {
-  administrator: ['read', 'write', 'delete', 'admin', 'audit', 'compliance'],
-  auditor: ['read', 'audit', 'compliance'],
+  administrator: ['read', 'write', 'delete', 'admin', 'compliance'],
+  auditor: ['read', 'write', 'audit', 'compliance'],
   document_manager: ['read', 'write', 'delete'],
-  viewer: ['read']
+  viewer: ['read', 'write']
 };
 
 const requirePermission = (permission) => {
@@ -60,5 +60,6 @@ const requirePermission = (permission) => {
 module.exports = {
   verifyRolePermissions,
   requirePermission,
-  rolePermissions
+  rolePermissions,
+  checkPermission: requirePermission
 };

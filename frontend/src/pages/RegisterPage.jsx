@@ -50,6 +50,7 @@ const OTPInput = ({ value, onChange }) => {
 };
 
 const inputCls = "w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-3 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors";
+const DEPARTMENTS = ['General', 'Finance', 'HR', 'IT', 'Compliance', 'Operations', 'Procurement', 'Logistics', 'Legal'];
 
 export default function RegisterPage() {
   const [step, setStep]     = useState('form');
@@ -156,19 +157,24 @@ export default function RegisterPage() {
                   <label className="block text-xs text-white/60 mb-1.5">Department *</label>
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                    <input name="department" value={form.department} onChange={handleChange} required
-                      className={inputCls} placeholder="Finance, HR, IT..." />
+                    <select name="department" value={form.department} onChange={handleChange} required
+                      className="w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-3 text-sm text-white outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors">
+                      <option value="" className="bg-[#0d2044]">Select department</option>
+                      {DEPARTMENTS.map(dept => <option key={dept} value={dept} className="bg-[#0d2044]">{dept}</option>)}
+                    </select>
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs text-white/60 mb-1.5">Role</label>
                   <select name="role" value={form.role} onChange={handleChange}
                     className="w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-400 transition-colors">
-                    <option value="viewer" className="bg-[#0d2044]">Viewer — read-only</option>
+                    <option value="viewer" className="bg-[#0d2044]">Viewer</option>
                     <option value="document_manager" className="bg-[#0d2044]">Document Manager</option>
                     <option value="auditor" className="bg-[#0d2044]">Auditor</option>
-                    <option value="administrator" className="bg-[#0d2044]">Administrator</option>
                   </select>
+                  {form.role !== 'viewer' && (
+                    <p className="mt-1 text-[10px] text-amber-200/80">This role requires administrator approval before sign-in.</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs text-white/60 mb-1.5">Password *</label>

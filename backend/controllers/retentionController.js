@@ -13,10 +13,14 @@ const createRetentionPolicy = async (req, res) => {
     }
 
     const policy = await RetentionPolicy.create({
+      policyName: name,
       name,
       description,
       policyType: policyType || 'operational',
+      applicableDocumentTypes: Array.isArray(documentTypes) ? documentTypes : [documentTypes],
       documentTypes: Array.isArray(documentTypes) ? documentTypes : [documentTypes],
+      retentionPeriod: parseInt(retentionDays),
+      effectiveDate: new Date(),
       retentionDays: parseInt(retentionDays),
       automationRules: automationRules || {},
       status: 'active',

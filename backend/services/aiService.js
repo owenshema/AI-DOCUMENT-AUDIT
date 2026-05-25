@@ -9,6 +9,8 @@
 
 const https = require('https');
 const { runAudit, detectDocumentType } = require('./auditRules');
+const logisticsDataset = require('./logisticsDatasetService');
+const reportBuilder = require('./reportBuilderService');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-3.5-turbo';
@@ -104,225 +106,55 @@ Do not guess. Return null for missing fields.`;
 
 // ── Module 3: Core Audit Engine ───────────────────────────────────────────────
 
-async function auditDocument(documentText, policyRules = []) {
-  // Always run the real rule-based engine first
-  const ruleResult = runAudit(documentText, policyRules);
-
-  // Try to enhance summary with OpenAI if available
-  if (OPENAI_API_KEY && OPENAI_API_KEY !== 'your-openai-key') {
-    const SYSTEM = `You are a document auditor for a logistics and supply chain company (SIFCO AE).
-Review the document and return ONLY valid JSON with:
-- compliance_score (integer 0-100)
-- missing_fields (array of strings)
-- inconsistencies (array of strings)
-- violations (array of strings)
-- recommendations (array of strings)
-- sentiment (positive|neutral|negative)
-- risk_level (low|medium|high)
-- summary (2-3 sentences)
-Be specific about logistics/supply chain issues: BOL numbers, carrier compliance, weight discrepancies, payment terms, accessorial charges.`;
-
-    const USER = `Audit this document:\n\n${documentText.slice(0, 3000)}\n\nPolicy rules:\n${
-      policyRules.length > 0 ? policyRules.join('\n') : ruleResult.fraud_flags.map(f => f.message).join('\n')
-    }`;
-
-    const aiText = await callOpenAI(SYSTEM, USER, 1000);
-    const aiResult = extractJSON(aiText);
-
-    if (aiResult) {
-      // Merge: take the stricter of the two scores, combine findings
-      const mergedScore = Math.min(ruleResult.compliance_score, aiResult.compliance_score ?? 100);
-      const mergedMissing = [...new Set([...(ruleResult.missing_fields || []), ...(aiResult.missing_fields || [])])];
-      const mergedViolations = [...new Set([...(ruleResult.violations || []), ...(aiResult.violations || [])])];
-      const mergedInconsistencies = [...new Set([...(ruleResult.inconsistencies || []), ...(aiResult.inconsistencies || [])])];
-      const mergedRecs = [...new Set([...(ruleResult.recommendations || []), ...(aiResult.recommendations || [])])];
-
-      return {
-        ...ruleResult,
-        compliance_score:  mergedScore,
-        missing_fields:    mergedMissing,
-        violations:        mergedViolations,
-        inconsistencies:   mergedInconsistencies,
-        recommendations:   mergedRecs,
-        summary:           aiResult.summary || ruleResult.summary,
-        sentiment:         aiResult.sentiment || ruleResult.sentiment,
-        risk_level:        aiResult.risk_level === 'high' || ruleResult.risk_level === 'high' ? 'high'
-                         : aiResult.risk_level === 'medium' || ruleResult.risk_level === 'medium' ? 'medium' : 'low',
-        engine:            'openai+rules',
-      };
-    }
-  }
+async function auditDocument(documentText, policyRules = [], context = {}) {
+  // Paper-audit training only — no Kaggle dataset, no legacy policy rules
+  const ruleResult = runAudit(documentText, context);
 
   return ruleResult;
 }
 
 // ── Module 4: Audit Report Writer ─────────────────────────────────────────────
 
-async function generateAuditReport(auditJson) {
-  const SYSTEM = `You are a senior audit report writer for SIFCO AE, a logistics and supply chain company.
-Write a formal, professional audit report based on the REAL audit data provided for the period.
-Structure:
-1. EXECUTIVE SUMMARY (2-3 sentences covering the period, documents processed, and overall compliance)
-2. DOCUMENT ACTIVITY (actual counts: uploaded, analysed, checks run)
-3. COMPLIANCE SCORE — ${auditJson.compliance_score ?? 0}/100 with explanation
-4. RISK ASSESSMENT — breakdown of high/medium/low risk documents
-5. KEY FINDINGS (bullet points with specific numbers from the data)
-6. RECOMMENDATIONS (numbered, actionable steps based on actual findings)
-7. CONCLUSION
-Use formal language. Reference the actual numbers from the data.`;
+async function generateAuditReport(auditJson, options = {}) {
+  const viewerRole = options.viewerRole || auditJson.generated_by_role || 'auditor';
+  const ownerScoped = options.ownerScoped || false;
 
-  const USER = `Audit data:\n${JSON.stringify(auditJson, null, 2)}`;
-  const aiText = await callOpenAI(SYSTEM, USER, 1400);
-  if (aiText) return { report_text: aiText, engine: 'openai' };
+  const structured = reportBuilder.buildStructuredReport(auditJson, {
+    viewerRole,
+    ownerScoped,
+  });
 
-  // ── Rule-based report using real period data ──────────────────────────────
-  const score     = auditJson.compliance_score ?? 0;
-  const start     = auditJson.period?.start || '—';
-  const end       = auditJson.period?.end   || '—';
-  const totalDocs = auditJson.total_documents ?? 0;
-  const totalAI   = auditJson.total_analyses  ?? 0;
-  const totalChk  = auditJson.total_checks    ?? 0;
-  const passRate  = auditJson.pass_rate       ?? 0;
-  const highRisk  = auditJson.risk_distribution?.high   ?? 0;
-  const medRisk   = auditJson.risk_distribution?.medium ?? 0;
-  const lowRisk   = auditJson.risk_distribution?.low    ?? 0;
+  const SYSTEM = `You are a senior audit report writer for Super International Freight / SIFCO (Kigali logistics).
+Write a concise executive narrative (max 400 words) for the structured audit below.
+Tone: professional, clear, suitable for management. Reference real numbers only.
+Do not invent data. Mention organization document validation and AI/forgery thresholds when relevant.`;
 
-  const complianceLabel = score >= 80 ? 'COMPLIANT' : score >= 60 ? 'PARTIALLY COMPLIANT' : 'NON-COMPLIANT';
-  const riskSummary = highRisk > 0
-    ? `${highRisk} high-risk document(s) require immediate escalation.`
-    : medRisk > 0 ? `${medRisk} medium-risk document(s) require review.`
-    : 'No high-risk documents identified.';
+  const USER = `Structured audit JSON:\n${JSON.stringify({
+    meta: structured.meta,
+    compliance: structured.compliance,
+    organizationValidation: structured.organizationValidation,
+    riskSummary: structured.riskSummary,
+    sectionTitles: structured.sections.map(s => s.title),
+    recommendations: structured.recommendations,
+  }, null, 2)}`;
 
-  const deptText = auditJson.departments && Object.keys(auditJson.departments).length > 0
-    ? Object.entries(auditJson.departments).map(([d, n]) => `  • ${d}: ${n} document(s)`).join('\n')
-    : '  • No department data available';
+  const aiNarrative = await callOpenAI(SYSTEM, USER, 600);
+  if (aiNarrative) {
+    structured.sections = structured.sections.map(s =>
+      s.id === 'executive' ? { ...s, paragraphs: [aiNarrative.trim()] } : s
+    );
+    return {
+      report_text: reportBuilder.formatReportAsText(structured),
+      structured,
+      engine: 'openai+structured',
+    };
+  }
 
-  const catText = auditJson.categories && Object.keys(auditJson.categories).length > 0
-    ? Object.entries(auditJson.categories).map(([c, n]) => `  • ${c}: ${n}`).join('\n')
-    : '  • No category data available';
-
-  // Per-document table with scores
-  const docListText = auditJson.document_list?.length > 0
-    ? auditJson.document_list.slice(0, 15).map((d, i) => {
-        const score = d.compliance_score != null ? `${d.compliance_score}/100` : 'Not analyzed';
-        const risk  = d.risk_level ? d.risk_level.toUpperCase() : '—';
-        const viol  = d.violations_count > 0 ? `${d.violations_count} violation(s)` : 'No violations';
-        const miss  = d.missing_fields?.length > 0 ? `Missing: ${d.missing_fields.join(', ')}` : '';
-        return `  ${i + 1}. ${d.title}\n     Category: ${d.category} | Dept: ${d.department} | Status: ${d.status}\n     Score: ${score} | Risk: ${risk} | ${viol}${miss ? '\n     ' + miss : ''}`;
-      }).join('\n\n')
-    : '  No documents found in this period.';
-
-  const violationsText = auditJson.violations?.length > 0
-    ? auditJson.violations.slice(0, 12).map(v => `  • ${v}`).join('\n')
-    : '  • No violations detected in this period';
-
-  const missingText = auditJson.missing_fields?.length > 0
-    ? auditJson.missing_fields.slice(0, 8).map(f => `  • ${f}`).join('\n')
-    : '  • All required fields present';
-
-  const recs = (auditJson.recommendations || []).length > 0
-    ? auditJson.recommendations.map((r, i) => `  ${i + 1}. ${r}`).join('\n')
-    : '  1. Continue monitoring document compliance\n  2. Maintain current audit schedule';
-
-  const conclusionText = score >= 80
-    ? `The audit period from ${start} to ${end} demonstrates satisfactory compliance with SIFCO AE standards. All ${totalDocs} document(s) processed achieved an average compliance score of ${score}/100. Continue current document governance practices and maintain the audit schedule.`
-    : score >= 60
-    ? `The audit period from ${start} to ${end} shows partial compliance. Of ${totalDocs} document(s) reviewed, the average compliance score is ${score}/100. ${highRisk} high-risk and ${medRisk} medium-risk items require remediation. Implement the recommendations above before the next audit cycle.`
-    : `The audit period from ${start} to ${end} reveals significant compliance gaps. The average compliance score of ${score}/100 is below the acceptable threshold of 80. Immediate action is required to address ${auditJson.violations?.length ?? 0} identified violation(s) and ${auditJson.missing_fields?.length ?? 0} missing field issue(s). A follow-up audit is recommended within 30 days.`;
-
-  // Activity log section
-  const activityText = auditJson.activity_log?.length > 0
-    ? auditJson.activity_log.slice(0, 20).map((a, i) => `  ${i + 1}. [${a.time || '—'}] ${a.user}: ${a.action}`).join('\n')
-    : '  No activity recorded in this period.';
-
-  const report_text = `AI DOCUMENT AUDIT REPORT — SIFCO AE
-${'='.repeat(65)}
-Report Title:    ${auditJson.title}
-Report Type:     ${(auditJson.reportType || '').replace(/_/g, ' ').toUpperCase()}
-Audit Period:    ${start} to ${end}
-Generated By:    ${auditJson.generated_by || 'System'} (${auditJson.generated_by_role || ''})
-Generated:       ${new Date().toLocaleString()}
-Audit Engine:    ${auditJson.engine || 'rule-based-v4'} | 15 policy rules checked
-${'='.repeat(65)}
-
-1. EXECUTIVE SUMMARY
-─────────────────────────────────────────────────────────────────
-This ${(auditJson.reportType || 'compliance').replace(/_/g, ' ')} audit covers the period from ${start} to ${end}.
-During this period, ${totalDocs} document(s) were uploaded to the SIFCO AE DocAudit system,
-${totalAI} AI compliance analysis run(s) were performed, and ${totalChk} compliance check(s) were
-conducted. The overall average compliance score for this period is ${score}/100 (${complianceLabel}).
-${riskSummary}
-
-2. DOCUMENT ACTIVITY
-─────────────────────────────────────────────────────────────────
-Total Documents Uploaded:    ${totalDocs}
-AI Analyses Performed:       ${totalAI}
-Compliance Checks Run:       ${totalChk}
-Checks Passed:               ${auditJson.passed_checks ?? 0}
-Checks Failed:               ${auditJson.failed_checks ?? 0}
-Pass Rate:                   ${passRate}%
-Average Compliance Score:    ${score}/100
-
-Documents by Department:
-${deptText}
-
-Documents by Category:
-${catText}
-
-3. COMPLIANCE SCORE
-─────────────────────────────────────────────────────────────────
-Overall Score: ${score}/100 — ${complianceLabel}
-
-${score >= 80
-  ? 'Documents in this period meet SIFCO AE compliance standards. The organization demonstrates strong document governance practices.'
-  : score >= 60
-  ? 'Some documents require remediation before full compliance is achieved. Key gaps include missing required fields and authorization issues.'
-  : 'Significant compliance gaps identified. The score falls below the minimum acceptable threshold of 80/100. Immediate corrective action is required.'}
-
-Score Distribution:
-${auditJson.score_breakdown?.length > 0
-  ? `  Highest score: ${Math.max(...auditJson.score_breakdown)}/100\n  Lowest score:  ${Math.min(...auditJson.score_breakdown)}/100\n  Documents analyzed: ${auditJson.score_breakdown.length}`
-  : '  No individual document scores available for this period.'}
-
-4. RISK ASSESSMENT
-─────────────────────────────────────────────────────────────────
-High Risk Documents:    ${highRisk}  ${highRisk > 0 ? '⚠️  REQUIRES IMMEDIATE ACTION' : '✓'}
-Medium Risk Documents:  ${medRisk}  ${medRisk > 0 ? '— Requires review' : '✓'}
-Low Risk Documents:     ${lowRisk}  ✓
-Unanalyzed Documents:   ${totalDocs - totalAI > 0 ? totalDocs - totalAI : 0}
-
-${highRisk > 0 ? `⚠️  ACTION REQUIRED: ${highRisk} high-risk document(s) must be escalated to the senior auditor for immediate review and remediation.` : ''}
-
-5. DOCUMENT-BY-DOCUMENT FINDINGS
-─────────────────────────────────────────────────────────────────
-${docListText}
-
-6. KEY VIOLATIONS & COMPLIANCE ISSUES
-─────────────────────────────────────────────────────────────────
-${violationsText}
-
-Missing Required Fields Detected:
-${missingText}
-
-7. RECOMMENDATIONS
-─────────────────────────────────────────────────────────────────
-${recs}
-
-8. CONCLUSION
-─────────────────────────────────────────────────────────────────
-${conclusionText}
-
-9. ACTIVITY LOG — WHO DID WHAT
-─────────────────────────────────────────────────────────────────
-${activityText}
-
-${'─'.repeat(65)}
-AI Document Audit System — SIFCO AE
-Audit Engine: ${auditJson.engine || 'rule-based-v4'} | 15 policy rules checked
-Report generated: ${new Date().toLocaleString()}
-CONFIDENTIAL — For internal use only`;
-
-  return { report_text, engine: 'rule-based-v4' };
+  return {
+    report_text: reportBuilder.formatReportAsText(structured),
+    structured,
+    engine: 'structured-v2',
+  };
 }
 
 

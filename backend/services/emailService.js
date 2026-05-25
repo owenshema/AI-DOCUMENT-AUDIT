@@ -31,6 +31,9 @@ function createTransporter() {
     host:   process.env.SMTP_HOST || 'smtp.gmail.com',
     port:   parseInt(process.env.SMTP_PORT || '587'),
     secure: false,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASSWORD,
@@ -68,6 +71,17 @@ async function testConnection() {
 async function sendEmail({ to, subject, html, text }) {
   const from = `"${process.env.SMTP_FROM_NAME || 'AI Document Audit'}" <${process.env.SMTP_USER}>`;
 
+  if (process.env.NODE_ENV !== 'production' && process.env.SMTP_SEND_REAL !== 'true') {
+    console.log('\n' + '='.repeat(55));
+    console.log('EMAIL - development console mode');
+    console.log('='.repeat(55));
+    console.log(`  To:      ${to}`);
+    console.log(`  Subject: ${subject}`);
+    console.log(`  Body:    ${text}`);
+    console.log('='.repeat(55) + '\n');
+    return { messageId: 'console-dev', configured: false };
+  }
+
   if (!isConfigured()) {
     // Console fallback — dev mode
     console.log('\n' + '═'.repeat(55));
@@ -81,7 +95,11 @@ async function sendEmail({ to, subject, html, text }) {
   }
 
   const t = createTransporter();
-  const info = await t.sendMail({ from, to, subject, html, text });
+  const sendPromise = t.sendMail({ from, to, subject, html, text });
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('SMTP send timed out after 15 seconds')), 15000);
+  });
+  const info = await Promise.race([sendPromise, timeoutPromise]);
   console.log(`📧 Email sent → ${to} (${info.messageId})`);
   return { messageId: info.messageId, configured: true };
 }
@@ -175,11 +193,86 @@ async function send2FAEnabled(email, fullName) {
   });
 }
 
+async function sendAuditComplete(email, fullName, docTitle, auditorName, status, summary, portalUrl) {
+  return sendEmail({
+    to:      email,
+    subject: `Portal update: "${docTitle}"`,
+    html:    tpl(`
+      <p>Hi <strong>${fullName}</strong>,</p>
+      <p>Changes have been made in your portal for <strong>"${docTitle}"</strong> by <strong>${auditorName}</strong>.</p>
+      <div style="background:#f8fafc;border-radius:12px;padding:18px;margin:16px 0;border-left:4px solid #4f46e5">
+        <p style="margin:0;font-size:13px;color:#374151">Log in to your portal to view the updated document status, auditor notes, and any required actions.</p>
+      </div>
+      <p>For privacy, audit results are available only inside the portal.</p>
+      <div style="text-align:center;margin:20px 0">
+        <a href="${portalUrl || 'http://localhost:3000/documents'}" style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">Log in to Portal</a>
+      </div>
+    `),
+    text: `Hi ${fullName},\n\nChanges have been made in your portal for "${docTitle}" by ${auditorName}.\n\nFor privacy, audit results are available only inside the portal. Log in to view the updated document status, auditor notes, and any required actions:\n${portalUrl || 'http://localhost:3000/documents'}`,
+  });
+}
+
+async function sendAccountApproved(email, fullName, role) {
+  return sendEmail({
+    to:      email,
+    subject: 'Your DocAudit AI account has been approved',
+    html:    tpl(`
+      <p>Hi <strong>${fullName}</strong>,</p>
+      <p>Your <strong>${role.replace(/_/g, ' ')}</strong> account on DocAudit AI has been <strong style="color:#10b981">approved</strong> by the administrator.</p>
+      <p>You can now log in to your portal and start using the system.</p>
+      <div style="text-align:center;margin:20px 0">
+        <a href="http://localhost:3000/login" style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">Log In Now →</a>
+      </div>
+    `),
+    text: `Hi ${fullName},\n\nYour ${role} account on DocAudit AI has been approved. You can now log in at http://localhost:3000/login`,
+  });
+}
+
+async function sendAccountRejected(email, fullName, reason) {
+  return sendEmail({
+    to:      email,
+    subject: 'DocAudit AI — Account application update',
+    html:    tpl(`
+      <p>Hi <strong>${fullName}</strong>,</p>
+      <p>Unfortunately, your account application has not been approved at this time.</p>
+      ${reason ? `<p><strong>Reason:</strong> ${reason}</p>` : ''}
+      <p>Please contact your administrator for more information.</p>
+    `),
+    text: `Hi ${fullName},\n\nYour DocAudit AI account application was not approved.\n${reason ? 'Reason: ' + reason : ''}\n\nContact your administrator for more information.`,
+  });
+}
+
+async function sendAdminApprovalRequest(email, adminName, applicant) {
+  const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000/users';
+  return sendEmail({
+    to:      email,
+    subject: `Account approval needed: ${applicant.fullName || applicant.email}`,
+    html:    tpl(`
+      <p>Hi <strong>${adminName || 'Administrator'}</strong>,</p>
+      <p>A new <strong>${String(applicant.role || 'viewer').replace(/_/g, ' ')}</strong> account needs your approval.</p>
+      <div style="background:#f8fafc;border-radius:12px;padding:14px;margin:16px 0">
+        <p><strong>Name:</strong> ${applicant.fullName || 'Not provided'}</p>
+        <p><strong>Email:</strong> ${applicant.email}</p>
+        <p><strong>Department:</strong> ${applicant.department || 'General'}</p>
+      </div>
+      <p>Log in to approve or reject this account.</p>
+      <div style="text-align:center;margin:20px 0">
+        <a href="${portalUrl}" style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">Review Account</a>
+      </div>
+    `),
+    text: `Hi ${adminName || 'Administrator'},\n\nA new ${String(applicant.role || 'viewer').replace(/_/g, ' ')} account needs approval.\nName: ${applicant.fullName || 'Not provided'}\nEmail: ${applicant.email}\nDepartment: ${applicant.department || 'General'}\n\nLog in to approve or reject it: ${portalUrl}`,
+  });
+}
+
 module.exports = {
   sendLoginOTP,
   sendEmailVerification,
   sendPasswordReset,
   send2FAEnabled,
+  sendAuditComplete,
+  sendAccountApproved,
+  sendAccountRejected,
+  sendAdminApprovalRequest,
   sendEmail,
   testConnection,
   isConfigured,

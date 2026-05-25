@@ -24,6 +24,8 @@ const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || '12');
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_DURATION_MS   = 30 * 60 * 1000; // 30 min
 const OTP_EXPIRY_MS      = 10 * 60 * 1000; // 10 min
+const APPROVAL_REQUIRED_ROLES = ['auditor', 'document_manager'];
+const ALLOW_DEV_OTP = process.env.NODE_ENV !== 'production' && process.env.SMTP_SEND_REAL !== 'true';
 
 // ── Validation schemas ────────────────────────────────────────────────────────
 
@@ -107,6 +109,7 @@ function safeUser(user) {
     emailVerified: user.emailVerified,
     mfaEnabled:    user.mfaEnabled,
     isActive:      user.isActive,
+    approvalStatus:user.approvalStatus,
     lastLogin:     user.lastLogin,
   };
 }
@@ -114,6 +117,9 @@ function safeUser(user) {
 // ── POST /api/auth/register ───────────────────────────────────────────────────
 
 const register = async (req, res) => {
+  if (req.body.full_name && !req.body.fullName) {
+    req.body.fullName = req.body.full_name;
+  }
   const { error, value } = validate(schemas.register, req.body);
   if (error) return res.status(400).json({ error });
 
@@ -123,7 +129,16 @@ const register = async (req, res) => {
     const existing = await User.findOne({ where: { email: value.email } });
     if (existing) return res.status(409).json({ error: 'Email already registered' });
 
+    const requestedRole = value.role || 'viewer';
+    if (requestedRole === 'administrator') {
+      const adminExists = await User.findOne({ where: { role: 'administrator' } });
+      if (adminExists) {
+        return res.status(403).json({ error: 'Only the existing administrator can create or approve privileged accounts.' });
+      }
+    }
+
     const otp = generateOTP();
+    const requiresAdminApproval = APPROVAL_REQUIRED_ROLES.includes(requestedRole);
     const user = await User.create({
       ...value,
       passwordHash:  value.password, // hashed by model hook
@@ -131,25 +146,44 @@ const register = async (req, res) => {
       otpExpiry:     new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h for email verify
       otpPurpose:    'verify_email',
       emailVerified: false,
+      approvalStatus: requiresAdminApproval ? 'pending' : 'approved',
+      isActive:      !requiresAdminApproval,
     });
 
     // Send verification email — non-fatal
     let emailSent = false;
     try {
-      await emailService.sendEmailVerification(user.email, user.fullName, otp);
-      emailSent = true;
+      const emailResult = await emailService.sendEmailVerification(user.email, user.fullName, otp);
+      emailSent = !!emailResult.configured;
     } catch (e) {
       console.warn('Email send failed:', e.message);
       console.log(`📧 DEV MODE — Verify OTP for ${user.email}: ${otp}`);
     }
 
+    if (!emailSent && !ALLOW_DEV_OTP) {
+      return res.status(502).json({ error: 'Could not send verification email. Check SMTP settings and try again.' });
+    }
+
+    if (requiresAdminApproval) {
+      try {
+        const admins = await User.findAll({
+          where: { role: 'administrator', isActive: true },
+          attributes: ['email', 'fullName'],
+        });
+        await Promise.all(admins.map(admin => emailService.sendAdminApprovalRequest(admin.email, admin.fullName, user)));
+      } catch (e) {
+        console.warn('Admin approval request email failed:', e.message);
+      }
+    }
+
     res.status(201).json({
       message:        emailSent
-        ? 'Registration successful. Check your email for the verification code.'
-        : 'Registration successful. Email not configured — check backend console for OTP.',
+        ? (requiresAdminApproval ? 'Registration submitted. Verify your email, then wait for administrator approval.' : 'Registration successful. Check your email for the verification code.')
+        : (requiresAdminApproval ? 'Registration submitted. Email not configured — check backend console for OTP, then wait for administrator approval.' : 'Registration successful. Email not configured — check backend console for OTP.'),
       userId:         user.id,
       requiresVerify: true,
-      ...(process.env.NODE_ENV !== 'production' && !emailSent ? { devOTP: otp } : {}),
+      requiresAdminApproval,
+      ...(ALLOW_DEV_OTP && !emailSent ? { devOTP: otp } : {}),
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -179,7 +213,11 @@ const login = async (req, res) => {
 
     // Account active check
     if (!user.isActive) {
-      return res.status(403).json({ error: 'Account deactivated. Contact your administrator.' });
+      return res.status(403).json({
+        error: user.approvalStatus === 'pending'
+          ? 'Account pending administrator approval.'
+          : 'Account deactivated. Contact your administrator.'
+      });
     }
 
     // Password check
@@ -217,11 +255,15 @@ const login = async (req, res) => {
     // Send OTP — non-fatal if email fails (dev mode logs to console)
     let emailSent = false;
     try {
-      await emailService.sendLoginOTP(user.email, user.fullName, otp);
-      emailSent = true;
+      const emailResult = await emailService.sendLoginOTP(user.email, user.fullName, otp);
+      emailSent = !!emailResult.configured;
     } catch (emailErr) {
       console.warn('Email send failed (check SMTP config):', emailErr.message);
       console.log(`📧 DEV MODE — Login OTP for ${user.email}: ${otp}`);
+    }
+
+    if (!emailSent && !ALLOW_DEV_OTP) {
+      return res.status(502).json({ error: 'Could not send OTP email. Check SMTP settings and try again.' });
     }
 
     res.json({
@@ -231,7 +273,7 @@ const login = async (req, res) => {
       requiresOTP:  true,
       userId:       user.id,
       // In dev mode (no SMTP), return OTP in response so user isn't blocked
-      ...(process.env.NODE_ENV !== 'production' && !emailSent ? { devOTP: otp } : {}),
+      ...(ALLOW_DEV_OTP && !emailSent ? { devOTP: otp } : {}),
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -261,11 +303,13 @@ const verifyOTP = async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired OTP' });
     }
 
-    // Clear OTP
-    await user.update({ otpCode: null, otpExpiry: null, otpPurpose: null });
-
     if (value.purpose === 'login') {
-      await user.update({ lastLogin: new Date() });
+      await user.update({
+        otpCode: null,
+        otpExpiry: null,
+        otpPurpose: null,
+        lastLogin: new Date()
+      });
       const token = issueJWT(user);
       return res.json({
         message:      'Login successful',
@@ -276,7 +320,12 @@ const verifyOTP = async (req, res) => {
     }
 
     if (value.purpose === 'verify_email') {
-      await user.update({ emailVerified: true });
+      await user.update({
+        otpCode: null,
+        otpExpiry: null,
+        otpPurpose: null,
+        emailVerified: true
+      });
       const token = issueJWT(user);
       return res.json({
         message:     'Email verified successfully',
@@ -424,14 +473,24 @@ const requestPasswordReset = async (req, res) => {
       otpExpiry:  new Date(Date.now() + 15 * 60 * 1000), // 15 min
       otpPurpose: 'reset_password',
     });
+    let emailSent = false;
     try {
-      await emailService.sendPasswordReset(user.email, user.fullName, otp);
+      const emailResult = await emailService.sendPasswordReset(user.email, user.fullName, otp);
+      emailSent = !!emailResult.configured;
     } catch (e) {
       console.warn('Email send failed:', e.message);
       console.log(`📧 DEV MODE — Reset OTP for ${user.email}: ${otp}`);
     }
 
-    res.json({ message: 'If that email exists, a reset code has been sent.', userId: user.id });
+    if (!emailSent && !ALLOW_DEV_OTP) {
+      return res.status(502).json({ error: 'Could not send password reset email. Check SMTP settings and try again.' });
+    }
+
+    res.json({
+      message: 'If that email exists, a reset code has been sent.',
+      userId: user.id,
+      ...(ALLOW_DEV_OTP && !emailSent ? { devOTP: otp } : {}),
+    });
   } catch (err) {
     res.status(500).json({ error: 'Request failed' });
   }
@@ -456,9 +515,8 @@ const resetPassword = async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired reset code' });
     }
 
-    const hash = await bcrypt.hash(value.newPassword, BCRYPT_ROUNDS);
     await user.update({
-      passwordHash: hash,
+      passwordHash: value.newPassword,
       otpCode:      null,
       otpExpiry:    null,
       otpPurpose:   null,
@@ -497,16 +555,26 @@ const resendOTP = async (req, res) => {
 
     await user.update({ otpCode: otp, otpExpiry: expiry, otpPurpose: purpose });
 
+    let emailSent = false;
     try {
-      if (purpose === 'login')          await emailService.sendLoginOTP(user.email, user.fullName, otp);
-      if (purpose === 'verify_email')   await emailService.sendEmailVerification(user.email, user.fullName, otp);
-      if (purpose === 'reset_password') await emailService.sendPasswordReset(user.email, user.fullName, otp);
+      let emailResult = null;
+      if (purpose === 'login')          emailResult = await emailService.sendLoginOTP(user.email, user.fullName, otp);
+      if (purpose === 'verify_email')   emailResult = await emailService.sendEmailVerification(user.email, user.fullName, otp);
+      if (purpose === 'reset_password') emailResult = await emailService.sendPasswordReset(user.email, user.fullName, otp);
+      emailSent = !!emailResult?.configured;
     } catch (e) {
       console.warn('Email send failed:', e.message);
       console.log(`📧 DEV MODE — OTP for ${user.email}: ${otp}`);
     }
 
-    res.json({ message: 'OTP resent' });
+    if (!emailSent && !ALLOW_DEV_OTP) {
+      return res.status(502).json({ error: 'Could not send OTP email. Check SMTP settings and try again.' });
+    }
+
+    res.json({
+      message: 'OTP resent',
+      ...(ALLOW_DEV_OTP && !emailSent ? { devOTP: otp } : {}),
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to resend OTP' });
   }
@@ -562,6 +630,7 @@ const listUsers = async (req, res) => {
     const where = {};
     if (role)       where.role       = role;
     if (department) where.department = { [Op.iLike]: `%${department}%` };
+    if (req.user?.role === 'auditor') where.role = { [Op.ne]: 'administrator' };
     const { count, rows } = await User.findAndCountAll({
       where,
       attributes: { exclude: ['passwordHash', 'mfaSecret', 'otpCode', 'emailVerificationToken', 'passwordResetToken'] },
@@ -587,6 +656,12 @@ const updateUserRole = async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     // Prevent self-demotion
     if (user.id === req.user.id) return res.status(403).json({ error: 'Cannot change your own role' });
+    if (role === 'administrator') {
+      const adminExists = await User.findOne({ where: { role: 'administrator' } });
+      if (adminExists && adminExists.id !== user.id) {
+        return res.status(403).json({ error: 'Only one administrator account is allowed.' });
+      }
+    }
     await user.update({ role });
     res.json({ message: 'Role updated', userId, role });
   } catch (err) {
@@ -602,10 +677,49 @@ const updateUserStatus = async (req, res) => {
     const user = await User.findByPk(userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (user.id === req.user.id) return res.status(403).json({ error: 'Cannot deactivate your own account' });
-    await user.update({ isActive: !!isActive });
-    res.json({ message: `User ${isActive ? 'activated' : 'deactivated'}`, userId });
+    if (user.role === 'administrator' && isActive === false) {
+      return res.status(403).json({ error: 'The administrator account cannot be deactivated' });
+    }
+    const updates = { isActive: !!isActive };
+    if (isActive) {
+      updates.approvalStatus = 'approved';
+      updates.approvedBy = req.user.id;
+      updates.approvedAt = new Date();
+    } else if (user.approvalStatus === 'pending') {
+      updates.approvalStatus = 'rejected';
+    }
+    await user.update(updates);
+
+    // Send approval/rejection email
+    try {
+      if (isActive) {
+        await emailService.sendAccountApproved(user.email, user.fullName, user.role);
+      } else if (updates.approvalStatus === 'rejected') {
+        await emailService.sendAccountRejected(user.email, user.fullName, null);
+      }
+    } catch(e) { console.warn('Approval email failed:', e.message); }
+
+    res.json({ message: `User ${isActive ? 'approved/activated' : 'deactivated'}`, userId });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+const deleteUser = async (req, res) => {
+  const { userId } = req.params;
+  const { User } = req.app.locals.models;
+  try {
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.id === req.user.id) return res.status(403).json({ error: 'Cannot delete your own account' });
+    if (user.role === 'administrator') {
+      return res.status(403).json({ error: 'The administrator account cannot be deleted' });
+    }
+
+    await user.destroy({ force: true });
+    res.json({ message: 'User deleted permanently', userId });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to delete user' });
   }
 };
 
@@ -616,6 +730,9 @@ const getUserById = async (req, res) => {
       attributes: { exclude: ['passwordHash', 'mfaSecret', 'otpCode'] },
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    if (req.user?.role === 'auditor' && user.role === 'administrator') {
+      return res.status(403).json({ error: 'Auditors cannot view administrator accounts' });
+    }
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -628,5 +745,5 @@ module.exports = {
   setupTOTP, confirmTOTP, disableTOTP,
   requestPasswordReset, resetPassword,
   resendOTP, testEmail,
-  listUsers, getUserById, updateUserRole, updateUserStatus,
+  listUsers, getUserById, updateUserRole, updateUserStatus, deleteUser,
 };

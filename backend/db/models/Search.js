@@ -18,6 +18,9 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(255),
       comment: 'User-friendly name for saved search'
     },
+    query: {
+      type: DataTypes.TEXT
+    },
     searchType: {
       type: DataTypes.STRING(100),
       defaultValue: 'document_search'
@@ -27,6 +30,10 @@ module.exports = (sequelize) => {
       defaultValue: false
     },
     isSaved: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
+    },
+    isPublic: {
       type: DataTypes.BOOLEAN,
       defaultValue: false
     },

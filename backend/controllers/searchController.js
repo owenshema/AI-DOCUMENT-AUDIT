@@ -82,10 +82,12 @@ const saveSearch = async (req, res) => {
     }
 
     const search = await Search.create({
-      name,
+      searchName: name,
       query,
+      keywords: query.split(/\s+/).filter(Boolean),
       filters: filters || {},
       userId: req.user?.id || 'system',
+      isSaved: true,
       isPublic: req.body.isPublic || false
     });
 

@@ -39,6 +39,22 @@ module.exports = (sequelize) => {
         isIn: [['auditor', 'document_manager', 'administrator', 'viewer']]
       }
     },
+    approvalStatus: {
+      type: DataTypes.STRING(30),
+      defaultValue: 'approved',
+      allowNull: false,
+      validate: {
+        isIn: [['pending', 'approved', 'rejected']]
+      }
+    },
+    approvedBy: {
+      type: DataTypes.UUID,
+      allowNull: true
+    },
+    approvedAt: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
     department: {
       type: DataTypes.STRING(100),
       allowNull: false

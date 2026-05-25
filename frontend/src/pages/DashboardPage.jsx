@@ -1,342 +1,377 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Upload, ArrowUpRight, FileText, ShieldCheck, Clock, AlertTriangle,
-  TrendingUp, CheckCircle2, Bot, BarChart2, Users,
+  AlertTriangle, ArrowUpRight, BarChart2, Bell, Bot, CheckCircle2,
+  Clock, FileText, ShieldCheck, Upload, Users,
 } from 'lucide-react';
 import AppShell from '../components/AppShell';
-import { documentAPI, dashboardAPI, analysisAPI } from '../api/auth';
+import { analysisAPI, dashboardAPI, documentAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
 
-// ── SVG Pie Chart ─────────────────────────────────────────────────────────────
-function PieChart({ slices, size = 140 }) {
-  const r = size / 2 - 16;
-  const cx = size / 2;
-  const cy = size / 2;
-  let cumAngle = -Math.PI / 2;
-
-  const paths = slices.map(({ value, color }, i) => {
-    const total = slices.reduce((s, sl) => s + sl.value, 0) || 1;
-    const angle = (value / total) * 2 * Math.PI;
-    const x1 = cx + r * Math.cos(cumAngle);
-    const y1 = cy + r * Math.sin(cumAngle);
-    cumAngle += angle;
-    const x2 = cx + r * Math.cos(cumAngle);
-    const y2 = cy + r * Math.sin(cumAngle);
-    const large = angle > Math.PI ? 1 : 0;
-    return (
-      <path key={i}
-        d={`M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} Z`}
-        fill={color} opacity="0.9" />
-    );
-  });
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {paths}
-      <circle cx={cx} cy={cy} r={r * 0.55} fill="transparent" />
-    </svg>
-  );
-}
-
-// ── Role-based quick actions ──────────────────────────────────────────────────
-const ROLE_ACTIONS = {
-  administrator: [
-    { label: 'Upload Document', icon: Upload,      path: '/documents',     color: 'indigo' },
-    { label: 'Run AI Audit',    icon: Bot,         path: '/ai-analysis',   color: 'purple' },
-    { label: 'Manage Users',    icon: Users,       path: '/users',         color: 'blue'   },
-    { label: 'View Reports',    icon: BarChart2,   path: '/audit-reports', color: 'emerald'},
-  ],
-  auditor: [
-    { label: 'Run AI Audit',    icon: Bot,         path: '/ai-analysis',   color: 'purple' },
-    { label: 'Audit Reports',   icon: BarChart2,   path: '/audit-reports', color: 'emerald'},
-    { label: 'View Documents',  icon: FileText,    path: '/documents',     color: 'blue'   },
-    { label: 'Workflow',        icon: CheckCircle2,path: '/workflow',      color: 'amber'  },
-  ],
-  document_manager: [
-    { label: 'Upload Document', icon: Upload,      path: '/documents',     color: 'indigo' },
-    { label: 'Run AI Audit',    icon: Bot,         path: '/ai-analysis',   color: 'purple' },
-    { label: 'Audit Reports',   icon: BarChart2,   path: '/audit-reports', color: 'emerald'},
-    { label: 'Workflow',        icon: CheckCircle2,path: '/workflow',      color: 'amber'  },
-  ],
-  viewer: [
-    { label: 'View Documents',  icon: FileText,    path: '/documents',     color: 'blue'   },
-    { label: 'View Reports',    icon: BarChart2,   path: '/audit-reports', color: 'emerald'},
-  ],
-};
-
-const ACTION_COLORS = {
-  indigo:  { bg: 'bg-indigo-500/15 border-indigo-500/20',  icon: 'text-indigo-400',  hover: 'hover:bg-indigo-500/25' },
-  purple:  { bg: 'bg-purple-500/15 border-purple-500/20',  icon: 'text-purple-400',  hover: 'hover:bg-purple-500/25' },
-  blue:    { bg: 'bg-blue-500/15 border-blue-500/20',      icon: 'text-blue-400',    hover: 'hover:bg-blue-500/25'   },
-  emerald: { bg: 'bg-emerald-500/15 border-emerald-500/20',icon: 'text-emerald-400', hover: 'hover:bg-emerald-500/25'},
-  amber:   { bg: 'bg-amber-500/15 border-amber-500/20',    icon: 'text-amber-400',   hover: 'hover:bg-amber-500/25'  },
+const STATUS_LABEL = {
+  uploaded: 'Uploaded',
+  in_review: 'In Review',
+  in_progress: 'In Progress',
+  submitted: 'Submitted',
+  reviewed: 'Reviewed',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  changes_requested: 'Changes Needed',
 };
 
 const STATUS_PILL = {
-  pending:   'bg-amber-500/15 text-amber-400',
-  approved:  'bg-emerald-500/15 text-emerald-400',
-  flagged:   'bg-red-500/15 text-red-400',
-  uploaded:  'bg-blue-500/15 text-blue-400',
-  reviewed:  'bg-purple-500/15 text-purple-400',
-  archived:  'bg-slate-500/15 text-slate-400',
+  uploaded: 'bg-slate-500/15 text-slate-400',
+  in_review: 'bg-amber-500/15 text-amber-400',
+  in_progress: 'bg-blue-500/15 text-blue-400',
+  submitted: 'bg-indigo-500/15 text-indigo-400',
+  reviewed: 'bg-purple-500/15 text-purple-400',
+  approved: 'bg-emerald-500/15 text-emerald-400',
+  rejected: 'bg-red-500/15 text-red-400',
+  changes_requested: 'bg-orange-500/15 text-orange-400',
 };
 
-export default function DashboardPage() {
-  const navigate = useNavigate();
-  const { user, isDarkMode } = useAuthStore();
-  const role = user?.role || 'viewer';
+function roleLabel(role) {
+  return (role || 'viewer').replace(/_/g, ' ');
+}
 
-  const [docs, setDocs]       = useState([]);
-  const [metrics, setMetrics] = useState({ total: 0, pending: 0, compliance: 82, completed: 0, flagged: 0 });
-  const [aiStats, setAiStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const [docsRes, metRes, aiRes] = await Promise.allSettled([
-        documentAPI.getAll({ limit: 6 }),
-        dashboardAPI.getMetrics(),
-        analysisAPI.getStats(),
-      ]);
-      if (docsRes.status === 'fulfilled') {
-        const d = docsRes.value?.documents || docsRes.value?.data || docsRes.value || [];
-        setDocs(Array.isArray(d) ? d.slice(0, 6) : []);
-      }
-      if (metRes.status === 'fulfilled') {
-        const m = metRes.value;
-        setMetrics(prev => ({
-          total:      m?.totalDocuments ?? m?.total ?? prev.total,
-          pending:    m?.pendingAudits  ?? prev.pending,
-          compliance: m?.complianceScore ?? prev.compliance,
-          completed:  m?.completedAudits ?? prev.completed,
-          flagged:    m?.flaggedDocuments ?? prev.flagged,
-        }));
-      }
-      if (aiRes.status === 'fulfilled') setAiStats(aiRes.value);
-      setLoading(false);
-    })();
-  }, []);
-
-  const card  = isDarkMode ? 'bg-[#111318] border border-white/8'  : 'bg-white border border-gray-200 shadow-sm';
-  const text  = isDarkMode ? 'text-white'    : 'text-gray-900';
-  const sub   = isDarkMode ? 'text-slate-500': 'text-gray-500';
-  const divider = isDarkMode ? 'border-white/5' : 'border-gray-100';
-
-  const approved = metrics.completed || 41;
-  const pending  = metrics.pending   || 17;
-  const flagged  = metrics.flagged   || 5;
-  const total    = approved + pending + flagged || 1;
-
-  const pieSlices = [
-    { value: approved, color: '#10b981', label: 'Approved' },
-    { value: pending,  color: '#f59e0b', label: 'Pending'  },
-    { value: flagged,  color: '#ef4444', label: 'Flagged'  },
-  ];
-
-  const METRIC_CARDS = [
-    {
-      label: 'Total Documents',
-      value: loading ? '—' : (metrics.total || docs.length),
-      sub:   '↑ 8 this week',
-      icon:  FileText,
-      color: 'text-indigo-400',
-      bg:    'bg-indigo-500/10',
-    },
-    {
-      label: 'Pending Audits',
-      value: loading ? '—' : pending,
-      sub:   `${Math.min(3, pending)} overdue`,
-      icon:  Clock,
-      color: 'text-amber-400',
-      bg:    'bg-amber-500/10',
-    },
-    {
-      label: 'Compliance Score',
-      value: loading ? '—' : `${metrics.compliance}%`,
-      sub:   '↑ 4% vs last month',
-      icon:  ShieldCheck,
-      color: 'text-emerald-400',
-      bg:    'bg-emerald-500/10',
-    },
-    {
-      label: 'Completed Audits',
-      value: loading ? '—' : approved,
-      sub:   'This quarter',
-      icon:  CheckCircle2,
-      color: 'text-blue-400',
-      bg:    'bg-blue-500/10',
-    },
-  ];
-
-  const actions = ROLE_ACTIONS[role] || ROLE_ACTIONS.viewer;
+function StatCard({ label, value, icon: Icon, tone = 'indigo', loading }) {
+  const tones = {
+    indigo: 'bg-indigo-500/10 text-indigo-400',
+    amber: 'bg-amber-500/10 text-amber-400',
+    emerald: 'bg-emerald-500/10 text-emerald-400',
+    red: 'bg-red-500/10 text-red-400',
+    blue: 'bg-blue-500/10 text-blue-400',
+  };
 
   return (
-    <AppShell title="Dashboard">
-      {/* Welcome banner */}
-      <div className={`rounded-2xl p-5 mb-6 flex items-center justify-between ${isDarkMode ? 'bg-gradient-to-r from-indigo-500/20 to-purple-500/10 border border-indigo-500/20' : 'bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100'}`}>
-        <div>
-          <h2 className={`text-lg font-bold ${text}`}>
-            Welcome back, {user?.fullName?.split(' ')[0] || 'User'} 👋
-          </h2>
-          <p className={`text-sm mt-0.5 ${sub}`}>
-            {role === 'administrator' && 'You have full system access. Manage users, documents, and audits.'}
-            {role === 'auditor'       && 'Review documents, run AI audits, and generate compliance reports.'}
-            {role === 'document_manager' && 'Upload and manage documents, run AI analysis, and track workflows.'}
-            {role === 'viewer'        && 'You have read-only access to documents and reports.'}
-          </p>
-        </div>
-        <div className={`hidden sm:flex h-12 w-12 rounded-2xl items-center justify-center ${isDarkMode ? 'bg-indigo-500/20' : 'bg-indigo-100'}`}>
-          <TrendingUp className="h-6 w-6 text-indigo-400" />
-        </div>
+    <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
+      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${tones[tone]}`}>
+        <Icon className="h-4 w-4" />
       </div>
+      <p className="text-2xl font-bold text-white">{loading ? '-' : value}</p>
+      <p className="mt-0.5 text-xs font-medium text-slate-400">{label}</p>
+    </div>
+  );
+}
 
-      {/* Metric cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        {METRIC_CARDS.map(c => (
-          <div key={c.label} className={`rounded-2xl p-5 ${card}`}>
-            <div className="flex items-start justify-between mb-3">
-              <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${c.bg}`}>
-                <c.icon className={`h-4 w-4 ${c.color}`} />
-              </div>
+function StatusBarChart({ docs, title = 'Document Status Graph' }) {
+  const statuses = ['uploaded', 'in_review', 'in_progress', 'changes_requested', 'approved', 'rejected'];
+  const counts = statuses.map(status => ({ status, count: docs.filter(doc => doc.status === status).length }));
+  const max = Math.max(1, ...counts.map(item => item.count));
+
+  return (
+    <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
+      <h2 className="mb-4 text-sm font-semibold text-white">{title}</h2>
+      <div className="space-y-3">
+        {counts.map(({ status, count }) => (
+          <div key={status}>
+            <div className="mb-1 flex items-center justify-between text-xs">
+              <span className="text-slate-500">{STATUS_LABEL[status]}</span>
+              <span className="font-semibold text-white">{count}</span>
             </div>
-            <p className={`text-2xl font-bold ${c.color}`}>{c.value}</p>
-            <p className={`text-xs font-medium mt-0.5 ${text}`}>{c.label}</p>
-            <p className={`text-[10px] mt-0.5 ${sub}`}>{c.sub}</p>
+            <div className="h-2 overflow-hidden rounded-full bg-white/8">
+              <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.max(5, (count / max) * 100)}%` }} />
+            </div>
           </div>
         ))}
       </div>
+    </div>
+  );
+}
 
-      {/* Main grid */}
-      <div className="grid gap-5 lg:grid-cols-3 mb-5">
+function RiskGraph({ aiStats }) {
+  const values = [
+    ['High', aiStats?.riskDistribution?.high ?? 0, 'bg-red-400'],
+    ['Medium', aiStats?.riskDistribution?.medium ?? 0, 'bg-amber-400'],
+    ['Low', aiStats?.riskDistribution?.low ?? 0, 'bg-emerald-400'],
+  ];
+  const total = Math.max(1, values.reduce((sum, [, value]) => sum + value, 0));
 
-        {/* Pie chart — audit status */}
-        <div className={`rounded-2xl p-5 ${card}`}>
-          <h2 className={`text-sm font-semibold mb-4 ${text}`}>Audit Status Overview</h2>
-          <div className="flex items-center gap-5">
-            <PieChart slices={pieSlices} size={130} />
-            <div className="space-y-2.5 flex-1">
-              {pieSlices.map(s => (
-                <div key={s.label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
-                    <span className={`text-xs ${sub}`}>{s.label}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className={`text-sm font-bold ${text}`}>{s.value}</span>
-                    <span className={`text-[10px] ml-1 ${sub}`}>{Math.round(s.value / total * 100)}%</span>
-                  </div>
-                </div>
-              ))}
-              <div className={`pt-2 border-t ${divider}`}>
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs ${sub}`}>Total</span>
-                  <span className={`text-sm font-bold ${text}`}>{total}</span>
-                </div>
-              </div>
+  return (
+    <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
+      <h2 className="mb-4 text-sm font-semibold text-white">Risk Graph</h2>
+      <div className="flex h-36 items-end gap-4">
+        {values.map(([label, value, color]) => (
+          <div key={label} className="flex flex-1 flex-col items-center gap-2">
+            <div className="flex h-24 w-full items-end rounded-xl bg-white/5 p-1">
+              <div className={`w-full rounded-lg ${color}`} style={{ height: `${Math.max(8, (value / total) * 100)}%` }} />
             </div>
+            <p className="text-xs font-semibold text-white">{value}</p>
+            <p className="text-[10px] text-slate-500">{label}</p>
           </div>
-        </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-        {/* AI Analysis stats */}
-        <div className={`rounded-2xl p-5 ${card}`}>
-          <h2 className={`text-sm font-semibold mb-4 ${text}`}>AI Analysis Engine</h2>
-          <div className="space-y-3">
-            {[
-              { label: 'Documents Analyzed', value: aiStats?.totalAnalyzed ?? 0,                    color: 'text-indigo-400' },
-              { label: 'High Risk',           value: aiStats?.riskDistribution?.high   ?? 0,         color: 'text-red-400'    },
-              { label: 'Medium Risk',         value: aiStats?.riskDistribution?.medium ?? 0,         color: 'text-amber-400'  },
-              { label: 'Low Risk',            value: aiStats?.riskDistribution?.low    ?? 0,         color: 'text-emerald-400'},
-            ].map(s => (
-              <div key={s.label} className="flex items-center justify-between">
-                <span className={`text-xs ${sub}`}>{s.label}</span>
-                <span className={`text-sm font-bold ${s.color}`}>{s.value}</span>
-              </div>
-            ))}
-            <div className={`pt-2 border-t ${divider}`}>
-              <div className="flex items-center justify-between">
-                <span className={`text-xs ${sub}`}>Engine</span>
-                <span className={`text-[10px] rounded-full px-2 py-0.5 ${isDarkMode ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
-                  {aiStats?.aiEngine === 'openai' ? '🤖 OpenAI' : '⚙️ Rule-based'}
-                </span>
-              </div>
-            </div>
-          </div>
+function DocumentRow({ doc }) {
+  const status = doc.status || 'uploaded';
+  return (
+    <div className="flex items-center gap-3 px-5 py-3.5">
+      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/15">
+        <FileText className="h-4 w-4 text-indigo-400" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-white">{doc.title || doc.fileName}</p>
+        <p className="text-xs text-slate-500">
+          {doc.category || 'document'} - {doc.department || 'General'}
+          {doc.createdAt ? ` - ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
+        </p>
+        {doc.metadata?.statusReason && (
+          <p className="mt-0.5 truncate text-[11px] text-amber-300">Auditor note: {doc.metadata.statusReason}</p>
+        )}
+      </div>
+      <span className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-medium ${STATUS_PILL[status] || STATUS_PILL.uploaded}`}>
+        {STATUS_LABEL[status] || status}
+      </span>
+    </div>
+  );
+}
 
-          {/* Compliance bar */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className={`text-xs ${sub}`}>Overall Compliance</span>
-              <span className={`text-sm font-bold text-emerald-400`}>{metrics.compliance}%</span>
-            </div>
-            <div className={`h-2 rounded-full overflow-hidden ${isDarkMode ? 'bg-white/8' : 'bg-gray-100'}`}>
-              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${metrics.compliance}%` }} />
-            </div>
-          </div>
-        </div>
+function OwnerDashboard({ user }) {
+  const navigate = useNavigate();
+  const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-        {/* Quick actions — role-based */}
-        <div className={`rounded-2xl p-5 ${card}`}>
-          <h2 className={`text-sm font-semibold mb-4 ${text}`}>Quick Actions</h2>
-          <div className="grid grid-cols-2 gap-2.5">
-            {actions.map(a => {
-              const c = ACTION_COLORS[a.color];
-              return (
-                <button key={a.path} onClick={() => navigate(a.path)}
-                  className={`flex flex-col items-center gap-2 rounded-xl border p-3 text-center transition-all ${c.bg} ${c.hover}`}>
-                  <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${isDarkMode ? 'bg-white/5' : 'bg-white'}`}>
-                    <a.icon className={`h-4 w-4 ${c.icon}`} />
-                  </div>
-                  <span className={`text-[11px] font-medium leading-tight ${text}`}>{a.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+  useEffect(() => {
+    documentAPI.getAll({ limit: 20 })
+      .then((res) => {
+        const list = res?.documents || res?.data || res || [];
+        setDocs(Array.isArray(list) ? list : []);
+      })
+      .catch(() => setDocs([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const pending = docs.filter((d) => ['uploaded', 'in_review', 'in_progress', 'submitted'].includes(d.status)).length;
+  const approved = docs.filter((d) => d.status === 'approved').length;
+  const rejected = docs.filter((d) => d.status === 'rejected').length;
+
+  return (
+    <AppShell title="My Dashboard">
+      <div className="mb-6 rounded-2xl border border-white/8 bg-[#111318] p-5">
+        <h2 className="text-lg font-bold text-white">
+          Welcome back, {user?.fullName?.split(' ')[0] || 'User'}
+          <span className="ml-2 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold capitalize text-slate-300">
+            {roleLabel(user?.role)}
+          </span>
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Your dashboard only shows documents, statuses, and reports that belong to your account.
+        </p>
       </div>
 
-      {/* Recent documents */}
-      <div className={`rounded-2xl ${card}`}>
-        <div className={`flex items-center justify-between px-5 py-4 border-b ${divider}`}>
-          <h2 className={`text-sm font-semibold ${text}`}>Recent Documents</h2>
-          <button onClick={() => navigate('/documents')}
-            className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
+      <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatCard label="Documents Uploaded" value={docs.length} icon={FileText} loading={loading} />
+        <StatCard label="Pending Audit" value={pending} icon={Clock} tone="amber" loading={loading} />
+        <StatCard label="Approved" value={approved} icon={CheckCircle2} tone="emerald" loading={loading} />
+        <StatCard label="Rejected" value={rejected} icon={AlertTriangle} tone="red" loading={loading} />
+      </div>
+
+      <div className="mb-6">
+        <StatusBarChart docs={docs} title="My Document Status Graph" />
+      </div>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <button onClick={() => navigate('/documents')} className="flex items-center gap-4 rounded-2xl border border-white/8 bg-[#111318] p-5 text-left transition-colors hover:bg-white/5">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-500/20">
+            <Upload className="h-5 w-5 text-indigo-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">Upload Document</p>
+            <p className="text-xs text-slate-500">Submit a file for auditor review</p>
+          </div>
+        </button>
+        <button onClick={() => navigate('/audit-reports')} className="flex items-center gap-4 rounded-2xl border border-white/8 bg-[#111318] p-5 text-left transition-colors hover:bg-white/5">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/20">
+            <BarChart2 className="h-5 w-5 text-emerald-400" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white">My Audit Reports</p>
+            <p className="text-xs text-slate-500">Download reports generated from your documents</p>
+          </div>
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#111318]">
+        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+          <h2 className="text-sm font-semibold text-white">My Documents & Audit Status</h2>
+          <button onClick={() => navigate('/documents')} className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
             View all <ArrowUpRight className="h-3 w-3" />
           </button>
         </div>
         {loading ? (
-          <div className={`p-8 text-center text-sm ${sub}`}>Loading...</div>
+          <div className="p-8 text-center text-sm text-slate-500">Loading your documents...</div>
         ) : docs.length === 0 ? (
-          <div className={`p-8 text-center text-sm ${sub}`}>
-            No documents yet.{' '}
-            {role !== 'viewer' && (
-              <button onClick={() => navigate('/documents')} className="text-indigo-400 hover:underline">
-                Upload your first document
-              </button>
-            )}
+          <div className="p-8 text-center">
+            <FileText className="mx-auto mb-3 h-10 w-10 text-slate-700" />
+            <p className="mb-3 text-sm text-slate-500">No documents uploaded yet.</p>
+            <button onClick={() => navigate('/documents')} className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600">
+              Upload Your First Document
+            </button>
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: isDarkMode ? 'rgba(255,255,255,0.05)' : '#f3f4f6' }}>
-            {docs.map(doc => (
-              <div key={doc.id} className={`flex items-center gap-3 px-5 py-3 transition-colors ${isDarkMode ? 'hover:bg-white/2' : 'hover:bg-gray-50'}`}>
-                <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-indigo-500/15' : 'bg-indigo-50'}`}>
-                  <FileText className="h-4 w-4 text-indigo-400" />
+          <div className="divide-y divide-white/5">
+            {docs.slice(0, 8).map((doc) => <DocumentRow key={doc.id} doc={doc} />)}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 flex items-start gap-3 rounded-2xl border border-white/8 bg-[#111318] p-4">
+        <Bell className="mt-0.5 h-4 w-4 flex-shrink-0 text-indigo-400" />
+        <p className="text-xs text-slate-500">
+          Audit completion emails are sent to <span className="font-semibold text-slate-300">{user?.email}</span>. Log in after the email to view document status, auditor notes, and available reports.
+        </p>
+      </div>
+    </AppShell>
+  );
+}
+
+function StaffDashboard({ user }) {
+  const navigate = useNavigate();
+  const [docs, setDocs] = useState([]);
+  const [metrics, setMetrics] = useState(null);
+  const [aiStats, setAiStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const isAdmin = user?.role === 'administrator';
+
+  useEffect(() => {
+    const calls = [documentAPI.getAll({ limit: 8 }), dashboardAPI.getMetrics()];
+    if (!isAdmin) calls.push(analysisAPI.getStats());
+
+    Promise.allSettled(calls).then(([docsRes, metricsRes, aiRes]) => {
+      if (docsRes.status === 'fulfilled') {
+        const list = docsRes.value?.documents || docsRes.value?.data || docsRes.value || [];
+        setDocs(Array.isArray(list) ? list : []);
+      }
+      if (metricsRes.status === 'fulfilled') setMetrics(metricsRes.value);
+      if (aiRes?.status === 'fulfilled') setAiStats(aiRes.value);
+      setLoading(false);
+    });
+  }, [isAdmin]);
+
+  const totalDocuments = metrics?.documentMetrics?.total ?? docs.length;
+  const uploadedToday = metrics?.documentMetrics?.uploadedToday ?? 0;
+  const passRate = metrics?.complianceMetrics?.passRate ?? 0;
+  const completed = metrics?.taskMetrics?.completed ?? 0;
+
+  const actions = isAdmin
+    ? [
+        { label: 'Manage Users', detail: 'Approve roles', icon: Users, path: '/users' },
+        { label: 'Document Hub', detail: 'View all uploads', icon: FileText, path: '/documents' },
+        { label: 'Audit Reports', detail: 'View system reports', icon: BarChart2, path: '/audit-reports' },
+      ]
+    : [
+        { label: 'Run AI Audit', detail: 'Audit submitted docs', icon: Bot, path: '/ai-analysis' },
+        { label: 'Update Status', detail: 'Notify owners', icon: CheckCircle2, path: '/documents' },
+        { label: 'Audit Reports', detail: 'Generate reports', icon: BarChart2, path: '/audit-reports' },
+      ];
+
+  return (
+    <AppShell title="Dashboard">
+      <div className="mb-6 rounded-2xl border border-white/8 bg-[#111318] p-5">
+        <h2 className="text-lg font-bold text-white">
+          Welcome back, {user?.fullName?.split(' ')[0] || 'User'}
+          <span className="ml-2 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold capitalize text-slate-300">
+            {roleLabel(user?.role)}
+          </span>
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          {isAdmin
+            ? 'Manage users, approvals, documents, and reports. Audit execution is reserved for auditors.'
+            : 'Audit uploaded documents, update their progress, and notify document owners when reviews are complete.'}
+        </p>
+      </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <StatCard label="Total Documents" value={totalDocuments} icon={FileText} loading={loading} />
+        <StatCard label="Uploaded Today" value={uploadedToday} icon={Upload} tone="blue" loading={loading} />
+        <StatCard label="Compliance Pass Rate" value={`${passRate}%`} icon={ShieldCheck} tone="emerald" loading={loading} />
+        <StatCard label="Completed Tasks" value={completed} icon={CheckCircle2} tone="amber" loading={loading} />
+      </div>
+
+      <div className="mb-5 grid gap-5 lg:grid-cols-3">
+        <StatusBarChart docs={docs} />
+        {!isAdmin && <RiskGraph aiStats={aiStats} />}
+        {!isAdmin && (
+          <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
+            <h2 className="mb-4 text-sm font-semibold text-white">AI Analysis Engine</h2>
+            <div className="space-y-3">
+              {[
+                ['Analyzed', aiStats?.totalAnalyzed ?? 0, 'text-indigo-400'],
+                ['High Risk', aiStats?.riskDistribution?.high ?? 0, 'text-red-400'],
+                ['Medium Risk', aiStats?.riskDistribution?.medium ?? 0, 'text-amber-400'],
+                ['Low Risk', aiStats?.riskDistribution?.low ?? 0, 'text-emerald-400'],
+              ].map(([label, value, color]) => (
+                <div key={label} className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500">{label}</span>
+                  <span className={`text-sm font-bold ${color}`}>{value}</span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium truncate ${text}`}>{doc.title || doc.fileName}</p>
-                  <p className={`text-xs ${sub}`}>
-                    {doc.category} · {doc.department}
-                    {doc.createdAt ? ` · ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
-                  </p>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className={`rounded-2xl border border-white/8 bg-[#111318] p-5 ${isAdmin ? 'lg:col-span-1' : ''}`}>
+          <h2 className="mb-4 text-sm font-semibold text-white">Quick Actions</h2>
+          <div className="grid gap-2.5">
+            {actions.map(({ label, detail, icon: Icon, path }) => (
+              <button key={label} onClick={() => navigate(path)} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/3 p-3 text-left transition-colors hover:bg-white/5">
+                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-400">
+                  <Icon className="h-4 w-4" />
                 </div>
-                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium flex-shrink-0 ${STATUS_PILL[doc.status] || STATUS_PILL.uploaded}`}>
-                  {doc.status || 'uploaded'}
-                </span>
+                <div>
+                  <p className="text-xs font-semibold text-white">{label}</p>
+                  <p className="text-[10px] text-slate-500">{detail}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
+          <h2 className="mb-4 text-sm font-semibold text-white">Document Status</h2>
+          <div className="space-y-2.5">
+            {['in_review', 'in_progress', 'approved', 'rejected'].map((status) => (
+              <div key={status} className="flex items-center gap-3">
+                <div className="h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500" />
+                <span className="flex-1 text-xs text-slate-500">{STATUS_LABEL[status]}</span>
+                <span className="text-sm font-bold text-white">{docs.filter((d) => d.status === status).length}</span>
               </div>
             ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#111318]">
+        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+          <h2 className="text-sm font-semibold text-white">Recent Documents</h2>
+          <button onClick={() => navigate('/documents')} className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
+            View all <ArrowUpRight className="h-3 w-3" />
+          </button>
+        </div>
+        {loading ? (
+          <div className="p-8 text-center text-sm text-slate-500">Loading...</div>
+        ) : docs.length === 0 ? (
+          <div className="p-8 text-center text-sm text-slate-500">No documents yet.</div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {docs.map((doc) => <DocumentRow key={doc.id} doc={doc} />)}
           </div>
         )}
       </div>
     </AppShell>
   );
+}
+
+export default function DashboardPage() {
+  const { user } = useAuthStore();
+  const role = user?.role || 'viewer';
+
+  if (role === 'viewer' || role === 'document_manager') {
+    return <OwnerDashboard user={user} />;
+  }
+
+  return <StaffDashboard user={user} />;
 }

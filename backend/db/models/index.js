@@ -25,6 +25,10 @@ const ComplianceCheckModel  = require('./ComplianceCheck');
 const AuditReportModel      = require('./AuditReport');
 const TaskModel             = require('./Task');
 const AuditLogModel         = require('./AuditLog');
+const WorkflowModel         = require('./Workflow');
+const SearchModel           = require('./Search');
+const RetentionPolicyModel  = require('./RetentionPolicy');
+const NotificationModel     = require('./Notification');
 
 // Initialise
 const User             = UserModel(sequelize);
@@ -35,6 +39,10 @@ const ComplianceCheck  = ComplianceCheckModel(sequelize);
 const AuditReport      = AuditReportModel(sequelize);
 const Task             = TaskModel(sequelize);
 const AuditLog         = AuditLogModel(sequelize);
+const Workflow         = WorkflowModel(sequelize);
+const Search           = SearchModel(sequelize);
+const RetentionPolicy  = RetentionPolicyModel(sequelize);
+const Notification     = NotificationModel(sequelize);
 
 // ── Associations ──────────────────────────────────────────────────────────────
 
@@ -66,6 +74,9 @@ ComplianceCheck.belongsTo(Document, { foreignKey: 'documentId' });
 Document.hasMany(Task, { foreignKey: 'documentId', as: 'tasks' });
 Task.belongsTo(Document, { foreignKey: 'documentId' });
 
+Workflow.hasMany(Task, { foreignKey: 'workflowId', as: 'tasks' });
+Task.belongsTo(Workflow, { foreignKey: 'workflowId', as: 'workflow' });
+
 // Policy ↔ ComplianceCheck
 Policy.hasMany(ComplianceCheck, { foreignKey: 'policyId', as: 'checks' });
 ComplianceCheck.belongsTo(Policy, { foreignKey: 'policyId' });
@@ -81,4 +92,8 @@ module.exports = {
   AuditReport,
   Task,
   AuditLog,
+  Workflow,
+  Search,
+  RetentionPolicy,
+  Notification,
 };

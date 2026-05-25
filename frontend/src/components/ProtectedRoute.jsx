@@ -1,20 +1,17 @@
 import React from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { ShieldOff, ArrowLeft } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
-const ROLE_PERMISSIONS = {
-  administrator:    ['dashboard','documents','ai-analysis','audit-reports','workflow','users','2fa'],
-  auditor:          ['dashboard','documents','ai-analysis','audit-reports','workflow','2fa'],
-  document_manager: ['dashboard','documents','ai-analysis','audit-reports','workflow','2fa'],
-  viewer:           ['dashboard','documents','2fa'],
-};
-
 export default function ProtectedRoute({ children, requiredRole = null }) {
   const { isAuthenticated, user } = useAuthStore();
-  const navigate = useNavigate();
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  // If account is pending approval, redirect to waiting page
+  if (user?.approvalStatus === 'pending' || user?.isActive === false) {
+    return <Navigate to="/pending-approval" replace />;
+  }
 
   const role = user?.role || 'viewer';
   const allowed = Array.isArray(requiredRole) ? requiredRole : requiredRole ? [requiredRole] : null;
@@ -29,15 +26,13 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
           </div>
           <h1 className="text-xl font-bold text-white mb-2">Access Denied</h1>
           <p className="text-sm text-slate-400 mb-2">
-            Your role <span className="text-white font-semibold capitalize">{role.replace('_',' ')}</span> does not have permission to access this page.
+            Your role <span className="text-white font-semibold capitalize">{role.replace(/_/g,' ')}</span> does not have permission to access this page.
           </p>
-          <p className="text-xs text-slate-600 mb-6">
-            Required: {allowed?.join(' or ')}
-          </p>
-          <button onClick={() => navigate('/dashboard')}
+          <p className="text-xs text-slate-600 mb-6">Required: {allowed?.join(' or ')}</p>
+          <a href="/dashboard"
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">
             <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-          </button>
+          </a>
         </div>
       </div>
     );

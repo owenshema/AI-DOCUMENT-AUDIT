@@ -103,7 +103,7 @@ class AnalysisService {
     return await analysisRepository.getAnalysisStats(startDate, endDate);
   }
 
-  private generateRecommendations(analysis) {
+  generateRecommendations(analysis) {
     const recommendations = [];
 
     if (analysis.riskLevel === 'high' || analysis.riskLevel === 'critical') {

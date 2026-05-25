@@ -7,20 +7,51 @@ const getDashboard = async (req, res) => {
   try {
     const { Document, Task, ComplianceCheck, AuditLog } = req.app.locals.models;
     const userId = req.user?.id || 'system';
+    const role = req.user?.role || 'viewer';
+    const Op = require('sequelize').Op;
+
+    // Define role-based isolation filters
+    const docWhere = {};
+    const taskWhere = {};
+    const logWhere = {};
+    const checkWhere = {};
+
+    if (role === 'viewer' || role === 'document_manager') {
+      docWhere[Op.or] = [
+        { uploadedBy: userId },
+        req.app.locals.sequelize.literal(`"metadata"->>'sharing' LIKE '%${userId}%'`)
+      ];
+      logWhere.userId = userId;
+    }
+
+    if (role !== 'administrator') {
+      taskWhere.assignedTo = userId;
+    }
+
+    if (role === 'viewer' || role === 'document_manager') {
+      const allowedDocs = await Document.findAll({
+        where: docWhere,
+        attributes: ['id']
+      });
+      const allowedDocIds = allowedDocs.map(d => d.id);
+      checkWhere.documentId = allowedDocIds;
+    }
 
     // Fetch metrics
-    const totalDocuments = await Document.count();
-    const pendingTasks = await Task.count({ where: { status: 'pending' } });
-    const completedTasks = await Task.count({ where: { status: 'completed' } });
+    const totalDocuments = await Document.count({ where: docWhere });
+    const pendingTasks = await Task.count({ where: { ...taskWhere, status: 'pending' } });
+    const completedTasks = await Task.count({ where: { ...taskWhere, status: 'completed' } });
     const overdueTasks = await Task.count({ 
       where: { 
+        ...taskWhere,
         status: 'pending',
-        dueDate: { [require('sequelize').Op.lt]: new Date() }
+        dueDate: { [Op.lt]: new Date() }
       }
     });
 
     // Get recent audit logs
     const recentLogs = await AuditLog.findAll({
+      where: logWhere,
       limit: 10,
       order: [['createdAt', 'DESC']]
     });
@@ -29,6 +60,7 @@ const getDashboard = async (req, res) => {
     let avgComplianceScore = 0;
     try {
       const complianceChecks = await ComplianceCheck.findAll({
+        where: checkWhere,
         attributes: [
           [require('sequelize').fn('AVG', require('sequelize').col('compliance_score')), 'avgScore']
         ]
@@ -72,25 +104,54 @@ const getDashboard = async (req, res) => {
 const getDashboardMetrics = async (req, res) => {
   try {
     const { ComplianceCheck, Document, Task, AuditReport } = req.app.locals.models;
+    const userId = req.user?.id || 'system';
+    const role = req.user?.role || 'viewer';
+    const Op = require('sequelize').Op;
+
+    // Define role-based isolation filters
+    const docWhere = {};
+    const taskWhere = {};
+    const checkWhere = {};
+
+    if (role === 'viewer' || role === 'document_manager') {
+      docWhere[Op.or] = [
+        { uploadedBy: userId },
+        req.app.locals.sequelize.literal(`"metadata"->>'sharing' LIKE '%${userId}%'`)
+      ];
+    }
+
+    if (role !== 'administrator') {
+      taskWhere.assignedTo = userId;
+    }
+
+    if (role === 'viewer' || role === 'document_manager') {
+      const allowedDocs = await Document.findAll({
+        where: docWhere,
+        attributes: ['id']
+      });
+      const allowedDocIds = allowedDocs.map(d => d.id);
+      checkWhere.documentId = allowedDocIds;
+    }
 
     // Audit metrics
-    const totalComplianceChecks = await ComplianceCheck.count();
-    const passedChecks = await ComplianceCheck.count({ where: { status: 'passed' } });
-    const failedChecks = await ComplianceCheck.count({ where: { status: 'failed' } });
-    const pendingChecks = await ComplianceCheck.count({ where: { status: 'pending' } });
+    const totalComplianceChecks = await ComplianceCheck.count({ where: checkWhere });
+    const passedChecks = await ComplianceCheck.count({ where: { ...checkWhere, status: 'passed' } });
+    const failedChecks = await ComplianceCheck.count({ where: { ...checkWhere, status: 'failed' } });
+    const pendingChecks = await ComplianceCheck.count({ where: { ...checkWhere, status: 'pending' } });
 
     // Document metrics
-    const totalDocuments = await Document.count();
+    const totalDocuments = await Document.count({ where: docWhere });
     const uploadedToday = await Document.count({
       where: {
-        createdAt: { [require('sequelize').Op.gte]: new Date(new Date().setHours(0, 0, 0, 0)) }
+        ...docWhere,
+        createdAt: { [Op.gte]: new Date(new Date().setHours(0, 0, 0, 0)) }
       }
     });
 
     // Task metrics
-    const totalTasks = await Task.count();
-    const completedTasks = await Task.count({ where: { status: 'completed' } });
-    const pendingTasks = await Task.count({ where: { status: 'pending' } });
+    const totalTasks = await Task.count({ where: taskWhere });
+    const completedTasks = await Task.count({ where: { ...taskWhere, status: 'completed' } });
+    const pendingTasks = await Task.count({ where: { ...taskWhere, status: 'pending' } });
 
     const metrics = {
       complianceMetrics: {
@@ -123,14 +184,18 @@ const getAuditTrend = async (req, res) => {
   try {
     const { days = 30 } = req.query;
     const { AuditLog } = req.app.locals.models;
+    const where = {
+      createdAt: {
+        [require('sequelize').Op.gte]: new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      }
+    };
+    if (!['administrator', 'auditor'].includes(req.user?.role)) {
+      where.userId = req.user?.id;
+    }
 
     // Get audit logs for the period
     const logs = await AuditLog.findAll({
-      where: {
-        createdAt: { 
-          [require('sequelize').Op.gte]: new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-        }
-      },
+      where,
       order: [['createdAt', 'ASC']]
     });
 
@@ -164,9 +229,18 @@ const getAuditTrend = async (req, res) => {
 
 const getComplianceOverview = async (req, res) => {
   try {
-    const { ComplianceCheck, Policy } = req.app.locals.models;
+    const { ComplianceCheck, Document } = req.app.locals.models;
+    const options = {};
+    if (['viewer', 'document_manager'].includes(req.user?.role)) {
+      options.include = [{
+        model: Document,
+        attributes: [],
+        required: true,
+        where: { uploadedBy: req.user.id },
+      }];
+    }
 
-    const allChecks = await ComplianceCheck.findAll();
+    const allChecks = await ComplianceCheck.findAll(options);
     const passedCount = allChecks.filter(c => c.status === 'passed').length;
     const failedCount = allChecks.filter(c => c.status === 'failed').length;
     const warningCount = allChecks.filter(c => c.status === 'warning').length;

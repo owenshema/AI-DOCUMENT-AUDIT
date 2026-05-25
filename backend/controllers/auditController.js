@@ -6,6 +6,26 @@
 const { v4: uuidv4 } = require('uuid');
 const PDFDocument = require('pdfkit');
 const aiService = require('../services/aiService');
+const emailService = require('../services/emailService');
+const reportBuilder = require('../services/reportBuilderService');
+
+const canAccessReport = (report, user) => {
+  if (!user) return false;
+  if (['administrator', 'auditor'].includes(user.role)) return true;
+  return report.createdBy === user.id || report.scope?.userId === user.id || (report.scope?.ownerIds || []).includes(user.id);
+};
+
+const formatReportForClient = (report, user) => {
+  const plain = report.toJSON ? report.toJSON() : report;
+  const role = user?.role || 'viewer';
+  const structured = plain.metrics?.structuredReport || plain.statistics?.structuredReport;
+  return {
+    ...plain,
+    structured: structured ? reportBuilder.filterStructuredForRole(structured, role) : null,
+    viewerRole: role,
+    viewerRoleLabel: reportBuilder.ROLE_LABELS[role] || role,
+  };
+};
 
 const generateAuditReport = async (req, res) => {
   try {
@@ -19,6 +39,8 @@ const generateAuditReport = async (req, res) => {
 
     const { AuditReport, ComplianceCheck, Document, DocumentAnalysis } = req.app.locals.models;
     const { Op } = require('sequelize');
+    const currentUser = req.user || {};
+    const ownerScoped = ['viewer', 'document_manager'].includes(currentUser.role);
 
     if (!title || !periodStart || !periodEnd) {
       return res.status(400).json({ error: 'title, periodStart, and periodEnd are required' });
@@ -30,25 +52,40 @@ const generateAuditReport = async (req, res) => {
     end.setHours(23, 59, 59, 999);
 
     const dateRange = { [Op.between]: [start, end] };
+    const documentWhere = { createdAt: dateRange };
+    const activityWhere = { createdAt: dateRange };
+
+    if (ownerScoped) {
+      documentWhere.uploadedBy = currentUser.id;
+    }
 
     // ── Pull real data for the period ────────────────────────────────────────
 
     // 1. Documents uploaded in period — include uploader info
     const documents = await Document.findAll({
-      where: { createdAt: dateRange },
+      where: documentWhere,
       attributes: ['id', 'title', 'category', 'department', 'status', 'uploadedBy', 'createdAt'],
       order: [['createdAt', 'DESC']],
     });
+    const docIds = documents.map(d => d.id);
+    if (ownerScoped) {
+      activityWhere[Op.or] = [
+        { userId: currentUser.id },
+        ...(docIds.length > 0 ? [{ resourceType: 'document', resourceId: { [Op.in]: docIds } }] : []),
+      ];
+    }
 
     // 2. AI analyses run in period — include full results for accurate reporting
+    const analysisWhere = { completedAt: dateRange };
+    if (ownerScoped) analysisWhere.documentId = { [Op.in]: docIds };
+
     const analyses = await DocumentAnalysis.findAll({
-      where: { completedAt: dateRange },
+      where: analysisWhere,
       attributes: ['id', 'documentId', 'riskFactors', 'results', 'summary', 'recommendations', 'performedBy', 'completedAt'],
       order: [['completedAt', 'DESC']],
     });
 
     // Also get ALL analyses ever for documents uploaded in this period (even if analyzed later)
-    const docIds = documents.map(d => d.id);
     const analysesForDocs = docIds.length > 0 ? await DocumentAnalysis.findAll({
       where: { documentId: docIds },
       attributes: ['id', 'documentId', 'riskFactors', 'results', 'summary', 'recommendations', 'completedAt'],
@@ -61,8 +98,11 @@ const generateAuditReport = async (req, res) => {
     const allAnalyses = Object.values(allAnalysesMap);
 
     // 3. Compliance checks in period
+    const complianceWhere = { createdAt: dateRange };
+    if (ownerScoped) complianceWhere.documentId = { [Op.in]: docIds };
+
     const complianceChecks = await ComplianceCheck.findAll({
-      where: { createdAt: dateRange },
+      where: complianceWhere,
       attributes: ['id', 'documentId', 'status', 'complianceScore', 'findings', 'createdAt'],
       order: [['createdAt', 'DESC']],
     });
@@ -152,19 +192,21 @@ const generateAuditReport = async (req, res) => {
       ...documents.map(d => d.uploadedBy),
       ...allAnalyses.map(a => a.performedBy),
     ].filter(Boolean))];
+    // ── Activity log for the period ───────────────────────────────────────────
+    const activityLogs = await AuditLog.findAll({
+      where: activityWhere,
+      order: [['createdAt', 'DESC']],
+      limit: 200,
+    });
+    activityLogs.forEach(l => {
+      if (l.userId && !allUserIds.includes(l.userId)) allUserIds.push(l.userId);
+    });
     const users = allUserIds.length > 0
       ? await User.findAll({ where: { id: allUserIds }, attributes: ['id', 'fullName', 'email', 'role'] })
       : [];
     const userMap = {};
     users.forEach(u => { userMap[u.id] = u.fullName || u.email; });
     const getName = id => (id && userMap[id]) ? userMap[id] : 'System';
-
-    // ── Activity log for the period ───────────────────────────────────────────
-    const activityLogs = await AuditLog.findAll({
-      where: { createdAt: dateRange },
-      order: [['createdAt', 'DESC']],
-      limit: 200,
-    });
 
     // Build human-readable activity timeline
     const activityTimeline = [
@@ -253,7 +295,8 @@ const generateAuditReport = async (req, res) => {
 
       // Score breakdown per document for the report
       score_breakdown: analysisScores,
-      engine: 'rule-based-v4',
+      engine: 'rule-based-v5-org-trained',
+      _rawAnalyses: allAnalyses,
 
       // Activity log — who did what during this period
       activity_log: activityTimeline,
@@ -261,26 +304,44 @@ const generateAuditReport = async (req, res) => {
       generated_by_role: req.user?.role || 'system',
     };
 
-    // ── Generate AI-written report text ───────────────────────────────────────
+    // ── Generate professional structured report ───────────────────────────────
 
-    const aiReport = await aiService.generateAuditReport(auditSummary);
+    const aiReport = await aiService.generateAuditReport(auditSummary, {
+      viewerRole: currentUser.role,
+      ownerScoped,
+    });
+    const structured = aiReport.structured || reportBuilder.buildStructuredReport(auditSummary, {
+      viewerRole: currentUser.role,
+      ownerScoped,
+    });
+    const shortSummary = structured.sections?.find(s => s.id === 'executive')?.paragraphs?.[0]
+      || auditSummary.summary;
 
     // ── Save report ───────────────────────────────────────────────────────────
+
+    const notifiedOwners = [...new Set(documents.map(d => d.uploadedBy).filter(Boolean))]
+      .filter(ownerId => ownerId !== currentUser.id);
+
+    const orgStats = structured.organizationValidation || {};
 
     const report = await AuditReport.create({
       id:               uuidv4(),
       reportType,
       title,
-      status:           'draft',
+      description:      `${structured.meta?.reportTypeLabel || reportType} · ${structured.meta?.scopeLabel || 'Organization'} · ${start.toISOString().split('T')[0]} to ${end.toISOString().split('T')[0]}`,
+      status:           'published',
       periodStart:      start,
       periodEnd:        end,
-      scope,
+      scope: ownerScoped ? { ...scope, userId: currentUser.id, ownerScope: currentUser.role } : { ...scope, ownerIds: notifiedOwners },
       findings:         complianceChecks.map(c => ({
         checkId:         c.id,
         documentId:      c.documentId,
         status:          c.status,
         score:           c.complianceScore,
       })),
+      summary:          shortSummary?.slice(0, 2000) || auditSummary.summary,
+      riskSummary:      structured.riskSummary || { high: highRisk, medium: medRisk, low: lowRisk },
+      recommendations:  structured.recommendations || uniqueRecs,
       metrics: {
         totalDocuments:  totalDocs,
         totalAnalyses,
@@ -292,17 +353,57 @@ const generateAuditReport = async (req, res) => {
         riskDistribution: { high: highRisk, medium: medRisk, low: lowRisk },
         departments:      deptMap,
         categories:       catMap,
+        organizationValidation: orgStats,
+        structuredReport: structured,
+        reportEngine: aiReport.engine,
+      },
+      statistics: {
+        compliance: structured.compliance,
+        documentList: auditSummary.document_list,
+        violations: uniqueViolations,
+        missingFields: uniqueMissing,
+        structuredReport: structured,
       },
       complianceScore:  avgComplianceScore,
       executiveSummary: aiReport.report_text,
-      createdBy:        req.user?.id || 'system',
+      publishedAt:      new Date(),
+      createdBy:        currentUser.id,
     });
+
+    if (notifiedOwners.length > 0) {
+      const { Notification, User } = req.app.locals.models;
+      const owners = await User.findAll({ where: { id: notifiedOwners }, attributes: ['id', 'email', 'fullName'] });
+      await Promise.all(owners.map(async owner => {
+        await Notification.create({
+          recipientId: owner.id,
+          notificationType: 'audit_report_ready',
+          priority: 'medium',
+          subject: 'Audit report ready',
+          message: `An audit report is ready to view: "${report.title}".`,
+          details: { reportId: report.id, reportType, periodStart, periodEnd },
+          relatedEntityType: 'audit_report',
+          relatedEntityId: report.id,
+          actionUrl: '/audit-reports',
+          status: 'unread',
+          sentAt: new Date(),
+          deliveryStatus: 'sent',
+        });
+
+        await emailService.sendEmail({
+          to: owner.email,
+          subject: `Audit report ready: ${report.title}`,
+          text: `Hi ${owner.fullName || owner.email},\n\nAn audit report has been updated in your portal.\nPeriod: ${periodStart} to ${periodEnd}\n\nLog in to view the changes: ${process.env.PORTAL_URL || 'http://localhost:3000/audit-reports'}`,
+          html: `<p>Hi <strong>${owner.fullName || owner.email}</strong>,</p><p>An audit report has been updated in your portal.</p><p>Period: ${periodStart} to ${periodEnd}</p><p><a href="${process.env.PORTAL_URL || 'http://localhost:3000/audit-reports'}">Log in to view the changes</a></p>`,
+        });
+      }));
+    }
 
     res.status(201).json({
       message:    'Audit report generated successfully',
-      report,
+      report:     formatReportForClient(report, req.user),
       aiEngine:   aiReport.engine,
       reportText: aiReport.report_text,
+      structured,
       statistics: {
         period:           { start: periodStart, end: periodEnd },
         totalDocuments:   totalDocs,
@@ -329,7 +430,11 @@ const getAuditReport = async (req, res) => {
       return res.status(404).json({ error: 'Report not found' });
     }
 
-    res.json(report);
+    if (!canAccessReport(report, req.user)) {
+      return res.status(403).json({ error: 'Access denied to this report' });
+    }
+
+    res.json(formatReportForClient(report, req.user));
   } catch (error) {
     console.error('Get audit report error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch report' });
@@ -340,9 +445,17 @@ const listAuditReports = async (req, res) => {
   try {
     const { status, limit = 10, page = 1 } = req.query;
     const { AuditReport } = req.app.locals.models;
+    const { Op } = require('sequelize');
 
     const where = {};
     if (status) where.status = status;
+    if (['viewer', 'document_manager'].includes(req.user?.role)) {
+      where[Op.or] = [
+        { createdBy: req.user.id },
+        { scope: { [Op.contains]: { userId: req.user.id } } },
+        { scope: { [Op.contains]: { ownerIds: [req.user.id] } } },
+      ];
+    }
 
     const { count, rows } = await AuditReport.findAndCountAll({
       where,
@@ -352,11 +465,12 @@ const listAuditReports = async (req, res) => {
     });
 
     res.json({
-      reports: rows,
+      reports: rows.map(r => formatReportForClient(r, req.user)),
       total: count,
       page: parseInt(page),
       limit: parseInt(limit),
-      pages: Math.ceil(count / limit)
+      pages: Math.ceil(count / limit),
+      viewerRole: req.user?.role,
     });
   } catch (error) {
     console.error('List audit reports error:', error);
@@ -368,10 +482,71 @@ const exportAuditReport = async (req, res) => {
   try {
     const { reportId } = req.params;
     const { format = 'PDF' } = req.query;
-    const { AuditReport } = req.app.locals.models;
+    const { AuditReport, AuditLog, User } = req.app.locals.models;
+    const { Op } = require('sequelize');
 
-    const report = await AuditReport.findByPk(reportId);
+    const report = await AuditReport.findByPk(reportId, {
+      include: [{ model: User, attributes: ['fullName', 'email', 'role'] }]
+    });
     if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (!canAccessReport(report, req.user)) {
+      return res.status(403).json({ error: 'Access denied to this report' });
+    }
+
+    const ownerScoped = ['viewer', 'document_manager'].includes(req.user?.role);
+    let reportDocIds = [];
+    if (ownerScoped) {
+      const ownerIds = [
+        report.createdBy,
+        report.scope?.userId,
+        ...(Array.isArray(report.scope?.ownerIds) ? report.scope.ownerIds : []),
+      ].filter(Boolean);
+
+      reportDocIds = (report.findings || [])
+        .map(f => f.documentId)
+        .filter(Boolean);
+
+      if (reportDocIds.length === 0 && ownerIds.length > 0) {
+        const { Document } = req.app.locals.models;
+        const ownerDocs = await Document.findAll({
+          where: {
+            uploadedBy: { [Op.in]: ownerIds },
+            createdAt: { [Op.between]: [report.periodStart, report.periodEnd] },
+          },
+          attributes: ['id'],
+        });
+        reportDocIds = ownerDocs.map(d => d.id);
+      }
+    }
+
+    // Fetch activities for the period. Viewer and document manager exports stay
+    // scoped to their account and document portal instead of system-wide logs.
+    const logWhere = {
+      createdAt: {
+        [Op.between]: [report.periodStart, report.periodEnd]
+      }
+    };
+    if (ownerScoped) {
+      logWhere[Op.or] = [
+        { userId: req.user.id },
+        ...(reportDocIds.length > 0 ? [{ resourceType: 'document', resourceId: { [Op.in]: reportDocIds } }] : []),
+      ];
+    }
+
+    const logs = await AuditLog.findAll({
+      where: logWhere,
+      include: [{ model: User, attributes: ['fullName', 'email', 'role'] }],
+      order: [['createdAt', 'DESC']],
+      limit: 100
+    });
+
+    const activitiesList = logs.map(log => {
+      const userName = log.User ? log.User.fullName : 'System';
+      const userRole = log.User ? `(${log.User.role})` : '';
+      const dateStr = new Date(log.createdAt).toLocaleDateString();
+      const desc = log.description || log.action.replace(/_/g, ' ');
+      return `[${dateStr}] ${userName} ${userRole}: ${desc}`;
+    });
 
     const fmt = format.toUpperCase();
 
@@ -387,6 +562,7 @@ const exportAuditReport = async (req, res) => {
         `Status      : ${report.status}`,
         `Period      : ${report.periodStart ? new Date(report.periodStart).toLocaleDateString() : '—'} to ${report.periodEnd ? new Date(report.periodEnd).toLocaleDateString() : '—'}`,
         `Compliance  : ${report.complianceScore ?? '—'}%`,
+        `Generated By: ${report.User ? report.User.fullName : 'System'} (${report.User ? report.User.role : 'system'})`,
         `Generated   : ${new Date(report.createdAt).toLocaleString()}`,
         '',
         '='.repeat(60),
@@ -396,7 +572,13 @@ const exportAuditReport = async (req, res) => {
         report.executiveSummary || 'No AI-generated content available for this report.',
         '',
         '='.repeat(60),
-        `SIFCO AE — DocAudit AI  |  Exported ${new Date().toLocaleString()}`,
+        'ACTIVITY TIMELINE',
+        '='.repeat(60),
+        '',
+        activitiesList.length > 0 ? activitiesList.join('\n') : 'No activities recorded during this period.',
+        '',
+        '='.repeat(60),
+        `Super International Freight / SIFCO — DocAudit AI  |  Exported ${new Date().toLocaleString()}`,
       ];
 
       const content = lines.join('\n');
@@ -418,7 +600,7 @@ const exportAuditReport = async (req, res) => {
     doc.fillColor('#ffffff').fontSize(20).font('Helvetica-Bold')
       .text('AUDIT REPORT', 50, 25);
     doc.fillColor('#a5b4fc').fontSize(10).font('Helvetica')
-      .text('DocAudit AI  ·  SIFCO AE', 50, 52);
+      .text('DocAudit AI  ·  Super International Freight / SIFCO', 50, 52);
 
     // Reset color
     doc.fillColor('#1a1d24');
@@ -434,7 +616,8 @@ const exportAuditReport = async (req, res) => {
       ['Documents',        `${report.metrics?.totalDocuments ?? 0} uploaded`],
       ['AI Analyses',      `${report.metrics?.totalAnalyses ?? 0} run`],
       ['Checks',           `${report.metrics?.totalChecks ?? 0} (${report.metrics?.passRate ?? 0}% pass rate)`],
-      ['Generated',        new Date(report.createdAt).toLocaleString()],
+      ['Generated By',     `${report.User ? report.User.fullName : 'System'} (${report.User ? report.User.role : 'system'})`],
+      ['Generated Date',   new Date(report.createdAt).toLocaleString()],
     ];
 
     doc.fontSize(11).font('Helvetica-Bold').text('Report Details', 50, y);
@@ -465,37 +648,52 @@ const exportAuditReport = async (req, res) => {
       .text(`${score}%`, 50 + barWidth - 28, y + 2, { width: 30, align: 'right' });
     y += 30;
 
-    // Report content
-    if (report.executiveSummary) {
+    const structured = report.metrics?.structuredReport;
+
+    const renderPdfSection = (title, bodyLines) => {
+      if (y > doc.page.height - 100) { doc.addPage(); y = 50; }
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#4f46e5').text(title, 50, y, { width: 495 });
+      y += 16;
+      (bodyLines || []).forEach(line => {
+        if (y > doc.page.height - 80) { doc.addPage(); y = 50; }
+        doc.fontSize(9).font('Helvetica').fillColor('#374151').text(String(line).slice(0, 500), 50, y, { width: 495 });
+        y += 14;
+      });
+      y += 8;
+    };
+
+    if (structured?.sections?.length) {
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d24').text('Report Sections', 50, y);
+      y += 20;
+      structured.sections.forEach(section => {
+        const lines = [];
+        (section.paragraphs || []).forEach(p => lines.push(p));
+        (section.highlights || []).forEach(h => lines.push(`${h.label}: ${h.value}`));
+        (section.metrics || []).forEach(m => lines.push(`${m.label}: ${m.value}`));
+        (section.bullets || []).forEach(b => lines.push(`• ${b}`));
+        (section.numbered || []).forEach((r, i) => lines.push(`${i + 1}. ${r}`));
+        (section.violations || []).forEach(v => lines.push(`• ${v}`));
+        if (section.narrative) lines.push(section.narrative);
+        renderPdfSection(section.title, lines);
+      });
+    } else if (report.executiveSummary) {
       doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d24').text('Report Content', 50, y);
       y += 18;
       doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').lineWidth(1).stroke();
       y += 12;
 
-      // Split into sections by numbered headings
       const sections = report.executiveSummary.split(/\n(?=\d+\.|[A-Z]{2,})/);
       sections.forEach(section => {
         const lines = section.trim().split('\n');
         lines.forEach(line => {
           if (!line.trim()) { y += 6; return; }
-
-          // Check if new page needed
-          if (y > doc.page.height - 80) {
-            doc.addPage();
-            y = 50;
-          }
-
+          if (y > doc.page.height - 80) { doc.addPage(); y = 50; }
           const isHeading = /^\d+\.|^[A-Z\s]{4,}:?$/.test(line.trim());
           if (isHeading) {
             doc.fontSize(10).font('Helvetica-Bold').fillColor('#4f46e5').text(line.trim(), 50, y, { width: 495 });
             y += 16;
-          } else if (line.trim().startsWith('•') || line.trim().startsWith('-')) {
-            doc.fontSize(9).font('Helvetica').fillColor('#374151')
-              .text(line.trim(), 65, y, { width: 480 });
-            y += 14;
           } else {
-            doc.fontSize(9).font('Helvetica').fillColor('#374151')
-              .text(line.trim(), 50, y, { width: 495 });
+            doc.fontSize(9).font('Helvetica').fillColor('#374151').text(line.trim(), 50, y, { width: 495 });
             y += 14;
           }
         });
@@ -506,11 +704,36 @@ const exportAuditReport = async (req, res) => {
       y += 20;
     }
 
+    // Activity timeline section in PDF
+    if (y > doc.page.height - 120) {
+      doc.addPage();
+      y = 50;
+    }
+    y += 15;
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#1a1d24').text('Activity Timeline (Who Did What)', 50, y);
+    y += 18;
+    doc.moveTo(50, y).lineTo(545, y).strokeColor('#e5e7eb').lineWidth(1).stroke();
+    y += 12;
+
+    if (activitiesList.length > 0) {
+      activitiesList.forEach(act => {
+        if (y > doc.page.height - 80) {
+          doc.addPage();
+          y = 50;
+        }
+        doc.fontSize(8).font('Helvetica').fillColor('#374151').text(act, 50, y, { width: 495 });
+        y += 14;
+      });
+    } else {
+      doc.fontSize(9).font('Helvetica-Oblique').fillColor('#6b7280').text('No activities recorded during this period.', 50, y);
+      y += 20;
+    }
+
     // Footer
     const footerY = doc.page.height - 40;
     doc.rect(0, footerY - 10, doc.page.width, 50).fill('#f9fafb');
     doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-      .text(`SIFCO AE  ·  DocAudit AI  ·  Exported ${new Date().toLocaleString()}  ·  CONFIDENTIAL`, 50, footerY, { align: 'center', width: 495 });
+      .text(`Super International Freight / SIFCO  ·  DocAudit AI  ·  Exported ${new Date().toLocaleString()}  ·  CONFIDENTIAL`, 50, footerY, { align: 'center', width: 495 });
 
     doc.end();
   } catch (error) {

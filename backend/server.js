@@ -41,7 +41,7 @@ app.use(cors());
 // Rate limiting
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: process.env.NODE_ENV === 'development' ? 100 : 20,
   message: { error: 'Too many requests from this IP, please try again after 15 minutes' },
   standardHeaders: true,
   legacyHeaders: false
@@ -69,6 +69,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Attach models to app for use in controllers
 app.locals.models = models;
+app.locals.sequelize = models.sequelize;
 
 // Health check endpoint
 app.get('/api/status', (req, res) => {

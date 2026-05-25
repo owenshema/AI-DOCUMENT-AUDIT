@@ -48,6 +48,7 @@ export default function ForgotPasswordPage() {
     try {
       const res = await apiClient.post('/auth/request-password-reset', { email });
       if (res.data.userId) setUserId(res.data.userId);
+      if (res.data.devOTP) setOtp(res.data.devOTP);
       setStep('otp');
     } catch (err) { setError(err.response?.data?.error || 'Request failed.'); }
     setLoading(false);

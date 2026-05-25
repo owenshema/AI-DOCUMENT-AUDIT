@@ -1,0 +1,49 @@
+{
+  "modelVersion": "sifco-ml-v1",
+  "trainedAt": "2026-05-25T16:05:20.235Z",
+  "referenceCount": 6,
+  "types": [
+    {
+      "id": "packing_list",
+      "label": "Packing List",
+      "sourceFile": "01-packing-list-unique-hybrid.txt",
+      "referencePdf": "UNIQUE HYBRID&EV SPARE PARTS PACKING LIST.pdf",
+      "tokenCount": 63
+    },
+    {
+      "id": "bill_of_lading",
+      "label": "Bill of Lading (HBL)",
+      "sourceFile": "03-hbl-unique-hybrid.txt",
+      "referencePdf": "UNIQUE HYBRID & EV SPARE PARTS HBL.pdf",
+      "tokenCount": 309
+    },
+    {
+      "id": "shipping_agreement",
+      "label": "Shipping Agreement",
+      "sourceFile": "02-shipping-agreement-john.txt",
+      "referencePdf": "shippimg agreement J0HN.pdf",
+      "tokenCount": 124
+    },
+    {
+      "id": "freight_invoice",
+      "label": "Freight Invoice (Super International)",
+      "sourceFile": "04-freight-invoice-unique-hybrid.txt",
+      "referencePdf": "UNIQUE HYBRID.pdf",
+      "tokenCount": 97
+    },
+    {
+      "id": "trucking_invoice",
+      "label": "Trucking Invoice",
+      "sourceFile": "05-trucking-invoice-ecmu5567458.txt",
+      "referencePdf": "TRUCK INVOICE ECMU5567458.pdf",
+      "tokenCount": 99
+    },
+    {
+      "id": "sea_freight_invoice",
+      "label": "Sea Freight Invoice",
+      "sourceFile": "06-sea-freight-john.txt",
+      "referencePdf": "JOHN SEA FREIGHT.pdf",
+      "tokenCount": 45
+    }
+  ]
+}

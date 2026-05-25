@@ -154,6 +154,134 @@ const getDailyActivity = async (req, res) => {
   }
 };
 
+const getDailyActivityScoped = async (req, res) => {
+  try {
+    const { date, days = 7 } = req.query;
+    const { AuditLog, User, Document, DocumentAnalysis, AuditReport } = req.app.locals.models;
+    const role = req.user?.role || 'viewer';
+    const userId = req.user?.id;
+    const ownerScoped = ['viewer', 'document_manager'].includes(role);
+
+    const since = date ? new Date(date) : new Date(Date.now() - parseInt(days) * 86400000);
+    since.setHours(0, 0, 0, 0);
+    const until = new Date(); until.setHours(23, 59, 59, 999);
+    const range = { [Op.between]: [since, until] };
+
+    const docWhere = { createdAt: range };
+    if (ownerScoped) {
+      docWhere[Op.or] = [
+        { uploadedBy: userId },
+        req.app.locals.sequelize.literal(`"metadata"->>'sharing' LIKE '%${userId}%'`)
+      ];
+    }
+
+    const docs = await Document.findAll({
+      where: docWhere,
+      attributes: ['id', 'title', 'category', 'uploadedBy', 'createdAt'],
+      order: [['createdAt', 'DESC']],
+    });
+    const docIds = docs.map(d => d.id);
+
+    const logWhere = { createdAt: range };
+    if (ownerScoped) {
+      logWhere[Op.or] = [
+        { userId },
+        ...(docIds.length > 0 ? [{ resourceType: 'document', resourceId: { [Op.in]: docIds } }] : []),
+      ];
+    }
+
+    const logs = await AuditLog.findAll({ where: logWhere, order: [['createdAt', 'DESC']] });
+
+    const analysisWhere = { completedAt: range };
+    if (ownerScoped) analysisWhere.documentId = docIds.length > 0 ? { [Op.in]: docIds } : { [Op.in]: [] };
+    const analyses = await DocumentAnalysis.findAll({
+      where: analysisWhere,
+      attributes: ['id', 'documentId', 'performedBy', 'completedAt', 'riskFactors', 'results'],
+      order: [['completedAt', 'DESC']],
+    });
+
+    const reportWhere = { createdAt: range };
+    if (ownerScoped) {
+      reportWhere[Op.or] = [
+        { createdBy: userId },
+        { scope: { [Op.contains]: { userId } } },
+        { scope: { [Op.contains]: { ownerIds: [userId] } } },
+      ];
+    }
+    const reports = await AuditReport.findAll({
+      where: reportWhere,
+      attributes: ['id', 'title', 'reportType', 'createdBy', 'createdAt'],
+      order: [['createdAt', 'DESC']],
+    });
+
+    const allUserIds = [...new Set([
+      ...logs.map(l => l.userId),
+      ...docs.map(d => d.uploadedBy),
+      ...analyses.map(a => a.performedBy),
+      ...reports.map(r => r.createdBy),
+    ].filter(Boolean))];
+
+    const users = allUserIds.length > 0
+      ? await User.findAll({ where: { id: allUserIds }, attributes: ['id', 'fullName', 'email', 'role'] })
+      : [];
+    const userMap = {};
+    users.forEach(u => { userMap[u.id] = { name: u.fullName || u.email, email: u.email, role: u.role }; });
+    const getName = id => id && userMap[id] ? userMap[id].name : 'System';
+
+    const timeline = [
+      ...docs.map(d => {
+        const action = `Uploaded "${d.title}" (${d.category})`;
+        return { type: 'upload', time: d.createdAt, user: getName(d.uploadedBy), detail: action, action, icon: 'upload' };
+      }),
+      ...analyses.map(a => {
+        const action = `AI audit run - risk: ${a.riskFactors?.level || a.results?.risk_level || 'low'}, score: ${a.results?.compliance_score ?? '-'}/100`;
+        return { type: 'analysis', time: a.completedAt, user: getName(a.performedBy), detail: action, action, icon: 'bot' };
+      }),
+      ...reports.map(r => {
+        const action = `Generated "${r.title}" (${(r.reportType || '').replace(/_/g, ' ')})`;
+        return { type: 'report', time: r.createdAt, user: getName(r.createdBy), detail: action, action, icon: 'report' };
+      }),
+      ...logs.filter(l => ['login', 'logout', 'delete_document', 'post_documents', 'document_status_update'].includes(l.action)).map(l => {
+        const action = l.description || l.action.replace(/_/g, ' ');
+        return {
+          type: l.action,
+          time: l.createdAt,
+          user: getName(l.userId),
+          detail: action,
+          action,
+          icon: l.action.includes('login') ? 'login' : l.action.includes('delete') ? 'delete' : 'action',
+        };
+      }),
+    ].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 100);
+
+    const byDay = {};
+    timeline.forEach(item => {
+      const day = new Date(item.time).toISOString().split('T')[0];
+      if (!byDay[day]) byDay[day] = { uploads: 0, analyses: 0, reports: 0, logins: 0 };
+      if (item.type === 'upload') byDay[day].uploads++;
+      if (item.type === 'analysis') byDay[day].analyses++;
+      if (item.type === 'report') byDay[day].reports++;
+      if (item.type === 'login') byDay[day].logins++;
+    });
+
+    res.json({
+      timeline,
+      byDay,
+      summary: {
+        totalUploads: docs.length,
+        totalAnalyses: analyses.length,
+        totalReports: reports.length,
+        totalActions: logs.length,
+        period: { from: since.toISOString().split('T')[0], to: until.toISOString().split('T')[0] },
+        scope: ownerScoped ? 'my_account' : 'system',
+      },
+    });
+  } catch (err) {
+    console.error('getDailyActivity error:', err);
+    res.status(500).json({ error: err.message || 'Failed to fetch activity' });
+  }
+};
+
 const getSecurityEvents = async (req, res) => {
   try {
     const { limit = 20, page = 1 } = req.query;
@@ -209,4 +337,4 @@ const getUserActivityLog = (req, res) => res.json({ activityLog: [], total: 0 })
 const getAccessLogs      = (req, res) => res.json({ accessLogs: [], total: 0 });
 const getComplianceLog   = (req, res) => res.json({ complianceLogs: [], total: 0 });
 
-module.exports = { getAuditLogs, getDailyActivity, getUserActivityLog, getAccessLogs, getSecurityEvents, getComplianceLog, exportAuditLog, getAnomalies };
+module.exports = { getAuditLogs, getDailyActivity: getDailyActivityScoped, getUserActivityLog, getAccessLogs, getSecurityEvents, getComplianceLog, exportAuditLog, getAnomalies };

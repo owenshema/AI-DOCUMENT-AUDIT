@@ -10,14 +10,14 @@ const ctrl    = require('../controllers/analysisController');
 router.post('/text',  ctrl.analyzeText);
 router.post('/parse', ctrl.parseDocumentText);
 
-// Document-based analysis
-router.post('/:documentId/analyze',   ctrl.analyzeDocument);
-router.get('/:documentId/insights',   ctrl.getDocumentInsights);
-router.get('/:documentId/status',     ctrl.getAnalysisStatus);
-
 // Bulk & stats
 router.post('/bulk/analyze',   ctrl.bulkAnalyze);
 router.get('/trend/history',   ctrl.getAnalysisTrend);
 router.get('/stats/overview',  ctrl.getAnalysisStats);
+
+// Document-based analysis
+router.post('/:documentId/analyze',   ctrl.analyzeDocument);
+router.get('/:documentId/insights',   ctrl.getDocumentInsights);
+router.get('/:documentId/status',     ctrl.getAnalysisStatus);
 
 module.exports = router;

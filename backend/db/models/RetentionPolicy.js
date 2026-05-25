@@ -12,6 +12,9 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(255),
       allowNull: false
     },
+    name: {
+      type: DataTypes.STRING(255)
+    },
     description: {
       type: DataTypes.TEXT
     },
@@ -39,6 +42,17 @@ module.exports = (sequelize) => {
     applicableDocumentTypes: {
       type: DataTypes.ARRAY(DataTypes.STRING(100)),
       defaultValue: []
+    },
+    documentTypes: {
+      type: DataTypes.ARRAY(DataTypes.STRING(100)),
+      defaultValue: []
+    },
+    retentionDays: {
+      type: DataTypes.INTEGER
+    },
+    automationRules: {
+      type: DataTypes.JSONB,
+      defaultValue: {}
     },
     applicableDepartments: {
       type: DataTypes.ARRAY(DataTypes.STRING(100)),

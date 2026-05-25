@@ -1,0 +1,2 @@
+  ✗ Database tables are synced — users table missing
+  ✗ Failed:  1

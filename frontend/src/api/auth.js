@@ -55,6 +55,11 @@ export const authAPI = {
     const response = await apiClient.patch(`/auth/users/${userId}/status`, { isActive });
     return response.data;
   },
+
+  deleteUser: async (userId) => {
+    const response = await apiClient.delete(`/auth/users/${userId}`);
+    return response.data;
+  },
 };
 
 export const documentAPI = {
@@ -81,6 +86,18 @@ export const documentAPI = {
     return response.data;
   },
 
+  reupload: async (id, formData) => {
+    const response = await apiClient.post(`/documents/${id}/reupload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  updateStatus: async (id, data) => {
+    const response = await apiClient.patch(`/documents/${id}/status`, data);
+    return response.data;
+  },
+
   delete: async (id) => {
     const response = await apiClient.delete(`/documents/${id}`);
     return response.data;
@@ -88,6 +105,11 @@ export const documentAPI = {
 
   download: async (id) => {
     return apiClient.get(`/documents/${id}/download`, { responseType: 'blob' });
+  },
+
+  previewText: async (id) => {
+    const response = await apiClient.get(`/documents/${id}/preview-text`);
+    return response.data;
   },
 
   share: async (id, data) => {
@@ -129,8 +151,8 @@ export const analysisAPI = {
     return response.data;
   },
 
-  analyzeDocument: async (documentId) => {
-    const response = await apiClient.post(`/analysis/${documentId}/analyze`);
+  analyzeDocument: async (documentId, data = {}) => {
+    const response = await apiClient.post(`/analysis/${documentId}/analyze`, data);
     return response.data;
   },
 

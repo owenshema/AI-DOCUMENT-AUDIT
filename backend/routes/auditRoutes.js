@@ -1,8 +1,8 @@
 /**
  * Audit Routes — with role-based access control
- * financial_report: admin, auditor only
+ * financial_report: auditor only
  * daily_report:     all roles
- * compliance_audit: admin, auditor, document_manager
+ * compliance_audit: auditor, document_manager
  * policy_report:    all roles
  */
 
@@ -20,13 +20,13 @@ const requireRole = (...roles) => (req, res, next) => {
 };
 
 const REPORT_ACCESS = {
-  financial_report:  ['administrator', 'auditor'],
-  compliance_audit:  ['administrator', 'auditor', 'document_manager'],
-  security_audit:    ['administrator', 'auditor'],
-  exception_report:  ['administrator', 'auditor'],
-  document_review:   ['administrator', 'auditor', 'document_manager'],
-  daily_report:      ['administrator', 'auditor', 'document_manager', 'viewer'],
-  policy_report:     ['administrator', 'auditor', 'document_manager', 'viewer'],
+  financial_report:  ['auditor'],
+  compliance_audit:  ['auditor', 'document_manager'],
+  security_audit:    ['auditor'],
+  exception_report:  ['auditor'],
+  document_review:   ['auditor', 'document_manager'],
+  daily_report:      ['auditor', 'document_manager', 'viewer'],
+  policy_report:     ['auditor', 'document_manager', 'viewer'],
 };
 
 // Dynamic access check based on reportType in body
@@ -46,8 +46,8 @@ router.post('/reports', checkReportAccess, auditController.generateAuditReport);
 router.get('/reports/:reportId', auditController.getAuditReport);
 router.get('/reports', auditController.listAuditReports);
 router.get('/reports/:reportId/export', auditController.exportAuditReport);
-router.post('/reports/schedule', requireRole('administrator', 'auditor'), auditController.scheduleAuditReport);
-router.post('/reports/:reportId/distribute', requireRole('administrator', 'auditor'), auditController.distributeAuditReport);
+router.post('/reports/schedule', requireRole('auditor'), auditController.scheduleAuditReport);
+router.post('/reports/:reportId/distribute', requireRole('auditor'), auditController.distributeAuditReport);
 router.post('/reports/:reportId/archive', requireRole('administrator', 'auditor'), auditController.archiveAuditReport);
 
 module.exports = router;

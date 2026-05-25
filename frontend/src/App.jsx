@@ -1,62 +1,70 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import useAuthStore from './store/authStore';
 import ProtectedRoute from './components/ProtectedRoute';
 
-import HomePage           from './pages/HomePage';
-import LoginPage          from './pages/LoginPage';
-import RegisterPage       from './pages/RegisterPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import DashboardPage      from './pages/DashboardPage';
-import DocumentsPage      from './pages/DocumentsPage';
-import AIAnalysisPage     from './pages/AIAnalysisPage';
-import AuditReportsPage   from './pages/AuditReportsPage';
-import WorkflowPage       from './pages/WorkflowPage';
-import UsersPage          from './pages/UsersPage';
+import HomePage            from './pages/HomePage';
+import LoginPage           from './pages/LoginPage';
+import RegisterPage        from './pages/RegisterPage';
+import ForgotPasswordPage  from './pages/ForgotPasswordPage';
+import PendingApprovalPage from './pages/PendingApprovalPage';
+import DashboardPage       from './pages/DashboardPage';
+import DocumentsPage       from './pages/DocumentsPage';
+import AIAnalysisPage      from './pages/AIAnalysisPage';
+import AuditReportsPage    from './pages/AuditReportsPage';
+import WorkflowPage        from './pages/WorkflowPage';
+import UsersPage           from './pages/UsersPage';
 
 export default function App() {
-  const { isAuthenticated, hydrateAuth } = useAuthStore();
+  const { isAuthenticated, user, hydrateAuth } = useAuthStore();
+  const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => { hydrateAuth(); }, [hydrateAuth]);
+  useEffect(() => {
+    hydrateAuth().finally(() => setHydrated(true));
+  }, [hydrateAuth]);
+
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen bg-[#0d0f14] flex items-center justify-center">
+        <div className="h-8 w-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  const isPending = isAuthenticated && (user?.approvalStatus === 'pending' || user?.isActive === false);
 
   return (
     <Router>
       <Routes>
-        {/* Public */}
         <Route path="/"                element={<HomePage />} />
-        <Route path="/login"           element={isAuthenticated ? <Navigate to="/dashboard" /> : <LoginPage />} />
-        <Route path="/register"        element={isAuthenticated ? <Navigate to="/dashboard" /> : <RegisterPage />} />
-        <Route path="/forgot-password" element={isAuthenticated ? <Navigate to="/dashboard" /> : <ForgotPasswordPage />} />
+        <Route path="/login"           element={isAuthenticated && !isPending ? <Navigate to="/dashboard" /> : <LoginPage />} />
+        <Route path="/register"        element={isAuthenticated && !isPending ? <Navigate to="/dashboard" /> : <RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-        {/* All authenticated roles */}
-        <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-        <Route path="/documents" element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />
+        <Route path="/pending-approval" element={
+          isAuthenticated ? <PendingApprovalPage /> : <Navigate to="/login" replace />
+        } />
 
-        {/* Auditor + Document Manager + Admin */}
+        <Route path="/dashboard"     element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+        <Route path="/documents"     element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />
+        <Route path="/audit-reports" element={<ProtectedRoute><AuditReportsPage /></ProtectedRoute>} />
+
         <Route path="/ai-analysis" element={
-          <ProtectedRoute requiredRole={['administrator','auditor','document_manager']}>
+          <ProtectedRoute requiredRole={['auditor']}>
             <AIAnalysisPage />
           </ProtectedRoute>
         } />
-        <Route path="/audit-reports" element={
-          <ProtectedRoute requiredRole={['administrator','auditor','document_manager']}>
-            <AuditReportsPage />
-          </ProtectedRoute>
-        } />
         <Route path="/workflow" element={
-          <ProtectedRoute requiredRole={['administrator','auditor','document_manager']}>
+          <ProtectedRoute requiredRole={['administrator','auditor']}>
             <WorkflowPage />
           </ProtectedRoute>
         } />
-
-        {/* Admin only */}
         <Route path="/users" element={
           <ProtectedRoute requiredRole={['administrator']}>
             <UsersPage />
           </ProtectedRoute>
         } />
 
-        {/* 404 */}
         <Route path="*" element={
           <div className="flex min-h-screen items-center justify-center bg-[#0d0f14]">
             <div className="text-center">

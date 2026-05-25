@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight, CheckCircle2, Bot, ShieldCheck,
-  ClipboardCheck, FileText, Lock, Archive, GitBranch,
+  ClipboardCheck, FileText, GitBranch,
   Globe, Award, Users, Truck, Menu, X, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
@@ -38,13 +38,6 @@ const MODULES = [
   { icon: ClipboardCheck,title: 'Compliance Checks',    desc: 'Automated policy validation against supply chain standards.' },
   { icon: FileText,      title: 'Audit Reports',        desc: 'Generate and export professional audit reports as PDF.' },
   { icon: GitBranch,     title: 'Workflow & Tasks',     desc: 'Assign, track, and escalate document review tasks.' },
-];
-
-const STATS = [
-  { value: '20+', label: 'Years Experience' },
-  { value: '50+', label: 'Countries Served' },
-  { value: 'ISO', label: 'Certified Quality' },
-  { value: '24/7', label: 'Support Available' },
 ];
 
 export default function HomePage() {
@@ -158,10 +151,6 @@ export default function HomePage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-400 transition-colors">
                 Get Started <ArrowRight className="h-5 w-5" />
               </Link>
-              <Link to="/login"
-                className="inline-flex items-center gap-2 rounded-xl border border-white/25 bg-white/10 px-8 py-3.5 text-base font-semibold text-white hover:bg-white/20 transition-colors">
-                Login to Dashboard
-              </Link>
             </div>
 
             {/* Stats */}
@@ -269,12 +258,14 @@ export default function HomePage() {
               </div>
             ))}
           </div>
-          <div className="text-center mt-10">
-            <Link to={isAuthenticated ? '/dashboard' : '/login'}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-7 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors">
-              {isAuthenticated ? 'Open Dashboard' : 'Login to Access All Modules'} <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
+          {isAuthenticated && (
+            <div className="text-center mt-10">
+              <Link to="/dashboard"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-7 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors">
+                Open Dashboard <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 

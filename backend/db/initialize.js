@@ -30,33 +30,40 @@ const initializeDatabase = async () => {
 };
 
 const seedInitialData = async () => {
-  // Admin user
-  const adminExists = await User.findOne({ where: { email: 'admin@audit.local' } });
-  if (!adminExists) {
-    await User.create({
-      fullName:      'System Administrator',
-      email:         'admin@audit.local',
-      passwordHash:  'admin123',
-      role:          'administrator',
-      department:    'IT',
-      emailVerified: true
+  // Remove old mock/demo users so real system data is not polluted on startup.
+  await User.destroy({ where: { email: 'auditor@audit.local' } });
+
+  const adminCredentials = {
+    fullName: 'Owen Shema',
+    email: 'owenshema76@gmail.com',
+    passwordHash: 'Owen@123!',
+    department: 'Administration',
+    role: 'administrator',
+    approvalStatus: 'approved',
+    emailVerified: true,
+    isActive: true
+  };
+
+  const [adminUser, createdAdmin] = await User.findOrCreate({
+    where: { email: adminCredentials.email },
+    defaults: adminCredentials
+  });
+
+  if (!createdAdmin) {
+    await adminUser.update({
+      fullName: adminCredentials.fullName,
+      passwordHash: adminCredentials.passwordHash,
+      department: adminCredentials.department,
+      role: adminCredentials.role,
+      approvalStatus: adminCredentials.approvalStatus,
+      emailVerified: adminCredentials.emailVerified,
+      isActive: adminCredentials.isActive,
+      loginAttempts: 0,
+      lockUntil: null
     });
-    console.log('  ✓ Admin user: admin@audit.local / admin123');
   }
 
-  // Sample auditor
-  const auditorExists = await User.findOne({ where: { email: 'auditor@audit.local' } });
-  if (!auditorExists) {
-    await User.create({
-      fullName:      'Lead Auditor',
-      email:         'auditor@audit.local',
-      passwordHash:  'auditor123',
-      role:          'auditor',
-      department:    'Audit',
-      emailVerified: true
-    });
-    console.log('  ✓ Auditor user: auditor@audit.local / auditor123');
-  }
+  console.log(`  ${createdAdmin ? 'Created' : 'Updated'} administrator login: owenshema76@gmail.com`);
 
   // Default compliance policies (supply chain focused)
   const policyExists = await Policy.findOne({ where: { name: 'Supply Chain Invoice Policy' } });

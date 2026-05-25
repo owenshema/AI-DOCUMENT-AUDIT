@@ -103,7 +103,10 @@ export default function LoginPage() {
 
   const handleResend = async () => {
     setResending(true); setError('');
-    try { await authAPI.resendOTP(userId, 'login'); } catch {}
+    try {
+      const res = await authAPI.resendOTP(userId, 'login');
+      if (res.devOTP) setOtp(res.devOTP);
+    } catch {}
     setResending(false);
   };
 
@@ -142,21 +145,23 @@ export default function LoginPage() {
                   <p className="text-xs text-red-300">{error}</p>
                 </div>
               )}
-              <form onSubmit={handleCredentials} className="space-y-4">
+              <form onSubmit={handleCredentials} className="space-y-4" autoComplete="off">
                 <div>
                   <label className="block text-xs text-white/60 mb-1.5">Email</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                    <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                    <input type="email" name="login-email" value={email} onChange={e => setEmail(e.target.value)}
+                      autoComplete="off"
                       className="w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-3 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors"
-                      placeholder="you@sifco.local" required />
+                      required />
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs text-white/60 mb-1.5">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                    <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                    <input type="password" name="login-password" value={password} onChange={e => setPassword(e.target.value)}
+                      autoComplete="off"
                       className="w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-3 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors"
                       placeholder="••••••••" required />
                   </div>
@@ -174,7 +179,6 @@ export default function LoginPage() {
               <p className="mt-5 text-center text-xs text-white/40">
                 No account? <Link to="/register" className="text-indigo-300 hover:text-white transition-colors">Register</Link>
               </p>
-              <p className="mt-2 text-center text-[10px] text-white/25">admin@audit.local / admin123</p>
             </>
           )}
 
