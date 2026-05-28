@@ -142,6 +142,44 @@ const FindingCard = ({ label, items = [], color, dot, dark }) => (
   </div>
 );
 
+function normalizeDocumentInspection(raw, result) {
+  if (!raw) return null;
+  const isOurs = result?.organization_match === true && raw.not_our_document !== true;
+
+  if (!isOurs) {
+    return {
+      assessed: false,
+      not_our_document: true,
+      signature: null,
+      stamp: null,
+      organization: null,
+      purpose: null,
+      request: null,
+      forgery_analysis: raw.forgery_analysis || null,
+      dates: null,
+      financials: null,
+    };
+  }
+
+  const paperPurpose = result?.organization_training?.paper_purpose || null;
+  return {
+    assessed: true,
+    signature: { present: false, ...(raw.signature || {}) },
+    stamp: { present: false, stamp_type: 'Seal', ...(raw.stamp || {}) },
+    organization: { present: false, ...(raw.organization || {}) },
+    purpose: {
+      present: false,
+      subject: paperPurpose,
+      purpose: paperPurpose,
+      ...(raw.purpose || {}),
+    },
+    request: { has_request: false, ...(raw.request || {}) },
+    forgery_analysis: { is_suspicious: false, forgery_score: 0, flags: [], ...(raw.forgery_analysis || {}) },
+    dates: { all_dates: [], issues: [], ...(raw.dates || {}) },
+    financials: raw.financials || null,
+  };
+}
+
 export default function AIAnalysisPage() {
   const { isDarkMode } = useAuthStore();
   const fileRef = useRef(null);
@@ -225,6 +263,9 @@ export default function AIAnalysisPage() {
   };
 
   const score = result?.compliance_score ?? result?.complianceScore ?? 0;
+  const overallScore = result?.overall_audit_score ?? score;
+  const breakdown = result?.overall_audit_breakdown;
+  const integrityScore = breakdown?.integrity_percent ?? Math.max(0, 100 - (result?.document_inspection?.forgery_analysis?.forgery_score ?? 0));
 
   return (
     <AppShell title="AI Analysis">
@@ -364,29 +405,41 @@ export default function AIAnalysisPage() {
                 </div>
               )}
 
-              {/* Score */}
+              {/* Overall + component scores */}
               {(() => {
                 const aiGenerated = Math.round(result?.ai_generated_percentage ?? 0);
+                const overallLabel = result?.overall_audit_status || (overallScore >= 85 ? 'Excellent' : overallScore >= 70 ? 'Good' : overallScore >= 50 ? 'Review Required' : 'Failed');
                 return (
-                  <div className={`grid grid-cols-2 gap-4 rounded-xl border p-4 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
-                    <div className="flex items-center gap-3">
-                      <ScoreArc score={score} dark={isDarkMode} />
-                      <div>
-                        <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${sub}`}>Compliance Score</p>
-                        <p className={`text-sm font-bold ${score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : 'text-red-400'}`}>
-                          {score >= 80 ? 'Compliant' : score >= 60 ? 'Partial' : 'Non-Compliant'}
-                        </p>
-                        <p className={`text-[10px] mt-0.5 ${sub}`}>Risk: <span className={`font-semibold capitalize ${text}`}>{result.risk_level || result.riskLevel || 'low'}</span></p>
+                  <div className="space-y-3">
+                    <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-indigo-500/25 bg-indigo-500/8' : 'border-indigo-200 bg-indigo-50'}`}>
+                      <div className="flex items-center gap-4">
+                        <ScoreArc score={overallScore} dark={isDarkMode} />
+                        <div>
+                          <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${sub}`}>Overall Audit Health</p>
+                          <p className={`text-2xl font-bold ${overallScore >= 85 ? 'text-emerald-400' : overallScore >= 70 ? 'text-indigo-400' : overallScore >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                            {overallScore}%
+                          </p>
+                          <p className={`text-xs font-semibold ${text}`}>{overallLabel}</p>
+                          <p className={`text-[10px] mt-1 ${sub}`}>60% SIFCO match + 40% document integrity</p>
+                        </div>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-3 border-l pl-3 ${isDarkMode ? 'border-white/5' : 'border-gray-200'}`}>
-                      <ScoreArc score={aiGenerated} dark={isDarkMode} />
-                      <div>
-                        <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${sub}`}>AI Written %</p>
-                        <p className={`text-sm font-bold ${aiGenerated > 25 ? 'text-red-400' : 'text-emerald-400'}`}>
-                          {aiGenerated > 25 ? 'Over 25% Limit' : 'Within 25% Limit'}
-                        </p>
-                        <p className={`text-[10px] mt-0.5 ${sub}`}>Sentiment: <span className={`font-semibold capitalize ${text}`}>{result.sentiment || 'neutral'}</span></p>
+
+                    <div className={`grid grid-cols-3 gap-3 rounded-xl border p-4 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
+                      <div className="text-center">
+                        <ScoreArc score={score} dark={isDarkMode} />
+                        <p className={`text-[10px] uppercase tracking-wider mt-2 ${sub}`}>Compliance</p>
+                        <p className={`text-xs font-bold ${score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : 'text-red-400'}`}>{score}%</p>
+                      </div>
+                      <div className="text-center">
+                        <ScoreArc score={integrityScore} dark={isDarkMode} />
+                        <p className={`text-[10px] uppercase tracking-wider mt-2 ${sub}`}>Integrity</p>
+                        <p className={`text-xs font-bold ${integrityScore >= 70 ? 'text-emerald-400' : integrityScore >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{integrityScore}%</p>
+                      </div>
+                      <div className="text-center">
+                        <ScoreArc score={100 - aiGenerated} dark={isDarkMode} />
+                        <p className={`text-[10px] uppercase tracking-wider mt-2 ${sub}`}>Authenticity</p>
+                        <p className={`text-xs font-bold ${aiGenerated > 25 ? 'text-red-400' : 'text-emerald-400'}`}>{100 - aiGenerated}%</p>
                       </div>
                     </div>
                   </div>
@@ -480,7 +533,8 @@ export default function AIAnalysisPage() {
 
               {/* ── Document Inspection Panel ── */}
               {result.document_inspection && (() => {
-                const di = result.document_inspection;
+                const di = normalizeDocumentInspection(result.document_inspection, result);
+                if (!di) return null;
                 const rowCls = `flex items-start justify-between gap-2 py-2 border-b ${isDarkMode ? 'border-white/5' : 'border-gray-100'} last:border-0`;
                 const labelCls = `text-[11px] font-medium flex-shrink-0 w-28 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`;
                 const valCls = `text-[11px] text-right ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`;
@@ -494,68 +548,106 @@ export default function AIAnalysisPage() {
                       🔍 Document Inspection
                     </p>
 
+                    {di.not_our_document && (
+                      <p className={`text-[11px] mb-3 rounded-lg border px-3 py-2 ${isDarkMode ? 'border-amber-500/25 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+                        Unrecognized document — not a trained SIFCO paper. Signature, stamp, and logo checks were not applied.
+                      </p>
+                    )}
+
                     {/* Signature */}
                     <div className={rowCls}>
                       <span className={labelCls}>Signature</span>
                       <div className="text-right">
-                        <span className={`text-[11px] font-semibold ${di.signature.present ? ok : bad}`}>
-                          {di.signature.present ? '✓ Present' : '✗ Missing'}
-                        </span>
-                        {di.signature.signer_name && <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Signed by: {di.signature.signer_name}</p>}
-                        {di.signature.signer_title && <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>Title: {di.signature.signer_title}</p>}
-                        {di.signature.signing_date && <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>Date: {di.signature.signing_date}</p>}
-                        {di.signature.type && <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>Type: {di.signature.type}</p>}
+                        {!di.signature ? (
+                          <span className={`text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>—</span>
+                        ) : (
+                          <>
+                            <span className={`text-[11px] font-semibold ${di.signature.present ? ok : bad}`}>
+                              {di.signature.present ? '✓ Present' : '✗ Missing'}
+                            </span>
+                            {di.signature.signer_name && <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>Signed by: {di.signature.signer_name}</p>}
+                            {di.signature.signer_title && <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>Title: {di.signature.signer_title}</p>}
+                            {di.signature.signing_date && <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>Date: {di.signature.signing_date}</p>}
+                            {di.signature.type && <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>Type: {di.signature.type}</p>}
+                          </>
+                        )}
                       </div>
                     </div>
 
                     {/* Stamp */}
                     <div className={rowCls}>
                       <span className={labelCls}>Stamp / Seal</span>
-                      <span className={`text-[11px] font-semibold ${di.stamp.present ? ok : warn}`}>
-                        {di.stamp.present ? `✓ ${di.stamp.stamp_type}` : '— Not detected'}
-                      </span>
+                      {!di.stamp ? (
+                        <span className={`text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>—</span>
+                      ) : (
+                        <span className={`text-[11px] font-semibold ${di.stamp.present ? ok : warn}`}>
+                          {di.stamp.present ? `✓ ${di.stamp.stamp_type || 'Detected'}` : '— Not detected'}
+                        </span>
+                      )}
                     </div>
 
                     {/* Organization */}
                     <div className={rowCls}>
-                      <span className={labelCls}>Organization</span>
+                      <span className={labelCls}>Organization / Logo</span>
                       <div className="text-right">
-                        <span className={`text-[11px] font-semibold ${di.organization.present ? ok : bad}`}>
-                          {di.organization.present ? '✓ Found' : '✗ Missing'}
-                        </span>
-                        {di.organization.primary && <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{di.organization.primary}</p>}
+                        {!di.organization ? (
+                          <span className={`text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>—</span>
+                        ) : (
+                          <>
+                            <span className={`text-[11px] font-semibold ${di.organization.present ? ok : bad}`}>
+                              {di.organization.present ? '✓ Found' : '✗ Missing'}
+                            </span>
+                            {di.organization.primary && <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{di.organization.primary}</p>}
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    {/* Purpose */}
+                    {/* Purpose through Dates — only for recognized SIFCO documents */}
+                    {!di.not_our_document && (
+                      <>
                     <div className={rowCls}>
                       <span className={labelCls}>Purpose</span>
                       <div className="text-right max-w-[180px]">
-                        <span className={`text-[11px] font-semibold ${di.purpose.present ? ok : warn}`}>
-                          {di.purpose.present ? '✓ Stated' : '— Not stated'}
+                        <span className={`text-[11px] font-semibold ${di.purpose?.present ? ok : warn}`}>
+                          {di.purpose?.present ? '✓ Stated' : '— Not stated'}
                         </span>
-                        {di.purpose.subject && <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'} truncate`}>{di.purpose.subject}</p>}
-                        {di.purpose.purpose && !di.purpose.subject && <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'} truncate`}>{di.purpose.purpose}</p>}
+                        {di.purpose?.subject && <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'} truncate`}>{di.purpose.subject}</p>}
+                        {di.purpose?.purpose && !di.purpose?.subject && <p className={`text-[10px] mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'} truncate`}>{di.purpose.purpose}</p>}
                       </div>
                     </div>
 
-                    {/* Request */}
                     <div className={rowCls}>
                       <span className={labelCls}>Request</span>
                       <div className="text-right">
                         <span className={`text-[11px] ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-                          {di.request.has_request ? '✓ Request found' : '— No request'}
+                          {di.request?.has_request ? '✓ Request found' : '— No request'}
                         </span>
-                        {di.request.approval_status && (
+                        {di.request?.approval_status && (
                           <p className={`text-[10px] mt-0.5 font-semibold ${di.request.approval_status === 'approved' ? ok : di.request.approval_status === 'rejected' ? bad : warn}`}>
                             {di.request.approval_status.toUpperCase()}
                           </p>
                         )}
-                        {di.request.requested_by && <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>By: {di.request.requested_by}</p>}
+                        {di.request?.requested_by && <p className={`text-[10px] ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`}>By: {di.request.requested_by}</p>}
                       </div>
                     </div>
 
+                    <div className={rowCls}>
+                      <span className={labelCls}>Dates Found</span>
+                      <div className="text-right">
+                        <span className={`text-[11px] ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
+                          {di.dates?.all_dates?.length > 0 ? di.dates.all_dates.slice(0,3).join(', ') : '— None detected'}
+                        </span>
+                        {di.dates?.issues?.length > 0 && (
+                          <p className={`text-[10px] mt-0.5 ${bad}`}>{di.dates.issues[0]}</p>
+                        )}
+                      </div>
+                    </div>
+                      </>
+                    )}
+
                     {/* Forgery */}
+                    {di.forgery_analysis && (
                     <div className={rowCls}>
                       <span className={labelCls}>Forgery Check</span>
                       <div className="text-right">
@@ -567,19 +659,7 @@ export default function AIAnalysisPage() {
                         )}
                       </div>
                     </div>
-
-                    {/* Dates */}
-                    <div className={rowCls}>
-                      <span className={labelCls}>Dates Found</span>
-                      <div className="text-right">
-                        <span className={`text-[11px] ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
-                          {di.dates.all_dates?.length > 0 ? di.dates.all_dates.slice(0,3).join(', ') : '— None detected'}
-                        </span>
-                        {di.dates.issues?.length > 0 && (
-                          <p className={`text-[10px] mt-0.5 ${bad}`}>{di.dates.issues[0]}</p>
-                        )}
-                      </div>
-                    </div>
+                    )}
 
                     {/* Financials */}
                     {di.financials && (

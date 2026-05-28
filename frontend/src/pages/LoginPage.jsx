@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, Loader, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Loader, ShieldCheck, RefreshCw, LogOut, ArrowRight } from 'lucide-react';
 import { authAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
 
@@ -45,7 +45,16 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false);
   const [resending, setResending] = useState(false);
   const navigate = useNavigate();
-  const { setUser, setToken } = useAuthStore();
+  const { user, isAuthenticated, setUser, setToken, logout } = useAuthStore();
+  const isPending = isAuthenticated && (user?.approvalStatus === 'pending' || user?.isActive === false);
+
+  const handleSignOut = async () => {
+    try { await authAPI.logout(); } catch { /* ignore */ }
+    logout();
+    setStep('credentials');
+    setOtp('');
+    setError('');
+  };
 
   const handleCredentials = async (e) => {
     e.preventDefault();
@@ -134,6 +143,31 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md p-7 shadow-2xl">
+
+          {isAuthenticated && !isPending && step === 'credentials' && (
+            <div className="mb-5 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
+              <p className="text-xs text-amber-100 mb-2">
+                You are already signed in as <span className="font-semibold">{user?.fullName || user?.email}</span>.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button type="button" onClick={() => navigate('/dashboard', { replace: true })}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-400">
+                  Continue to Dashboard <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+                <button type="button" onClick={handleSignOut}
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white/80 hover:bg-white/10">
+                  <LogOut className="h-3.5 w-3.5" /> Sign in as someone else
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isPending && (
+            <div className="mb-5 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+              Your account is pending approval.{' '}
+              <Link to="/pending-approval" className="underline hover:text-white">View status</Link>
+            </div>
+          )}
 
           {/* ── Credentials ── */}
           {step === 'credentials' && (

@@ -255,6 +255,7 @@ function StaffDashboard({ user }) {
   const uploadedToday = metrics?.documentMetrics?.uploadedToday ?? 0;
   const passRate = metrics?.complianceMetrics?.passRate ?? 0;
   const completed = metrics?.taskMetrics?.completed ?? 0;
+  const avgOverallAudit = aiStats?.averageOverallAuditScore ?? 0;
 
   const actions = isAdmin
     ? [
@@ -284,9 +285,10 @@ function StaffDashboard({ user }) {
         </p>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-5">
         <StatCard label="Total Documents" value={totalDocuments} icon={FileText} loading={loading} />
         <StatCard label="Uploaded Today" value={uploadedToday} icon={Upload} tone="blue" loading={loading} />
+        <StatCard label="Avg Audit Health" value={loading ? '-' : `${avgOverallAudit}%`} icon={Bot} tone="indigo" loading={loading} />
         <StatCard label="Compliance Pass Rate" value={`${passRate}%`} icon={ShieldCheck} tone="emerald" loading={loading} />
         <StatCard label="Completed Tasks" value={completed} icon={CheckCircle2} tone="amber" loading={loading} />
       </div>
@@ -300,6 +302,7 @@ function StaffDashboard({ user }) {
             <div className="space-y-3">
               {[
                 ['Analyzed', aiStats?.totalAnalyzed ?? 0, 'text-indigo-400'],
+                ['Avg Health', `${aiStats?.averageOverallAuditScore ?? 0}%`, 'text-indigo-300'],
                 ['High Risk', aiStats?.riskDistribution?.high ?? 0, 'text-red-400'],
                 ['Medium Risk', aiStats?.riskDistribution?.medium ?? 0, 'text-amber-400'],
                 ['Low Risk', aiStats?.riskDistribution?.low ?? 0, 'text-emerald-400'],

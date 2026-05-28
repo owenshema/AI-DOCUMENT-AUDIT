@@ -151,6 +151,8 @@ const STATUS_PILL = {
   flagged:    'bg-red-500/15 text-red-400',
 };
 
+const getMainScrollEl = () => document.querySelector('main');
+
 export default function DocumentsPage() {
   const { user } = useAuthStore();
   const dropRef = useRef(null);
@@ -168,15 +170,27 @@ export default function DocumentsPage() {
   const [expanded, setExpanded]   = useState(null);
   const [viewerDoc, setViewerDoc] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts = {}) => {
+    const silent = opts.silent === true;
+    if (!silent) setLoading(true);
     try {
       const res = await documentAPI.getAll({ limit: 30 });
       const d = res?.documents || res?.data || res || [];
       setDocs(Array.isArray(d) ? d : []);
     } catch { setDocs([]); }
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, []);
+
+  const refreshDocument = useCallback(async (docId) => {
+    try {
+      const res = await documentAPI.getById(docId);
+      const updated = res?.document || res;
+      if (!updated?.id) return;
+      setDocs(prev => prev.map(d => (d.id === docId ? { ...d, ...updated } : d)));
+    } catch {
+      await load({ silent: true });
+    }
+  }, [load]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -261,16 +275,28 @@ export default function DocumentsPage() {
   };
 
   const handleAnalyze = async (doc) => {
+    const scrollEl = getMainScrollEl();
+    const scrollTop = scrollEl?.scrollTop ?? 0;
+
+    setExpanded(doc.id);
     setAnalysisMsg(p => ({ ...p, [doc.id]: 'Analyzing...' }));
     try {
       const auditorComment = analysisDraft[doc.id]?.comment || '';
       const res = await analysisAPI.analyzeDocument(doc.id, { auditorComment });
       const risk = res?.analysis?.riskLevel || res?.riskLevel || 'low';
-      setAnalysisMsg(p => ({ ...p, [doc.id]: `Risk: ${risk}` }));
+      setAnalysisMsg(p => ({ ...p, [doc.id]: `Audit complete · Risk: ${risk}` }));
       setAnalysisDraft(p => ({ ...p, [doc.id]: { comment: '' } }));
       await loadAuditResult(doc.id);
-      load();
-    } catch { setAnalysisMsg(p => ({ ...p, [doc.id]: 'Failed' })); }
+      await refreshDocument(doc.id);
+    } catch {
+      setAnalysisMsg(p => ({ ...p, [doc.id]: 'Failed' }));
+    } finally {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (scrollEl) scrollEl.scrollTop = scrollTop;
+        });
+      });
+    }
   };
 
   const handleStatusUpdate = async (doc) => {

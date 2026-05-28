@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   FileBarChart2, Plus, RefreshCw, Download, X, Eye,
-  Activity, Upload, Bot, LogIn, Trash2, Lock, Shield, User,
+  Activity, Upload, Bot, LogIn, Trash2, Lock, Shield, User, Search, Filter,
 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import ReportViewer from '../components/ReportViewer';
@@ -40,13 +40,18 @@ const ACTIVITY_ICONS = {
   action:   <Activity className="h-3.5 w-3.5 text-slate-400" />,
 };
 
-const downloadReport = (reportId, format, token) => {
-  const base = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
-  const url  = `${base}/audits/reports/${reportId}/export?format=${format}&token=${token}`;
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.setAttribute('download', `audit_report_${reportId.slice(0, 8)}.${format === 'PDF' ? 'pdf' : 'csv'}`);
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+const downloadReport = async (reportId, format) => {
+  const res = await auditAPI.exportReport(reportId, format);
+  const blob = res.data;
+  const ext = format === 'PDF' ? 'pdf' : 'csv';
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.setAttribute('download', `audit_report_${reportId.slice(0, 8)}.${ext}`);
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
 
 function complianceColor(score) {
@@ -57,7 +62,6 @@ function complianceColor(score) {
 
 export default function AuditReportsPage() {
   const { user, isDarkMode } = useAuthStore();
-  const token = localStorage.getItem('token') || '';
   const role  = user?.role || 'viewer';
 
   const [reports, setReports]         = useState([]);
@@ -72,6 +76,9 @@ export default function AuditReportsPage() {
   const [busy, setBusy]               = useState(false);
   const [msg, setMsg]                 = useState('');
   const [downloading, setDownloading] = useState({});
+  const [reportQuery, setReportQuery] = useState('');
+  const [reportTypeFilter, setReportTypeFilter] = useState('');
+  const [reportStatusFilter, setReportStatusFilter] = useState('');
 
   function today() { return new Date().toISOString().split('T')[0]; }
 
@@ -153,10 +160,14 @@ export default function AuditReportsPage() {
     setBusy(false);
   };
 
-  const handleExport = (id, fmt) => {
+  const handleExport = async (id, fmt) => {
     setDownloading(p => ({ ...p, [`${id}_${fmt}`]: true }));
-    downloadReport(id, fmt, token);
-    setTimeout(() => setDownloading(p => ({ ...p, [`${id}_${fmt}`]: false })), 2000);
+    try {
+      await downloadReport(id, fmt);
+    } catch (e) {
+      setMsg(e?.response?.data?.error || 'Export failed.');
+    }
+    setDownloading(p => ({ ...p, [`${id}_${fmt}`]: false }));
   };
 
   const handleArchive = async (id) => {
@@ -164,6 +175,18 @@ export default function AuditReportsPage() {
   };
 
   const selectedTypeInfo = REPORT_TYPES.find(t => t.value === form.reportType);
+
+  const filteredReports = useMemo(() => {
+    return reports.filter(function (r) {
+      var title = (r.title || '').toLowerCase();
+      var type = (r.reportType || r.structured?.meta?.reportType || '').toLowerCase();
+      var q = reportQuery.trim().toLowerCase();
+      if (q && title.indexOf(q) < 0 && type.indexOf(q) < 0) return false;
+      if (reportTypeFilter && r.reportType !== reportTypeFilter) return false;
+      if (reportStatusFilter && r.status !== reportStatusFilter) return false;
+      return true;
+    });
+  }, [reports, reportQuery, reportTypeFilter, reportStatusFilter]);
 
   return (
     <AppShell title="Audit Reports">
@@ -187,7 +210,7 @@ export default function AuditReportsPage() {
               className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${activeTab === tab
                 ? 'bg-indigo-500 text-white'
                 : isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {tab === 'reports' ? `Reports (${reports.length})` : activityScopeLabel}
+              {tab === 'reports' ? `Reports (${filteredReports.length})` : activityScopeLabel}
             </button>
           ))}
         </div>
@@ -209,9 +232,32 @@ export default function AuditReportsPage() {
       {activeTab === 'reports' && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className={`lg:col-span-1 rounded-2xl border overflow-hidden ${card} ${selectedReport ? 'lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto' : ''}`}>
-            <div className={`border-b px-5 py-4 sticky top-0 z-10 ${isDarkMode ? 'border-white/8 bg-[#111318]' : 'border-gray-200 bg-white'}`}>
-              <h2 className={`text-sm font-semibold ${text}`}>Report Library</h2>
-              <p className={`text-xs mt-0.5 ${sub}`}>Select a report to view the full professional breakdown</p>
+            <div className={`border-b px-5 py-4 sticky top-0 z-10 space-y-3 ${isDarkMode ? 'border-white/8 bg-[#111318]' : 'border-gray-200 bg-white'}`}>
+              <div>
+                <h2 className={`text-sm font-semibold ${text}`}>Report Library</h2>
+                <p className={`text-xs mt-0.5 ${sub}`}>Filter and open reports with overall audit health, compliance, and activity breakdown</p>
+              </div>
+              <div className="relative">
+                <Search className={`absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${sub}`} />
+                <input
+                  value={reportQuery}
+                  onChange={(e) => setReportQuery(e.target.value)}
+                  placeholder="Search reports..."
+                  className={`w-full rounded-xl border py-2 pl-9 pr-3 text-xs outline-none ${inputCls}`}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <select value={reportTypeFilter} onChange={(e) => setReportTypeFilter(e.target.value)} className={`rounded-xl border px-2 py-2 text-xs outline-none ${inputCls}`}>
+                  <option value="">All types</option>
+                  {REPORT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <select value={reportStatusFilter} onChange={(e) => setReportStatusFilter(e.target.value)} className={`rounded-xl border px-2 py-2 text-xs outline-none ${inputCls}`}>
+                  <option value="">All statuses</option>
+                  <option value="published">Published</option>
+                  <option value="draft">Draft</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
             </div>
             {loading ? (
               <div className={`p-10 text-center text-sm ${sub}`}>Loading reports...</div>
@@ -221,10 +267,16 @@ export default function AuditReportsPage() {
                 <p className={`text-sm font-medium ${text}`}>No reports yet</p>
                 <p className={`text-xs mt-1 ${sub}`}>Generate a compliance or daily report for your selected period.</p>
               </div>
+            ) : filteredReports.length === 0 ? (
+              <div className="p-10 text-center">
+                <Filter className={`mx-auto mb-3 h-10 w-10 ${isDarkMode ? 'text-slate-700' : 'text-gray-300'}`} />
+                <p className={`text-sm font-medium ${text}`}>No matching reports</p>
+                <p className={`text-xs mt-1 ${sub}`}>Adjust filters or generate a new report.</p>
+              </div>
             ) : (
               <div className={`divide-y ${divider}`}>
-                {reports.map(r => {
-                  const score = r.complianceScore ?? r.structured?.compliance?.score ?? 0;
+                {filteredReports.map(r => {
+                  const score = r.complianceScore ?? r.structured?.compliance?.overallScore ?? r.structured?.compliance?.score ?? 0;
                   const isSelected = selectedReport?.id === r.id;
                   const typeLabel = r.structured?.meta?.reportTypeLabel || r.reportType?.replace(/_/g, ' ');
                   return (
@@ -234,8 +286,9 @@ export default function AuditReportsPage() {
                         : isDarkMode ? 'hover:bg-white/2' : 'hover:bg-gray-50'}`}
                       onClick={() => openReport(r)}>
                       <div className="flex items-start gap-3">
-                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-indigo-500/15' : 'bg-indigo-50'}`}>
-                          <span className={`text-sm font-bold ${complianceColor(score)}`}>{Math.round(score)}</span>
+                        <div className={`h-10 w-10 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-indigo-500/15' : 'bg-indigo-50'}`}>
+                          <span className={`text-sm font-bold leading-none ${complianceColor(score)}`}>{Math.round(score)}</span>
+                          <span className={`text-[8px] ${sub}`}>health</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm font-semibold truncate ${text}`}>{r.title}</p>

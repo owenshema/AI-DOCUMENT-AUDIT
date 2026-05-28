@@ -236,8 +236,11 @@ export const auditAPI = {
   },
 
   exportReport: async (reportId, format = 'PDF') => {
-    const response = await apiClient.get(`/audits/reports/${reportId}/export`, { params: { format } });
-    return response.data;
+    const response = await apiClient.get(`/audits/reports/${reportId}/export`, {
+      params: { format },
+      responseType: 'blob',
+    });
+    return response;
   },
 
   scheduleReport: async (data) => {
@@ -390,13 +393,22 @@ export const taskAPI = {
 };
 
 export const searchAPI = {
-  search: async (query, params) => {
-    const response = await apiClient.post('/search/documents', { query, ...params });
+  search: async (query, params = {}) => {
+    const response = await apiClient.post('/search/documents', {
+      query,
+      filters: params.filters || {},
+      limit: params.limit || 20,
+      page: params.page || 1,
+    });
     return response.data;
   },
 
-  advanced: async (filters) => {
-    const response = await apiClient.post('/search/advanced', filters);
+  advanced: async (criteria, params = {}) => {
+    const response = await apiClient.post('/search/advanced', {
+      criteria,
+      limit: params.limit || 20,
+      page: params.page || 1,
+    });
     return response.data;
   },
 

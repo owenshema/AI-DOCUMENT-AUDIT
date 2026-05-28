@@ -61,8 +61,10 @@ function aggregateOrgStats(analyses) {
     aiThresholdExceeded: 0,
     forgeryFlagged: 0,
     avgAiPercent: 0,
+    avgOverallAudit: 0,
   };
   var aiPercents = [];
+  var overallScores = [];
   analyses.forEach(function(a) {
     var r = a.results || {};
     if (r.organization_match === true) stats.orgAccepted++;
@@ -70,9 +72,13 @@ function aggregateOrgStats(analyses) {
     if (r.ai_threshold_exceeded) stats.aiThresholdExceeded++;
     if (r.document_inspection?.forgery_analysis?.is_suspicious) stats.forgeryFlagged++;
     if (typeof r.ai_generated_percentage === 'number') aiPercents.push(r.ai_generated_percentage);
+    if (typeof r.overall_audit_score === 'number') overallScores.push(r.overall_audit_score);
   });
   if (aiPercents.length) {
     stats.avgAiPercent = Math.round(aiPercents.reduce(function(s, n) { return s + n; }, 0) / aiPercents.length);
+  }
+  if (overallScores.length) {
+    stats.avgOverallAudit = Math.round(overallScores.reduce(function(s, n) { return s + n; }, 0) / overallScores.length);
   }
   return stats;
 }
@@ -98,6 +104,7 @@ function buildRoleSections(data, role, reportType) {
       data.summary || 'No summary available for this period.',
     ],
     highlights: [
+      { label: 'Overall Audit Health', value: (data.overall_audit_score ?? score) + '/100', status: complianceStatus(data.overall_audit_score ?? score).code },
       { label: 'Compliance Score', value: score + '/100', status: status.code },
       { label: 'Documents Processed', value: String(data.total_documents ?? 0) },
       { label: 'Pass Rate', value: (data.pass_rate ?? 0) + '%' },
@@ -134,6 +141,7 @@ function buildRoleSections(data, role, reportType) {
         { key: 'org_fail', label: 'Not Our Organization', value: orgStats.orgRejected ?? 0, warn: (orgStats.orgRejected ?? 0) > 0 },
         { key: 'ai_high', label: 'AI Content > 25%', value: orgStats.aiThresholdExceeded ?? 0, warn: (orgStats.aiThresholdExceeded ?? 0) > 0 },
         { key: 'forgery', label: 'Forgery Indicators', value: orgStats.forgeryFlagged ?? 0, warn: (orgStats.forgeryFlagged ?? 0) > 0 },
+        { key: 'avg_health', label: 'Avg Audit Health', value: (orgStats.avgOverallAudit ?? 0) + '%' },
         { key: 'avg_ai', label: 'Avg AI-Written %', value: (orgStats.avgAiPercent ?? 0) + '%' },
       ],
     });
@@ -200,14 +208,14 @@ function buildRoleSections(data, role, reportType) {
     priority: 7,
     visibleTo: ['administrator', 'auditor', 'document_manager', 'viewer'],
     table: {
-      columns: ['Title', 'Category', 'Department', 'Status', 'Score', 'Risk'],
+      columns: ['Title', 'Category', 'Status', 'Compliance', 'Overall Health', 'Risk'],
       rows: (data.document_list || []).slice(0, 20).map(function(d) {
         return [
           d.title,
           d.category || '—',
-          d.department || '—',
           (d.status || '—').replace(/_/g, ' '),
-          d.compliance_score != null ? d.compliance_score + '/100' : 'Pending',
+          d.compliance_score != null ? d.compliance_score + '%' : 'Pending',
+          d.overall_audit_score != null ? d.overall_audit_score + '%' : '—',
           (d.risk_level || '—').toUpperCase(),
         ];
       }),
@@ -284,7 +292,8 @@ function buildStructuredReport(auditSummary, options) {
   var reportType = auditSummary.reportType || 'compliance_audit';
   var ownerScoped = options.ownerScoped || false;
   var score = auditSummary.compliance_score ?? 0;
-  var status = complianceStatus(score);
+  var overallScore = auditSummary.overall_audit_score ?? score;
+  var status = complianceStatus(overallScore);
   var orgStats = aggregateOrgStats(auditSummary._rawAnalyses || []);
 
   var enriched = Object.assign({}, auditSummary, {
@@ -313,6 +322,8 @@ function buildStructuredReport(auditSummary, options) {
     },
     compliance: {
       score: score,
+      overallScore: overallScore,
+      overallStatus: auditSummary.overall_audit_status || status.label,
       status: status,
       passRate: auditSummary.pass_rate ?? 0,
     },

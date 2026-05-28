@@ -1,0 +1,32 @@
+{
+  "labels": [
+    "has_stamp",
+    "has_signature",
+    "has_logo",
+    "has_missing_fields",
+    "high_forgery_risk"
+  ],
+  "required_fields": [
+    "invoice",
+    "date",
+    "total",
+    "consignee",
+    "container",
+    "bill of lading",
+    "freight",
+    "destination",
+    "origin",
+    "signature",
+    "stamp",
+    "vessel",
+    "weight"
+  ],
+  "input_size": [
+    224,
+    224
+  ],
+  "threshold": 0.5,
+  "architecture": "EfficientNet-B0 + Multi-label head",
+  "training_samples": 24,
+  "best_val_loss": 0.6764
+}

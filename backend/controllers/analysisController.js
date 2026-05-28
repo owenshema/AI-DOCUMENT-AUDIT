@@ -12,7 +12,14 @@ const emailService = require('../services/emailService');
 const { extractTextFromFile } = require('../services/pdfTextService');
 
 function decideDocumentStatus(result) {
-  if (result.organization_match) {
+  var forgery = result.document_inspection && result.document_inspection.forgery_analysis;
+  var forgeryScore = Number(forgery && forgery.forgery_score) || 0;
+  var forgeryBlocked = !!(forgery && forgery.is_suspicious && forgeryScore >= 45);
+  var mlOk = !!result.organization_match;
+  var overall = result.overall_audit_score != null ? result.overall_audit_score : result.compliance_score;
+  var scoreOk = typeof overall === 'number' ? overall >= 70 : mlOk;
+
+  if (mlOk && !forgeryBlocked && scoreOk) {
     var ml = result.organization_training && result.organization_training.ml_training;
     var ref = ml && ml.best_match ? ml.best_match.reference_pdf : '';
     return {
@@ -27,6 +34,21 @@ function decideDocumentStatus(result) {
       code: 'ML-OK',
     };
   }
+
+  if (forgeryBlocked) {
+    return {
+      status: 'rejected',
+      title: 'Document integrity check failed',
+      reason: result.organization_message || ('Forgery risk score ' + forgeryScore + '/100 exceeds threshold.'),
+      detail: (forgery.flags || []).slice(0, 5).join('; ') || 'Visual or text integrity indicators flagged this document.',
+      nextSteps: [
+        'Verify stamps, signatures, and letterhead against the original SIFCO reference.',
+        'Re-upload a scanned copy of the authentic document.',
+      ],
+      code: 'FORGERY-REJECT',
+    };
+  }
+
   return {
     status: 'rejected',
     title: 'Not a SIFCO trained document',
@@ -54,6 +76,7 @@ async function notifyAuditCompletion(models, document, result, decision, auditor
     decision.nextSteps && decision.nextSteps[0] ? `Next step: ${decision.nextSteps[0]}` : null,
     auditorComment ? `Auditor comment: ${auditorComment}` : null,
     `Compliance score: ${result.compliance_score}/100.`,
+    `Overall audit health: ${result.overall_audit_score ?? '—'}%.`,
     `AI-written content: ${result.ai_generated_percentage ?? 0}% (limit: 25%).`,
     `Risk: ${result.risk_level || 'low'}.`,
   ].filter(Boolean).join(' ');
@@ -155,6 +178,7 @@ const analyzeDocument = async (req, res) => {
     // 3. ML audit — content only (filename is NOT passed to the classifier)
     const result = await aiService.auditDocument(textToAnalyze, [], {
       contentOnly: true,
+      filePath: document.filePath,
     });
     const decision = decideDocumentStatus(result);
 
@@ -166,6 +190,9 @@ const analyzeDocument = async (req, res) => {
       summary:         result.summary       || '',
       results: {
         compliance_score:    result.compliance_score,
+        overall_audit_score: result.overall_audit_score,
+        overall_audit_status: result.overall_audit_status,
+        overall_audit_breakdown: result.overall_audit_breakdown,
         ai_generated_percentage: result.ai_generated_percentage,
         ai_threshold_exceeded: result.ai_threshold_exceeded,
         ai_validity_percentage: result.ai_validity_percentage,
@@ -177,6 +204,7 @@ const analyzeDocument = async (req, res) => {
         fraud_flags:         result.fraud_flags,
         dataset_baseline:    result.dataset_baseline,
         document_type:       result.document_type,
+        organization_match:  result.organization_match,
         document_inspection: result.document_inspection,
         auditor_comment:     auditorComment || null,
       },
@@ -198,6 +226,8 @@ const analyzeDocument = async (req, res) => {
         latestAuditSummary: result.summary,
         latestAuditorComment: auditorComment || null,
         latestComplianceScore: result.compliance_score,
+        latestOverallAuditScore: result.overall_audit_score,
+        latestOverallAuditStatus: result.overall_audit_status,
         latestAiGeneratedPercentage: result.ai_generated_percentage,
         statusReason: decision.reason,
         statusTitle: decision.title,
@@ -223,6 +253,9 @@ const analyzeDocument = async (req, res) => {
         documentTitle:    document.title,
         documentType:     result.document_type,
         compliance_score: result.compliance_score,
+        overall_audit_score: result.overall_audit_score,
+        overall_audit_status: result.overall_audit_status,
+        overall_audit_breakdown: result.overall_audit_breakdown,
         ai_generated_percentage: result.ai_generated_percentage,
         ai_threshold_exceeded: result.ai_threshold_exceeded,
         ai_validity_percentage: result.ai_validity_percentage,
@@ -360,7 +393,11 @@ const bulkAnalyze = async (req, res) => {
           continue;
         }
 
-        const result = await aiService.auditDocument(text, [], { contentOnly: true });
+        const result = await aiService.auditDocument(text, [], {
+          contentOnly: true,
+          filePath: doc.filePath,
+        });
+        const decision = decideDocumentStatus(result);
 
         await DocumentAnalysis.upsert({
           documentId: docId,
@@ -369,12 +406,19 @@ const bulkAnalyze = async (req, res) => {
           summary:         result.summary       || '',
           results: {
             compliance_score: result.compliance_score,
+            overall_audit_score: result.overall_audit_score,
+            overall_audit_status: result.overall_audit_status,
+            overall_audit_breakdown: result.overall_audit_breakdown,
             ai_generated_percentage: result.ai_generated_percentage,
             ai_threshold_exceeded: result.ai_threshold_exceeded,
             ai_validity_percentage: result.ai_validity_percentage,
             risk_level:       result.risk_level,
             missing_fields:   result.missing_fields,
             violations:       result.violations,
+            inconsistencies:  result.inconsistencies,
+            document_type:    result.document_type,
+            organization_match: result.organization_match,
+            document_inspection: result.document_inspection,
             dataset_baseline: result.dataset_baseline,
           },
           keywords:        result.missing_fields || [],
@@ -386,11 +430,33 @@ const bulkAnalyze = async (req, res) => {
           completedAt:     new Date(),
         });
 
+        await doc.update({
+          status: decision.status,
+          ocrProcessed: Boolean(text) || doc.ocrProcessed,
+          metadata: {
+            ...(doc.metadata || {}),
+            latestAuditDecision: decision,
+            latestAuditSummary: result.summary,
+            latestComplianceScore: result.compliance_score,
+            latestOverallAuditScore: result.overall_audit_score,
+            latestOverallAuditStatus: result.overall_audit_status,
+            statusReason: decision.reason,
+            statusTitle: decision.title,
+            statusDetail: decision.detail,
+            statusCode: decision.code,
+          },
+          lastModifiedBy: req.user?.id || null,
+          lastModifiedAt: new Date(),
+        });
+
         results.push({
           documentId: docId,
           status:     'success',
+          documentStatus: decision.status,
           riskLevel:  result.risk_level,
           score:      result.compliance_score,
+          overall_audit_score: result.overall_audit_score,
+          overall_audit_status: result.overall_audit_status,
           ai_generated_percentage: result.ai_generated_percentage,
           ai_threshold_exceeded: result.ai_threshold_exceeded,
           ai_validity_percentage: result.ai_validity_percentage,
@@ -470,6 +536,7 @@ const getAnalysisTrend = async (req, res) => {
 const getAnalysisStats = async (req, res) => {
   try {
     const { Document, DocumentAnalysis } = req.app.locals.models;
+    const { averageOverallScore } = require('../services/auditScoreService');
     const options = {};
     if (['viewer', 'document_manager'].includes(req.user?.role)) {
       options.include = [{
@@ -483,6 +550,7 @@ const getAnalysisStats = async (req, res) => {
     res.json({
       totalAnalyzed:     all.length,
       averageConfidence: 95,
+      averageOverallAuditScore: averageOverallScore(all),
       riskDistribution: {
         high:   all.filter(a => (a.riskFactors?.level || a.results?.risk_level) === 'high').length,
         medium: all.filter(a => (a.riskFactors?.level || a.results?.risk_level) === 'medium').length,

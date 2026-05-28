@@ -127,9 +127,11 @@ const generateAuditReport = async (req, res) => {
     const analysisScores = allAnalyses
       .map(a => a.results?.compliance_score)
       .filter(s => typeof s === 'number' && s >= 0);
+    const { averageOverallScore } = require('../services/auditScoreService');
     const avgAnalysisScore = analysisScores.length > 0
       ? Math.round(analysisScores.reduce((s, x) => s + x, 0) / analysisScores.length)
       : null;
+    const avgOverallAuditScore = averageOverallScore(allAnalyses) || avgAnalysisScore || 0;
 
     // Compliance check scores
     const checkScores = complianceChecks.map(c => c.complianceScore).filter(s => typeof s === 'number' && s >= 0);
@@ -242,6 +244,8 @@ const generateAuditReport = async (req, res) => {
       reportType,
       period:           { start: periodStart, end: periodEnd },
       compliance_score: avgComplianceScore,
+      overall_audit_score: avgOverallAuditScore,
+      overall_audit_status: avgOverallAuditScore >= 85 ? 'Excellent' : avgOverallAuditScore >= 70 ? 'Good' : avgOverallAuditScore >= 50 ? 'Review Required' : 'Failed',
       document_type:    reportType,
 
       // Real counts
@@ -275,6 +279,7 @@ const generateAuditReport = async (req, res) => {
         `${totalDocs} document(s) uploaded, ${totalAnalyses} AI analysis run(s), ` +
         `${totalChecks} compliance check(s) performed with a ${passRate}% pass rate. ` +
         `Average compliance score: ${avgComplianceScore}/100. ` +
+        `Average overall audit health: ${avgOverallAuditScore}/100. ` +
         `Risk distribution: ${highRisk} high, ${medRisk} medium, ${lowRisk} low.`,
 
       // Per-document details
@@ -287,6 +292,8 @@ const generateAuditReport = async (req, res) => {
           status:           d.status,
           date:             d.createdAt?.toISOString().split('T')[0],
           compliance_score: analysis?.results?.compliance_score ?? null,
+          overall_audit_score: analysis?.results?.overall_audit_score ?? null,
+          overall_audit_status: analysis?.results?.overall_audit_status ?? null,
           risk_level:       analysis ? getRisk(analysis) : null,
           violations_count: analysis?.results?.violations?.length ?? 0,
           missing_fields:   analysis?.results?.missing_fields?.slice(0, 3) ?? [],
@@ -605,6 +612,31 @@ const exportAuditReport = async (req, res) => {
     // Reset color
     doc.fillColor('#1a1d24');
     let y = 110;
+    const pageBottom = () => doc.page.height - 60;
+    const ensureSpace = (needed) => {
+      if (y + needed > pageBottom()) {
+        doc.addPage();
+        y = 50;
+      }
+    };
+    const writeText = (text, opts = {}) => {
+      const {
+        x = 50,
+        width = 495,
+        fontSize = 9,
+        font = 'Helvetica',
+        color = '#374151',
+        lineGap = 3,
+        spacing = 6,
+      } = opts;
+      const content = String(text || '').slice(0, 2000);
+      if (!content.trim()) return;
+      doc.fontSize(fontSize).font(font).fillColor(color);
+      const height = doc.heightOfString(content, { width, lineGap });
+      ensureSpace(height + spacing);
+      doc.text(content, x, y, { width, lineGap });
+      y += height + spacing;
+    };
 
     // Meta table
     const meta = [
@@ -626,9 +658,15 @@ const exportAuditReport = async (req, res) => {
     y += 10;
 
     meta.forEach(([key, val]) => {
+      doc.fontSize(9).font('Helvetica-Bold').fillColor('#6b7280');
+      const keyH = doc.heightOfString(key, { width: 130 });
+      doc.fontSize(9).font('Helvetica').fillColor('#111827');
+      const valH = doc.heightOfString(String(val || '—'), { width: 360 });
+      const rowH = Math.max(keyH, valH) + 6;
+      ensureSpace(rowH);
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#6b7280').text(key, 50, y, { width: 130 });
       doc.fontSize(9).font('Helvetica').fillColor('#111827').text(String(val || '—'), 185, y, { width: 360 });
-      y += 18;
+      y += rowH;
     });
 
     y += 10;
@@ -651,15 +689,11 @@ const exportAuditReport = async (req, res) => {
     const structured = report.metrics?.structuredReport;
 
     const renderPdfSection = (title, bodyLines) => {
-      if (y > doc.page.height - 100) { doc.addPage(); y = 50; }
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#4f46e5').text(title, 50, y, { width: 495 });
-      y += 16;
+      writeText(title, { fontSize: 10, font: 'Helvetica-Bold', color: '#4f46e5', spacing: 4 });
       (bodyLines || []).forEach(line => {
-        if (y > doc.page.height - 80) { doc.addPage(); y = 50; }
-        doc.fontSize(9).font('Helvetica').fillColor('#374151').text(String(line).slice(0, 500), 50, y, { width: 495 });
-        y += 14;
+        writeText(line, { fontSize: 9, font: 'Helvetica', color: '#374151', spacing: 4 });
       });
-      y += 8;
+      y += 6;
     };
 
     if (structured?.sections?.length) {
@@ -686,16 +720,17 @@ const exportAuditReport = async (req, res) => {
       sections.forEach(section => {
         const lines = section.trim().split('\n');
         lines.forEach(line => {
-          if (!line.trim()) { y += 6; return; }
-          if (y > doc.page.height - 80) { doc.addPage(); y = 50; }
-          const isHeading = /^\d+\.|^[A-Z\s]{4,}:?$/.test(line.trim());
-          if (isHeading) {
-            doc.fontSize(10).font('Helvetica-Bold').fillColor('#4f46e5').text(line.trim(), 50, y, { width: 495 });
-            y += 16;
-          } else {
-            doc.fontSize(9).font('Helvetica').fillColor('#374151').text(line.trim(), 50, y, { width: 495 });
-            y += 14;
+          if (!line.trim()) {
+            y += 4;
+            return;
           }
+          const isHeading = /^\d+\.|^[A-Z\s]{4,}:?$/.test(line.trim());
+          writeText(line.trim(), {
+            fontSize: isHeading ? 10 : 9,
+            font: isHeading ? 'Helvetica-Bold' : 'Helvetica',
+            color: isHeading ? '#4f46e5' : '#374151',
+            spacing: 4,
+          });
         });
       });
     } else {
@@ -717,16 +752,10 @@ const exportAuditReport = async (req, res) => {
 
     if (activitiesList.length > 0) {
       activitiesList.forEach(act => {
-        if (y > doc.page.height - 80) {
-          doc.addPage();
-          y = 50;
-        }
-        doc.fontSize(8).font('Helvetica').fillColor('#374151').text(act, 50, y, { width: 495 });
-        y += 14;
+        writeText(act, { fontSize: 8, font: 'Helvetica', color: '#374151', spacing: 4 });
       });
     } else {
-      doc.fontSize(9).font('Helvetica-Oblique').fillColor('#6b7280').text('No activities recorded during this period.', 50, y);
-      y += 20;
+      writeText('No activities recorded during this period.', { fontSize: 9, font: 'Helvetica-Oblique', color: '#6b7280' });
     }
 
     // Footer

@@ -35,16 +35,35 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 // Security middleware
-app.use(helmet());
-app.use(cors());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+}));
+
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(null, false);
+  },
+  credentials: true,
+}));
 
 // Rate limiting
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 100 : 20,
-  message: { error: 'Too many requests from this IP, please try again after 15 minutes' },
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 100 : 10,
+  message: { error: 'Too many authentication attempts. Try again after 15 minutes.' },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  skipSuccessfulRequests: false,
 });
 
 const apiLimiter = rateLimit({

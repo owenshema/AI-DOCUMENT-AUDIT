@@ -142,8 +142,84 @@ var REFERENCE_SPECS = [
 
 var corpusCache = null;
 /** Acceptance uses DOCUMENT BODY only — file name is never required */
-var ACCEPT_SIMILARITY = 0.24;
-var ACCEPT_MARKER_RATIO = 0.45;
+var ACCEPT_SIMILARITY = 0.52;
+var ACCEPT_MARKER_RATIO = 0.70;
+var ACCEPT_MIN_SIMILARITY = 0.32;
+var ACCEPT_AMBIGUITY_MARGIN = 0.10;
+var MIN_BODY_LENGTH = 80;
+var REJECTED_COMPLIANCE_SCORE = 10;
+
+function specForId(id) {
+  for (var i = 0; i < REFERENCE_SPECS.length; i++) {
+    if (REFERENCE_SPECS[i].id === id) return REFERENCE_SPECS[i];
+  }
+  return null;
+}
+
+function buildRejectedInspection() {
+  return {
+    assessed: false,
+    not_our_document: true,
+    signature: null,
+    stamp: null,
+    organization: null,
+    logo: null,
+    purpose: null,
+    request: null,
+    dates: null,
+    forgery_analysis: null,
+  };
+}
+
+function buildAcceptedInspection(documentText, best) {
+  var normalized = normalizeText(documentText);
+  return {
+    assessed: true,
+    not_our_document: false,
+    signature: { present: !!(best && best.signatureFound), issues: [] },
+    stamp: {
+      present: /shipped\s+on\s+board|seal|stamp/i.test(normalized),
+      stamp_type: 'Seal',
+      issues: [],
+    },
+    forgery_analysis: null,
+    organization: {
+      present: !!(best && best.markerBrand >= 50),
+      primary: best && best.markerBrand >= 50 ? 'SIFCO partner branding detected' : null,
+    },
+    purpose: {
+      present: !!(best && best.purpose),
+      subject: best ? best.purpose : null,
+      purpose: best ? best.purpose : null,
+    },
+    request: { has_request: false, approval_status: null },
+    dates: { all_dates: [], issues: [] },
+  };
+}
+
+function passesCompanyCriteria(best, normalizedText) {
+  if (!best) return false;
+  if (best.markerBrand < 50) return false;
+
+  var spec = specForId(best.id);
+  if (spec && spec.signatureMarkers && spec.signatureMarkers.length > 0) {
+    if (!best.signatureFound && best.markerSignature < 50) return false;
+  }
+
+  if (best.id === 'bill_of_lading') {
+    if (!/shipped\s+on\s+board|seal|authorised\s+signatory|authorized\s+signatory/i.test(normalizedText)) {
+      return false;
+    }
+  }
+
+  if (best.id === 'shipping_agreement') {
+    if (!/\bsifco\b/i.test(normalizedText) || !/super\s+international/i.test(normalizedText)) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 function normalizeText(text) {
   return (text || '')
@@ -294,7 +370,7 @@ function classifyDocument(documentText, context) {
     };
   }
 
-  if (!normalized || normalized.length < 20) {
+  if (!normalized || normalized.length < MIN_BODY_LENGTH) {
     return {
       accepted: false,
       reason: 'unreadable',
@@ -358,22 +434,36 @@ function classifyDocument(documentText, context) {
   var best = scores[0];
   var second = scores[1];
 
-  var accepted =
-    best.combinedScore >= ACCEPT_SIMILARITY &&
-    (
-      best.markerRequired >= ACCEPT_MARKER_RATIO * 100 ||
-      best.similarity >= 0.2 ||
-      (best.titleDetected && best.markerRequired >= 32) ||
-      (best.markerBrand >= 50 && best.markerRequired >= 35)
-    );
+  var markerOk = best.markerRequired >= ACCEPT_MARKER_RATIO * 100;
+  var similarityOk = best.similarity >= ACCEPT_MIN_SIMILARITY;
+  var combinedOk = best.combinedScore >= ACCEPT_SIMILARITY;
+  var titleOrStrongMarkers = best.titleDetected || best.markerRequired >= 85;
 
-  if (accepted && second && best.combinedScore - second.combinedScore < 0.06 && second.markerRequired > best.markerRequired) {
+  var accepted = combinedOk && markerOk && similarityOk && titleOrStrongMarkers;
+
+  if (accepted && second) {
+    var margin = best.combinedScore - second.combinedScore;
+    if (margin < ACCEPT_AMBIGUITY_MARGIN) {
+      accepted = false;
+    }
+    if (margin < 0.12 && second.combinedScore >= 0.45 && second.markerRequired >= 65) {
+      accepted = false;
+    }
+  }
+
+  if (accepted && best.markerBrand < 40 && best.markerRequired < 80) {
     accepted = false;
+  }
+
+  var companyCriteriaFailed = false;
+  if (accepted && !passesCompanyCriteria(best, normalized)) {
+    accepted = false;
+    companyCriteriaFailed = true;
   }
 
   return {
     accepted: accepted,
-    reason: accepted ? 'trained_match' : 'no_trained_match',
+    reason: accepted ? 'trained_match' : (companyCriteriaFailed ? 'company_criteria_failed' : 'no_trained_match'),
     bestMatch: best,
     allScores: scores,
     matchedBy: 'document_content_only',
@@ -419,6 +509,9 @@ function runTrainedAudit(documentText, context) {
   if (!accepted) {
     if (result.reason === 'unreadable') {
       message = result.message;
+    } else if (result.reason === 'company_criteria_failed') {
+      message =
+        'Document rejected: does not meet SIFCO company criteria — missing required partner branding, authorized signature, or official stamp/seal for the trained paper format.';
     } else if (best && best.markerRequired >= 30) {
       message =
         'This document is closest to "' + best.label + '" (' + Math.round(best.combinedScore * 100) +
@@ -433,16 +526,14 @@ function runTrainedAudit(documentText, context) {
       ' with ' + Math.round(best.combinedScore * 100) + '% match confidence.';
   }
 
-  var compliance_score = accepted
-    ? Math.min(100, Math.max(82, 75 + Math.round((best.combinedScore || 0) * 25)))
-    : Math.max(5, Math.round((best ? best.combinedScore : 0) * 40));
+  var compliance_score = accepted ? 100 : REJECTED_COMPLIANCE_SCORE;
 
   return {
-    document_type: best ? best.id : 'unknown',
+    document_type: accepted && best ? best.id : 'unknown',
     organization_match: accepted,
     trained_reference_match: accepted,
     organization_message: message,
-    organization_category: best ? best.id : null,
+    organization_category: accepted && best ? best.id : null,
     organization_training: {
       paper_label: best ? best.label : null,
       paper_purpose: best ? best.purpose : null,
@@ -458,14 +549,18 @@ function runTrainedAudit(documentText, context) {
     ai_generated_percentage: 0,
     ai_threshold_exceeded: false,
     ai_validity_percentage: compliance_score,
-    risk_level: accepted ? 'low' : 'high',
+    risk_level: accepted ? (best.combinedScore >= 0.65 ? 'low' : 'medium') : 'high',
     sentiment: accepted ? 'positive' : 'negative',
     summary: message,
     missing_fields: [],
-    extracted_fields: {
+    extracted_fields: accepted ? {
       paper_type: best ? best.label : null,
       matched_reference: best ? best.referencePdf : null,
       confidence: best ? Math.round(best.combinedScore * 100) + '%' : null,
+    } : {
+      paper_type: null,
+      matched_reference: null,
+      confidence: REJECTED_COMPLIANCE_SCORE + '%',
     },
     violations: [],
     inconsistencies: accepted ? [] : [{
@@ -480,15 +575,9 @@ function runTrainedAudit(documentText, context) {
     fraud_flags: [],
     policy_rules_checked: 0,
     engine: 'sifco-ml-trained',
-    document_inspection: {
-      signature: { present: !!(best && best.signatureFound), issues: [] },
-      stamp: { present: /shipped\s+on\s+board|seal/i.test(normalizeText(documentText)), issues: [] },
-      forgery_analysis: { is_suspicious: false, forgery_score: 0, flags: [] },
-      organization: {
-        present: !!(best && best.markerBrand >= 50),
-        primary: best && best.markerBrand >= 50 ? 'SIFCO partner branding detected' : null,
-      },
-    },
+    document_inspection: accepted
+      ? buildAcceptedInspection(documentText, best)
+      : buildRejectedInspection(),
   };
 }
 

@@ -7,3 +7,10 @@ frontend/.env
 backend/uploads/
 *.log
 .DS_Store
+.venv312/
+backend/data/audit_temp/
+backend/data/temp_audit_page.png
+*_log.txt
+training_log.txt
+forgery_training_log.txt
+test_first_sample_log.txt
