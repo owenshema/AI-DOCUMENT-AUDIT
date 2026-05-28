@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { ShieldOff, ArrowLeft } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 
@@ -29,10 +29,10 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
             Your role <span className="text-white font-semibold capitalize">{role.replace(/_/g,' ')}</span> does not have permission to access this page.
           </p>
           <p className="text-xs text-slate-600 mb-6">Required: {allowed?.join(' or ')}</p>
-          <a href="/dashboard"
+          <Link to="/dashboard"
             className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">
             <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-          </a>
+          </Link>
         </div>
       </div>
     );

@@ -12,6 +12,7 @@ import DashboardPage       from './pages/DashboardPage';
 import DocumentsPage       from './pages/DocumentsPage';
 import AIAnalysisPage      from './pages/AIAnalysisPage';
 import AuditReportsPage    from './pages/AuditReportsPage';
+import SearchPage          from './pages/SearchPage';
 import WorkflowPage        from './pages/WorkflowPage';
 import UsersPage           from './pages/UsersPage';
 
@@ -37,8 +38,8 @@ export default function App() {
     <Router>
       <Routes>
         <Route path="/"                element={<HomePage />} />
-        <Route path="/login"           element={isAuthenticated && !isPending ? <Navigate to="/dashboard" /> : <LoginPage />} />
-        <Route path="/register"        element={isAuthenticated && !isPending ? <Navigate to="/dashboard" /> : <RegisterPage />} />
+        <Route path="/login"           element={<LoginPage />} />
+        <Route path="/register"        element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
         <Route path="/pending-approval" element={
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/dashboard"     element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         <Route path="/documents"     element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />
         <Route path="/audit-reports" element={<ProtectedRoute><AuditReportsPage /></ProtectedRoute>} />
+        <Route path="/search"        element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
 
         <Route path="/ai-analysis" element={
           <ProtectedRoute requiredRole={['auditor']}>

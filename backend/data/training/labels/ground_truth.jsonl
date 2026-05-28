@@ -1,0 +1,6 @@
+{"doc_id": "01-packing-list-unique-hybrid", "document_type": "Packing_List", "consignee": "UNIQUE HYBRID & EV SPARE PARTS", "cargo_type": "Auto_Spare_Parts", "total_packages": 37, "weight_kg": 1000, "container_number": "TEMU6439085", "bill_of_lading": "DXB1020247"}
+{"doc_id": "02-shipping-agreement-john", "document_type": "Shipping_Agreement", "consignee": "HATANGIMANA JOHN", "shipper": "SIFCO", "cargo_type": "Vehicle", "total_usd": 4595, "bill_of_lading": "DXB1022332", "weight_kg": 6000, "cargo_details": "MITSUBISHI-FUSO FIGHTER 1990"}
+{"doc_id": "03-hbl-unique-hybrid", "document_type": "House_Bill_of_Lading", "consignee": "UNIQUE HYBRID", "cargo_type": "Auto_Spare_Parts", "container_number": "TEMU6439085", "bill_of_lading": "DXB1020247"}
+{"doc_id": "04-freight-invoice-unique-hybrid", "document_type": "Freight_Invoice", "consignee": "UNIQUE HYBRID", "cargo_type": "Auto_Spare_Parts", "total_usd": 660, "container_number": "TEMU6439085"}
+{"doc_id": "05-trucking-invoice-ecmu5567458", "document_type": "Trucking_Invoice", "container_number": "ECMU5567458", "cargo_type": "Container_Transport", "total_usd": 350}
+{"doc_id": "06-sea-freight-john", "document_type": "Sea_Freight_Invoice", "consignee": "HATANGIMANA JOHN", "cargo_type": "Vehicle", "total_usd": 4595, "bill_of_lading": "DXB1022332"}

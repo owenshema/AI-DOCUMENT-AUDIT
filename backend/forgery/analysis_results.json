@@ -1,0 +1,313 @@
+[
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\01-packing-list-unique-hybrid_page_0.png",
+    "doc_name": "01-packing-list-unique-hybrid_page_0.png",
+    "stamp": {
+      "detected": false
+    },
+    "signature": {
+      "detected": false
+    },
+    "logo": {
+      "detected": false
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "invoice",
+        "consignee",
+        "bill of lading",
+        "freight",
+        "origin",
+        "signature",
+        "stamp"
+      ],
+      "text_length": 570
+    },
+    "forgery_risk": {
+      "score": 100,
+      "level": "HIGH",
+      "factors": [
+        "MISSING_STAMP",
+        "MISSING_SIGNATURE",
+        "MISSING_LOGO",
+        "MANY_MISSING_FIELDS"
+      ]
+    }
+  },
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\01-packing-list-unique-hybrid_page_1.png",
+    "doc_name": "01-packing-list-unique-hybrid_page_1.png",
+    "stamp": {
+      "detected": false
+    },
+    "signature": {
+      "detected": false
+    },
+    "logo": {
+      "detected": false
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "invoice",
+        "consignee",
+        "bill of lading",
+        "freight",
+        "origin",
+        "signature",
+        "stamp"
+      ],
+      "text_length": 570
+    },
+    "forgery_risk": {
+      "score": 100,
+      "level": "HIGH",
+      "factors": [
+        "MISSING_STAMP",
+        "MISSING_SIGNATURE",
+        "MISSING_LOGO",
+        "MANY_MISSING_FIELDS"
+      ]
+    }
+  },
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\02-shipping-agreement-john_page_0.png",
+    "doc_name": "02-shipping-agreement-john_page_0.png",
+    "stamp": {
+      "detected": false
+    },
+    "signature": {
+      "detected": true
+    },
+    "logo": {
+      "detected": true
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "invoice",
+        "date",
+        "consignee",
+        "container",
+        "origin",
+        "stamp"
+      ],
+      "text_length": 989
+    },
+    "forgery_risk": {
+      "score": 55,
+      "level": "MEDIUM",
+      "factors": [
+        "MISSING_STAMP",
+        "MANY_MISSING_FIELDS"
+      ]
+    }
+  },
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\02-shipping-agreement-john_page_1.png",
+    "doc_name": "02-shipping-agreement-john_page_1.png",
+    "stamp": {
+      "detected": false
+    },
+    "signature": {
+      "detected": true
+    },
+    "logo": {
+      "detected": true
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "invoice",
+        "date",
+        "consignee",
+        "container",
+        "origin",
+        "stamp"
+      ],
+      "text_length": 989
+    },
+    "forgery_risk": {
+      "score": 55,
+      "level": "MEDIUM",
+      "factors": [
+        "MISSING_STAMP",
+        "MANY_MISSING_FIELDS"
+      ]
+    }
+  },
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\03-hbl-unique-hybrid_page_0.png",
+    "doc_name": "03-hbl-unique-hybrid_page_0.png",
+    "stamp": {
+      "detected": true
+    },
+    "signature": {
+      "detected": true
+    },
+    "logo": {
+      "detected": true
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "invoice",
+        "signature"
+      ],
+      "text_length": 2532
+    },
+    "forgery_risk": {
+      "score": 0,
+      "level": "LOW",
+      "factors": []
+    }
+  },
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\03-hbl-unique-hybrid_page_1.png",
+    "doc_name": "03-hbl-unique-hybrid_page_1.png",
+    "stamp": {
+      "detected": true
+    },
+    "signature": {
+      "detected": true
+    },
+    "logo": {
+      "detected": true
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "invoice",
+        "signature"
+      ],
+      "text_length": 2532
+    },
+    "forgery_risk": {
+      "score": 0,
+      "level": "LOW",
+      "factors": []
+    }
+  },
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\03-hbl-unique-hybrid_page_2.png",
+    "doc_name": "03-hbl-unique-hybrid_page_2.png",
+    "stamp": {
+      "detected": true
+    },
+    "signature": {
+      "detected": true
+    },
+    "logo": {
+      "detected": true
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "invoice",
+        "signature"
+      ],
+      "text_length": 2532
+    },
+    "forgery_risk": {
+      "score": 0,
+      "level": "LOW",
+      "factors": []
+    }
+  },
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\04-freight-invoice-unique-hybrid_page_0.png",
+    "doc_name": "04-freight-invoice-unique-hybrid_page_0.png",
+    "stamp": {
+      "detected": false
+    },
+    "signature": {
+      "detected": false
+    },
+    "logo": {
+      "detected": true
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "consignee",
+        "bill of lading",
+        "signature",
+        "stamp",
+        "vessel",
+        "weight"
+      ],
+      "text_length": 757
+    },
+    "forgery_risk": {
+      "score": 80,
+      "level": "HIGH",
+      "factors": [
+        "MISSING_STAMP",
+        "MISSING_SIGNATURE",
+        "MANY_MISSING_FIELDS"
+      ]
+    }
+  },
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\05-trucking-invoice-ecmu5567458_page_0.png",
+    "doc_name": "05-trucking-invoice-ecmu5567458_page_0.png",
+    "stamp": {
+      "detected": false
+    },
+    "signature": {
+      "detected": false
+    },
+    "logo": {
+      "detected": true
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "consignee",
+        "bill of lading",
+        "freight",
+        "signature",
+        "stamp",
+        "vessel",
+        "weight"
+      ],
+      "text_length": 746
+    },
+    "forgery_risk": {
+      "score": 80,
+      "level": "HIGH",
+      "factors": [
+        "MISSING_STAMP",
+        "MISSING_SIGNATURE",
+        "MANY_MISSING_FIELDS"
+      ]
+    }
+  },
+  {
+    "image_path": "C:\\Users\\USER\\Desktop\\AI POWERED AUDIT DOCUMMENT\\backend\\data\\training\\images\\06-sea-freight-john_page_0.png",
+    "doc_name": "06-sea-freight-john_page_0.png",
+    "stamp": {
+      "detected": false
+    },
+    "signature": {
+      "detected": false
+    },
+    "logo": {
+      "detected": false
+    },
+    "text_analysis": {
+      "missing_fields": [
+        "invoice",
+        "container",
+        "bill of lading",
+        "origin",
+        "signature",
+        "stamp",
+        "weight"
+      ],
+      "text_length": 354
+    },
+    "forgery_risk": {
+      "score": 100,
+      "level": "HIGH",
+      "factors": [
+        "MISSING_STAMP",
+        "MISSING_SIGNATURE",
+        "MISSING_LOGO",
+        "MANY_MISSING_FIELDS"
+      ]
+    }
+  }
+]

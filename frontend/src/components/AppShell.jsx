@@ -2,14 +2,17 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FolderOpen, Bot, FileBarChart2,
-  GitBranch, LogOut, Menu, ChevronDown, Sun, Moon,
+  GitBranch, LogOut, Menu, ChevronDown, Sun, Moon, Search,
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
+import { authAPI } from '../api/auth';
+import GlobalSearchBar from './GlobalSearchBar';
 
 // â”€â”€ Role-based nav config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // roles: null = all, array = restricted to those roles
 const ALL_NAV = [
   { path: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard',     roles: null },
+  { path: '/search',         icon: Search,          label: 'Search',        roles: null },
   { path: '/documents',     icon: FolderOpen,      label: 'My Documents',  roles: ['viewer','document_manager'] },
   { path: '/documents',     icon: FolderOpen,      label: 'Document Hub',  roles: ['administrator','auditor'] },
   { path: '/ai-analysis',   icon: Bot,             label: 'AI Analysis',   roles: ['auditor'] },
@@ -42,7 +45,11 @@ export default function AppShell({ children, title }) {
   // Filter nav by role
   const visibleNav = ALL_NAV.filter(n => !n.roles || n.roles.includes(role));
 
-  const handleLogout = () => { logout(); navigate('/login'); };
+  const handleLogout = async () => {
+    try { await authAPI.logout(); } catch { /* ignore */ }
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   // Theme classes
   const bg      = isDarkMode ? 'bg-[#0d0f14]'  : 'bg-gray-50';
@@ -149,8 +156,8 @@ export default function AppShell({ children, title }) {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Topbar */}
         <header className={`flex items-center justify-between border-b px-5 py-3 ${topbar}`}>
-          <div className="flex items-center gap-3">
-            <button className={`${subtext} hover:${text} transition-colors`} 
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <button className={`${subtext} hover:${text} transition-colors flex-shrink-0`} 
               onClick={() => {
                 if (window.innerWidth < 1024) {
                   setMobileOpen(true);
@@ -160,7 +167,10 @@ export default function AppShell({ children, title }) {
               }}>
               <Menu className="h-5 w-5" />
             </button>
-            <h1 className={`text-base font-semibold ${text}`}>{title || 'Dashboard'}</h1>
+            <h1 className={`text-base font-semibold flex-shrink-0 ${text}`}>{title || 'Dashboard'}</h1>
+            <div className="hidden md:block flex-1 max-w-xl ml-4">
+              <GlobalSearchBar />
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

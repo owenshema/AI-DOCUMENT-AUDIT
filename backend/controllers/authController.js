@@ -17,6 +17,7 @@ const speakeasy = require('speakeasy');
 const QRCode   = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const emailService = require('../services/emailService');
+const { logSecurityEvent } = require('../utils/securityAudit');
 
 const JWT_SECRET  = process.env.JWT_SECRET  || 'change-this-secret';
 const JWT_EXPIRES = process.env.JWT_EXPIRES_IN || '24h';
@@ -93,9 +94,9 @@ function generateOTP() {
 
 function issueJWT(user) {
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role },
+    { id: user.id, email: user.email, role: user.role, purpose: 'access' },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES }
+    { expiresIn: JWT_EXPIRES, issuer: 'docaudit-ai', audience: 'docaudit-client' }
   );
 }
 
@@ -203,12 +204,31 @@ const login = async (req, res) => {
     const user = await User.findOne({ where: { email: value.email } });
 
     if (!user) {
+      await logSecurityEvent(req.app.locals.models, {
+        action: 'failed_login',
+        resourceType: 'auth',
+        status: 'failure',
+        description: 'Login attempt for unknown email',
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        details: { email: value.email },
+      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Account lockout check
     if (user.lockUntil && user.lockUntil > new Date()) {
-      return res.status(423).json({ error: 'Invalid credentials' });
+      await logSecurityEvent(req.app.locals.models, {
+        userId: user.id,
+        userRole: user.role,
+        action: 'login_blocked',
+        resourceType: 'auth',
+        status: 'failure',
+        description: 'Login attempt while account locked',
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      });
+      return res.status(423).json({ error: 'Account temporarily locked due to failed attempts. Try again later.' });
     }
 
     // Account active check
@@ -229,6 +249,17 @@ const login = async (req, res) => {
         updates.lockUntil = new Date(Date.now() + LOCK_DURATION_MS);
       }
       await user.update(updates);
+      await logSecurityEvent(req.app.locals.models, {
+        userId: user.id,
+        userRole: user.role,
+        action: attempts >= MAX_LOGIN_ATTEMPTS ? 'account_locked' : 'failed_login',
+        resourceType: 'auth',
+        status: 'failure',
+        description: 'Invalid password on login',
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        details: { attempts },
+      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -300,6 +331,23 @@ const verifyOTP = async (req, res) => {
       !user.otpExpiry ||
       user.otpExpiry < new Date()
     ) {
+      const attempts = (user.loginAttempts || 0) + 1;
+      const updates = { loginAttempts: attempts };
+      if (attempts >= MAX_LOGIN_ATTEMPTS) {
+        updates.lockUntil = new Date(Date.now() + LOCK_DURATION_MS);
+      }
+      await user.update(updates);
+      await logSecurityEvent(req.app.locals.models, {
+        userId: user.id,
+        userRole: user.role,
+        action: 'failed_otp',
+        resourceType: 'auth',
+        status: 'failure',
+        description: 'Invalid or expired OTP',
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+        details: { purpose: value.purpose, attempts },
+      });
       return res.status(401).json({ error: 'Invalid or expired OTP' });
     }
 
@@ -533,7 +581,18 @@ const resetPassword = async (req, res) => {
 // ── POST /api/auth/logout ─────────────────────────────────────────────────────
 
 const logout = async (req, res) => {
-  // JWT is stateless — client discards token. Log the event.
+  if (req.user) {
+    await logSecurityEvent(req.app.locals.models, {
+      userId: req.user.id,
+      userRole: req.user.role,
+      action: 'logout',
+      resourceType: 'auth',
+      status: 'success',
+      description: 'User signed out',
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+  }
   res.json({ message: 'Logged out successfully' });
 };
 

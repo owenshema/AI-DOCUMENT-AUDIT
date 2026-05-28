@@ -4,11 +4,25 @@ import {
   Upload, Cpu, ClipboardCheck, XCircle, Calendar, User, Lock,
 } from 'lucide-react';
 
-const STATUS_STYLES = {
-  compliant: { bg: 'bg-emerald-500/15', text: 'text-emerald-500', border: 'border-emerald-500/30' },
-  partial: { bg: 'bg-amber-500/15', text: 'text-amber-500', border: 'border-amber-500/30' },
-  non_compliant: { bg: 'bg-red-500/15', text: 'text-red-500', border: 'border-red-500/30' },
+const HEALTH_STYLES = {
+  excellent: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', label: 'Excellent' },
+  good: { bg: 'bg-indigo-500/15', text: 'text-indigo-400', border: 'border-indigo-500/30', label: 'Good' },
+  review: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30', label: 'Review Required' },
+  failed: { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30', label: 'Failed' },
 };
+
+function healthStyle(score, statusLabel) {
+  if (statusLabel) {
+    var key = statusLabel.toLowerCase().includes('excellent') ? 'excellent'
+      : statusLabel.toLowerCase().includes('good') ? 'good'
+      : statusLabel.toLowerCase().includes('review') ? 'review' : 'failed';
+    return HEALTH_STYLES[key];
+  }
+  if (score >= 85) return HEALTH_STYLES.excellent;
+  if (score >= 70) return HEALTH_STYLES.good;
+  if (score >= 50) return HEALTH_STYLES.review;
+  return HEALTH_STYLES.failed;
+}
 
 const METRIC_ICONS = {
   upload: Upload,
@@ -166,7 +180,10 @@ export default function ReportViewer({ report, isDarkMode, onClose }) {
   const structured = report?.structured;
   const meta = structured?.meta;
   const compliance = structured?.compliance;
-  const statusStyle = STATUS_STYLES[compliance?.status?.code] || STATUS_STYLES.partial;
+  const overallScore = compliance?.overallScore ?? compliance?.score ?? report?.complianceScore ?? 0;
+  const complianceScore = compliance?.score ?? report?.complianceScore ?? 0;
+  const health = healthStyle(overallScore, compliance?.overallStatus);
+  const statusStyle = health;
   const text = isDarkMode ? 'text-white' : 'text-gray-900';
   const sub = isDarkMode ? 'text-slate-500' : 'text-gray-500';
 
@@ -185,40 +202,68 @@ export default function ReportViewer({ report, isDarkMode, onClose }) {
     <div className="space-y-4">
       {/* Header */}
       <div className={`rounded-2xl border overflow-hidden ${isDarkMode ? 'bg-gradient-to-br from-indigo-950/80 to-[#111318] border-indigo-500/20' : 'bg-gradient-to-br from-indigo-50 to-white border-indigo-100'}`}>
-        <div className="p-6 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-          <ScoreRing score={compliance?.score ?? report?.complianceScore} isDarkMode={isDarkMode} />
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
-                {compliance?.status?.label || 'Review'}
-              </span>
-              <span className={`rounded-full px-2.5 py-0.5 text-[10px] ${isDarkMode ? 'bg-white/10 text-slate-400' : 'bg-gray-100 text-gray-600'}`}>
-                {meta?.reportTypeLabel || report?.reportType}
-              </span>
-              {meta?.confidential && (
-                <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] text-amber-500 bg-amber-500/10 border border-amber-500/20">
-                  <Lock className="h-3 w-3" /> Confidential
+        <div className="p-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+            <div className="flex gap-4">
+              <div className="text-center">
+                <ScoreRing score={overallScore} isDarkMode={isDarkMode} />
+                <p className={`text-[10px] mt-2 font-semibold uppercase tracking-wide ${sub}`}>Overall Health</p>
+              </div>
+              <div className="text-center">
+                <ScoreRing score={complianceScore} size={72} isDarkMode={isDarkMode} />
+                <p className={`text-[10px] mt-2 font-semibold uppercase tracking-wide ${sub}`}>Compliance</p>
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                  {compliance?.overallStatus || statusStyle.label}
                 </span>
-              )}
+                <span className={`rounded-full px-2.5 py-0.5 text-[10px] ${isDarkMode ? 'bg-white/10 text-slate-400' : 'bg-gray-100 text-gray-600'}`}>
+                  {meta?.reportTypeLabel || report?.reportType?.replace(/_/g, ' ')}
+                </span>
+                {meta?.confidential && (
+                  <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] text-amber-500 bg-amber-500/10 border border-amber-500/20">
+                    <Lock className="h-3 w-3" /> Confidential
+                  </span>
+                )}
+              </div>
+              <h2 className={`text-xl font-bold ${text}`}>{meta?.title || report?.title}</h2>
+              <p className={`text-sm mt-2 ${sub}`}>
+                This report summarizes document audits, compliance scores, forgery checks, and activity for the selected period.
+              </p>
+              <div className={`flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs ${sub}`}>
+                <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />
+                  {meta?.period?.start} — {meta?.period?.end}
+                </span>
+                <span className="flex items-center gap-1"><User className="h-3 w-3" />
+                  {meta?.generatedByRoleLabel || report?.viewerRoleLabel}
+                </span>
+                <span className="flex items-center gap-1"><Shield className="h-3 w-3" />
+                  {meta?.scopeLabel}
+                </span>
+              </div>
             </div>
-            <h2 className={`text-lg font-bold ${text}`}>{meta?.title || report?.title}</h2>
-            <div className={`flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs ${sub}`}>
-              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />
-                {meta?.period?.start} — {meta?.period?.end}
-              </span>
-              <span className="flex items-center gap-1"><User className="h-3 w-3" />
-                {meta?.generatedByRoleLabel || report?.viewerRoleLabel}
-              </span>
-              <span className="flex items-center gap-1"><Shield className="h-3 w-3" />
-                {meta?.scopeLabel}
-              </span>
-            </div>
+            {onClose && (
+              <button onClick={onClose} className={`rounded-lg p-2 self-start ${isDarkMode ? 'hover:bg-white/10 text-slate-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+                ✕
+              </button>
+            )}
           </div>
-          {onClose && (
-            <button onClick={onClose} className={`rounded-lg p-2 ${isDarkMode ? 'hover:bg-white/10 text-slate-400' : 'hover:bg-gray-100 text-gray-500'}`}>
-              ✕
-            </button>
-          )}
+
+          <div className={`mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 rounded-xl border p-3 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-indigo-100 bg-white/70'}`}>
+            {[
+              ['Overall Health', `${overallScore}%`],
+              ['Compliance', `${complianceScore}%`],
+              ['Pass Rate', `${compliance?.passRate ?? 0}%`],
+              ['Report Type', meta?.reportTypeLabel?.split(' ')[0] || 'Audit'],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <p className={`text-[10px] uppercase tracking-wide ${sub}`}>{label}</p>
+                <p className={`text-sm font-bold mt-0.5 ${text}`}>{value}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

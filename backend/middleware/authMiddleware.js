@@ -6,14 +6,18 @@
 const jwt = require('jsonwebtoken');
 
 const verifyToken = async (req, res, next) => {
-  // Support token in Authorization header OR as ?token= query param (for file downloads)
   const authHeader = req.headers.authorization;
-  const queryToken = req.query.token;
+  const allowQueryToken = req.method === 'GET' && /\/export(?:\?|$)/i.test(req.originalUrl || req.url || '');
+  const queryToken = allowQueryToken ? req.query.token : null;
 
-  const raw = authHeader ? authHeader.replace('Bearer ', '') : queryToken;
+  const raw = authHeader ? authHeader.replace(/^Bearer\s+/i, '') : queryToken;
 
   if (!raw) {
-    return res.status(401).json({ error: 'Authorization header missing' });
+    return res.status(401).json({ error: 'Authorization required' });
+  }
+
+  if (process.env.NODE_ENV === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'change-this-secret')) {
+    return res.status(503).json({ error: 'Server security misconfiguration' });
   }
 
   try {
@@ -22,7 +26,6 @@ const verifyToken = async (req, res, next) => {
       process.env.JWT_SECRET || 'change-this-secret'
     );
 
-    // Verify user exists in database to prevent stale token database foreign key crashes
     const { User } = require('../db/models');
     const user = await User.findByPk(decoded.id);
     if (!user) {
@@ -36,18 +39,22 @@ const verifyToken = async (req, res, next) => {
       });
     }
 
+    if (decoded.role && decoded.role !== user.role) {
+      return res.status(401).json({ error: 'Session role mismatch. Please sign in again.' });
+    }
+
     req.user = {
-      id: decoded.id,
-      email: decoded.email,
-      role: user.role
+      id: user.id,
+      email: user.email,
+      role: user.role,
     };
 
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Token expired' });
+      return res.status(401).json({ error: 'Session expired. Please sign in again.' });
     }
-    return res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({ error: 'Invalid session' });
   }
 };
 

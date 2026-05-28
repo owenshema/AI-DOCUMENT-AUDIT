@@ -36,6 +36,12 @@ apiClient.interceptors.response.use(
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
+    if (status === 403 && !isAuthRequest) {
+      const msg = error.response?.data?.error || '';
+      if (/pending|deactivated|inactive/i.test(msg)) {
+        window.location.href = '/pending-approval';
+      }
+    }
     return Promise.reject(error);
   }
 );

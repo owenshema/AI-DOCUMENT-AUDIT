@@ -107,8 +107,113 @@ Do not guess. Return null for missing fields.`;
 // ── Module 3: Core Audit Engine ───────────────────────────────────────────────
 
 async function auditDocument(documentText, policyRules = [], context = {}) {
-  // Paper-audit training only — no Kaggle dataset, no legacy policy rules
   const ruleResult = runAudit(documentText, context);
+
+  const forgeryResult = await require('./forgeryDetectionService').analyzeDocument(documentText, {
+    filePath: context.filePath,
+    imagePath: context.imagePath,
+  });
+
+  ruleResult.document_inspection = ruleResult.document_inspection || {};
+  ruleResult.document_inspection.forgery_analysis = forgeryResult;
+
+  const isOurs = !!ruleResult.organization_match;
+
+  if (isOurs) {
+    if (forgeryResult.stamp) {
+      ruleResult.document_inspection.stamp = {
+        present: !!forgeryResult.stamp.detected,
+        issues: forgeryResult.stamp.detected ? [] : ['MISSING_STAMP'],
+        details: forgeryResult.stamp,
+        stamp_type: 'Seal',
+      };
+    }
+    if (forgeryResult.signature) {
+      ruleResult.document_inspection.signature = {
+        present: !!forgeryResult.signature.detected,
+        issues: forgeryResult.signature.detected ? [] : ['MISSING_SIGNATURE'],
+        details: forgeryResult.signature,
+      };
+    }
+    if (forgeryResult.logo) {
+      ruleResult.document_inspection.organization = ruleResult.document_inspection.organization || {};
+      ruleResult.document_inspection.organization.present = !!forgeryResult.logo.detected;
+      ruleResult.document_inspection.organization.logo_detected = !!forgeryResult.logo.detected;
+      ruleResult.document_inspection.organization.details = forgeryResult.logo;
+    }
+
+    const di = ruleResult.document_inspection;
+    const paperPurpose = ruleResult.organization_training && ruleResult.organization_training.paper_purpose;
+    di.assessed = true;
+    di.not_our_document = false;
+    di.signature = di.signature || { present: false, issues: [] };
+    di.stamp = di.stamp || { present: false, issues: [], stamp_type: null };
+    di.organization = di.organization || { present: false, primary: null };
+    di.purpose = di.purpose || {
+      present: !!paperPurpose,
+      subject: paperPurpose || null,
+      purpose: paperPurpose || null,
+    };
+    di.request = di.request || { has_request: false };
+    di.dates = di.dates || { all_dates: [], issues: [] };
+  } else {
+    ruleResult.compliance_score = 10;
+    ruleResult.ai_validity_percentage = 10;
+    ruleResult.document_inspection = {
+      assessed: false,
+      not_our_document: true,
+      signature: null,
+      stamp: null,
+      organization: null,
+      logo: null,
+      purpose: null,
+      request: null,
+      dates: null,
+      forgery_analysis: forgeryResult,
+    };
+  }
+
+  if ((!ruleResult.missing_fields || !ruleResult.missing_fields.length) && forgeryResult.missing_fields) {
+    ruleResult.missing_fields = forgeryResult.missing_fields;
+  }
+
+  var forgeryScore = Number(forgeryResult.forgery_score) || 0;
+  if (forgeryResult.is_suspicious && forgeryScore >= 45) {
+    ruleResult.organization_match = false;
+    ruleResult.trained_reference_match = false;
+    ruleResult.risk_level = 'high';
+    ruleResult.compliance_score = 10;
+    ruleResult.ai_validity_percentage = 10;
+    ruleResult.document_inspection = {
+      assessed: false,
+      not_our_document: true,
+      signature: null,
+      stamp: null,
+      organization: null,
+      logo: null,
+      purpose: null,
+      request: null,
+      dates: null,
+      forgery_analysis: forgeryResult,
+    };
+    ruleResult.inconsistencies = ruleResult.inconsistencies || [];
+    if (!ruleResult.inconsistencies.some(function (i) { return i.code === 'FORGERY-FLAG'; })) {
+      ruleResult.inconsistencies.unshift({
+        code: 'FORGERY-FLAG',
+        title: 'Document integrity check failed',
+        summary: 'Forgery risk score ' + forgeryScore + '/100 exceeds the acceptance threshold.',
+        detail: (forgeryResult.flags || []).slice(0, 5).join('; ') || 'Visual or text integrity indicators flagged this document.',
+      });
+    }
+    ruleResult.organization_message =
+      'Document rejected: integrity check failed (forgery risk ' + forgeryScore + '/100). ' +
+      (ruleResult.organization_message || '');
+  } else if (forgeryResult.is_suspicious && ruleResult.risk_level === 'low') {
+    ruleResult.risk_level = forgeryResult.risk_level === 'HIGH' ? 'high' : 'medium';
+  }
+
+  const overall = require('./auditScoreService').computeOverallAuditScore(ruleResult);
+  Object.assign(ruleResult, overall);
 
   return ruleResult;
 }

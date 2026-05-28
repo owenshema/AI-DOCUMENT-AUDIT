@@ -9,24 +9,25 @@ const ctrl       = require('../controllers/authController');
 const { verifyToken, verifyRole } = require('../middleware/authMiddleware');
 
 // Strict rate limiter for auth endpoints
+const otpLimit = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: process.env.NODE_ENV === 'development' ? 50 : 5,
+  message: { error: 'Too many OTP attempts. Try again in 5 minutes.' },
+  skipSuccessfulRequests: true,
+});
+
 const authLimit = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'development' ? 100 : 20,
+  max: process.env.NODE_ENV === 'development' ? 100 : 10,
   message: { error: 'Too many requests. Try again in 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-const otpLimit = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: process.env.NODE_ENV === 'development' ? 50 : 5,
-  message: { error: 'Too many OTP attempts. Try again in 5 minutes.' },
-});
-
 // ── Public ────────────────────────────────────────────────────────────────────
 router.post('/register',               authLimit, ctrl.register);
 router.post('/login',                  authLimit, ctrl.login);
-router.post('/logout',                 ctrl.logout);
+router.post('/logout',                 verifyToken, ctrl.logout);
 router.post('/verify-otp',             otpLimit,  ctrl.verifyOTP);
 router.post('/verify-totp',            otpLimit,  ctrl.verifyTOTP);
 router.post('/resend-otp',             otpLimit,  ctrl.resendOTP);
