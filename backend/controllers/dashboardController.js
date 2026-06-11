@@ -3,6 +3,8 @@
  * Handles dashboard data and summaries with real database
  */
 
+const { documentWhereForUser, isOwnerRole } = require('../utils/ownerScope');
+
 const getDashboard = async (req, res) => {
   try {
     const { Document, Task, ComplianceCheck, AuditLog } = req.app.locals.models;
@@ -16,11 +18,8 @@ const getDashboard = async (req, res) => {
     const logWhere = {};
     const checkWhere = {};
 
-    if (role === 'viewer' || role === 'document_manager') {
-      docWhere[Op.or] = [
-        { uploadedBy: userId },
-        req.app.locals.sequelize.literal(`"metadata"->>'sharing' LIKE '%${userId}%'`)
-      ];
+    Object.assign(docWhere, documentWhereForUser({ id: userId, role }));
+    if (isOwnerRole(role)) {
       logWhere.userId = userId;
     }
 
@@ -28,7 +27,7 @@ const getDashboard = async (req, res) => {
       taskWhere.assignedTo = userId;
     }
 
-    if (role === 'viewer' || role === 'document_manager') {
+    if (isOwnerRole(role)) {
       const allowedDocs = await Document.findAll({
         where: docWhere,
         attributes: ['id']
@@ -72,6 +71,7 @@ const getDashboard = async (req, res) => {
     }
 
     const dashboard = {
+      scope: isOwnerRole(role) ? 'personal' : 'organization',
       summary: {
         totalDocuments,
         pendingTasks,
@@ -113,18 +113,13 @@ const getDashboardMetrics = async (req, res) => {
     const taskWhere = {};
     const checkWhere = {};
 
-    if (role === 'viewer' || role === 'document_manager') {
-      docWhere[Op.or] = [
-        { uploadedBy: userId },
-        req.app.locals.sequelize.literal(`"metadata"->>'sharing' LIKE '%${userId}%'`)
-      ];
-    }
+    Object.assign(docWhere, documentWhereForUser({ id: userId, role }));
 
     if (role !== 'administrator') {
       taskWhere.assignedTo = userId;
     }
 
-    if (role === 'viewer' || role === 'document_manager') {
+    if (isOwnerRole(role)) {
       const allowedDocs = await Document.findAll({
         where: docWhere,
         attributes: ['id']
@@ -231,7 +226,7 @@ const getComplianceOverview = async (req, res) => {
   try {
     const { ComplianceCheck, Document } = req.app.locals.models;
     const options = {};
-    if (['viewer', 'document_manager'].includes(req.user?.role)) {
+    if (isOwnerRole(req.user?.role)) {
       options.include = [{
         model: Document,
         attributes: [],

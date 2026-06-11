@@ -1,5 +1,7 @@
 # 5-Tier Architecture Implementation Summary
 
+> **Visual diagram:** See [`FIVE_TIER_ARCHITECTURE_DIAGRAM.md`](./FIVE_TIER_ARCHITECTURE_DIAGRAM.md) for the full five-tier diagram with labelled data-flow arrows (Presentation → Application → Service → Data Access → Persistence).
+
 ## Architecture Completed ✅
 
 Your backend has been successfully transformed from a 2-tier to a **5-tier architecture**:

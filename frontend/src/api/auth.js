@@ -75,7 +75,7 @@ export const documentAPI = {
 
   create: async (data) => {
     const config = data instanceof FormData
-      ? { headers: { 'Content-Type': 'multipart/form-data' } }
+      ? { timeout: 120000 }
       : undefined;
     const response = await apiClient.post('/documents', data, config);
     return response.data;
@@ -88,7 +88,7 @@ export const documentAPI = {
 
   reupload: async (id, formData) => {
     const response = await apiClient.post(`/documents/${id}/reupload`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      timeout: 120000,
     });
     return response.data;
   },
@@ -124,7 +124,7 @@ export const documentAPI = {
 
   bulkUpload: async (formData) => {
     const response = await apiClient.post('/documents/bulk/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+      timeout: 120000,
     });
     return response.data;
   },
@@ -152,7 +152,9 @@ export const analysisAPI = {
   },
 
   analyzeDocument: async (documentId, data = {}) => {
-    const response = await apiClient.post(`/analysis/${documentId}/analyze`, data);
+    const response = await apiClient.post(`/analysis/${documentId}/analyze`, data, {
+      timeout: 180000,
+    });
     return response.data;
   },
 
@@ -314,6 +316,23 @@ export const dashboardAPI = {
 
   getComplianceOverview: async () => {
     const response = await apiClient.get('/dashboard/compliance-overview');
+    return response.data;
+  },
+
+  getActivity: async (params = {}) => {
+    const response = await apiClient.get('/dashboard/activity', { params });
+    return response.data;
+  },
+};
+
+export const roleReportsAPI = {
+  getCatalog: async () => {
+    const response = await apiClient.get('/role-reports/catalog');
+    return response.data;
+  },
+
+  getReport: async (reportId, params = {}) => {
+    const response = await apiClient.get(`/role-reports/${reportId}`, { params });
     return response.data;
   },
 };

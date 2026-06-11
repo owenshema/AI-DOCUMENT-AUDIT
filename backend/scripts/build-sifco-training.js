@@ -1,12 +1,14 @@
 'use strict';
 /**
- * Rebuild SIFCO training text + corpus from reference PDFs in data/training/reference/
+ * Rebuild SIFCO training text + corpus from reference PDFs and SIFCO_Audit_Report.xlsx
  * Usage: node scripts/build-sifco-training.js
  */
 var fs = require('fs');
 var path = require('path');
 var { PDFParse } = require('pdf-parse');
 var ml = require('../services/sifcoMlTrainingService');
+var auditReportTraining = require('../services/auditReportTrainingService');
+var notebookTraining = require('../services/notebookTrainingService');
 
 var TRAINING_DIR = path.join(__dirname, '..', 'data', 'training');
 var REF_DIR = path.join(TRAINING_DIR, 'reference');
@@ -33,6 +35,28 @@ var MAP = [
     fs.writeFileSync(path.join(TRAINING_DIR, m.txt), (result.text || '').trim(), 'utf8');
     console.log('OK', m.txt, (result.text || '').length, 'chars');
   }
+
+  console.log('\nIngesting SIFCO_Audit_Report.xlsx (if present)...');
+  var excelResult = auditReportTraining.ingestAuditReportExcel();
+  if (excelResult.ok) {
+    console.log('Excel OK:', excelResult.rowCount, 'rows ->', excelResult.labelsPath);
+    console.log('By document type:', JSON.stringify(excelResult.bySpec));
+  } else if (excelResult.skipped) {
+    console.warn('Excel skipped:', excelResult.message);
+    console.warn('Place your file at:', auditReportTraining.DEFAULT_XLSX);
+  } else {
+    console.warn('Excel ingest failed:', excelResult.error || excelResult.message);
+  }
+
+  console.log('\nIngesting Untitled3.ipynb audit rules (reference PDF audit)...');
+  var notebookResult = notebookTraining.runNotebookIngest();
+  if (notebookResult.meta && notebookResult.meta.auditedCount) {
+    console.log('Notebook OK:', notebookResult.meta.auditedCount, 'reference audits ->', notebookTraining.LABELS_PATH);
+  } else {
+    console.warn('Notebook ingest failed:', notebookResult.error || 'unknown error');
+    console.warn('Install: py -3.12 -m pip install pdfplumber fuzzywuzzy python-Levenshtein pdf2image pytesseract');
+  }
+
   var corpus = ml.rebuildTrainingFromDisk();
   console.log('Corpus rebuilt:', corpus.referenceCount, 'references, version', corpus.modelVersion);
 })();

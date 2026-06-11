@@ -3,6 +3,8 @@
  * Handles workflow configuration and task management with database
  */
 
+const { documentWhereForUser } = require('../utils/ownerScope');
+
 const createWorkflow = async (req, res) => {
   try {
     const { name, description, workflowType, steps, department } = req.body;
@@ -165,12 +167,8 @@ const getTaskQueue = async (req, res) => {
     });
 
     const docWhere = {};
-    if (['viewer', 'document_manager'].includes(role)) {
-      docWhere[Op.or] = [
-        { uploadedBy: userId },
-        req.app.locals.sequelize.literal(`"metadata"->>'sharing' LIKE '%${userId}%'`)
-      ];
-    } else if (status && status !== 'all') {
+    Object.assign(docWhere, documentWhereForUser({ id: userId, role }));
+    if (!['viewer', 'document_manager'].includes(role) && status && status !== 'all') {
       docWhere.status = status;
     }
 

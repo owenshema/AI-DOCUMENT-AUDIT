@@ -5,9 +5,11 @@
 const express = require('express');
 const router = express.Router();
 const dashboardController = require('../controllers/dashboardController');
+const auditLogController = require('../controllers/auditLogController');
 
 router.get('/', dashboardController.getDashboard);
 router.get('/metrics', dashboardController.getDashboardMetrics);
+router.get('/activity', auditLogController.getDailyActivity);
 router.get('/audit-trend', dashboardController.getAuditTrend);
 router.get('/compliance-overview', dashboardController.getComplianceOverview);
 router.get('/system-health', dashboardController.getSystemHealth);

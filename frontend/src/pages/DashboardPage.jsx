@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, ArrowUpRight, BarChart2, Bell, Bot, CheckCircle2,
-  Clock, FileText, ShieldCheck, Upload, Users,
+  Clock, FileText, ShieldCheck, Upload, Users, Activity,
 } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { analysisAPI, dashboardAPI, documentAPI } from '../api/auth';
@@ -132,21 +132,30 @@ function DocumentRow({ doc }) {
 function OwnerDashboard({ user }) {
   const navigate = useNavigate();
   const [docs, setDocs] = useState([]);
+  const [activity, setActivity] = useState({ timeline: [], summary: {} });
+  const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    documentAPI.getAll({ limit: 20 })
-      .then((res) => {
-        const list = res?.documents || res?.data || res || [];
+    Promise.allSettled([
+      documentAPI.getAll({ limit: 20 }),
+      dashboardAPI.getOverview(),
+      dashboardAPI.getActivity({ days: 14 }),
+    ]).then(([docsRes, overviewRes, activityRes]) => {
+      if (docsRes.status === 'fulfilled') {
+        const list = docsRes.value?.documents || docsRes.value?.data || docsRes.value || [];
         setDocs(Array.isArray(list) ? list : []);
-      })
-      .catch(() => setDocs([]))
-      .finally(() => setLoading(false));
+      }
+      if (overviewRes.status === 'fulfilled') setOverview(overviewRes.value);
+      if (activityRes.status === 'fulfilled') setActivity(activityRes.value || { timeline: [], summary: {} });
+    }).finally(() => setLoading(false));
   }, []);
 
   const pending = docs.filter((d) => ['uploaded', 'in_review', 'in_progress', 'submitted'].includes(d.status)).length;
   const approved = docs.filter((d) => d.status === 'approved').length;
   const rejected = docs.filter((d) => d.status === 'rejected').length;
+  const complianceScore = overview?.summary?.complianceScore ?? overview?.metrics?.complianceScore ?? 0;
+  const recentActivity = activity.timeline?.slice(0, 8) || [];
 
   return (
     <AppShell title="My Dashboard">
@@ -162,11 +171,12 @@ function OwnerDashboard({ user }) {
         </p>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard label="Documents Uploaded" value={docs.length} icon={FileText} loading={loading} />
+      <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-5">
+        <StatCard label="My Documents" value={docs.length} icon={FileText} loading={loading} />
         <StatCard label="Pending Audit" value={pending} icon={Clock} tone="amber" loading={loading} />
         <StatCard label="Approved" value={approved} icon={CheckCircle2} tone="emerald" loading={loading} />
         <StatCard label="Rejected" value={rejected} icon={AlertTriangle} tone="red" loading={loading} />
+        <StatCard label="Compliance Score" value={`${complianceScore}%`} icon={ShieldCheck} tone="blue" loading={loading} />
       </div>
 
       <div className="mb-6">
@@ -192,6 +202,37 @@ function OwnerDashboard({ user }) {
             <p className="text-xs text-slate-500">Download reports generated from your documents</p>
           </div>
         </button>
+      </div>
+
+      <div className="mb-6 overflow-hidden rounded-2xl border border-white/8 bg-[#111318]">
+        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
+          <h2 className="text-sm font-semibold text-white">My Recent Activity</h2>
+          <span className="text-[10px] text-slate-500">Last 14 days</span>
+        </div>
+        {loading ? (
+          <div className="p-8 text-center text-sm text-slate-500">Loading your activity...</div>
+        ) : recentActivity.length === 0 ? (
+          <div className="p-8 text-center text-sm text-slate-500">No activity yet. Upload a document to get started.</div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {recentActivity.map((item, index) => (
+              <div key={`${item.time}-${index}`} className="flex items-start gap-3 px-5 py-3.5">
+                <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white/5">
+                  {item.type === 'upload' ? <Upload className="h-3.5 w-3.5 text-indigo-400" />
+                    : item.type === 'analysis' ? <Bot className="h-3.5 w-3.5 text-emerald-400" />
+                    : item.type === 'report' ? <BarChart2 className="h-3.5 w-3.5 text-amber-400" />
+                    : <Activity className="h-3.5 w-3.5 text-slate-400" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-white">{item.detail || item.action}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    {item.time ? new Date(item.time).toLocaleString() : ''}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#111318]">

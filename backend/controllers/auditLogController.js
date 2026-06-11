@@ -3,6 +3,7 @@
  * Audit Log Controller — Real database queries
  */
 const { Op } = require('sequelize');
+const { documentWhereForUser, isOwnerRole } = require('../utils/ownerScope');
 
 // ── GET /api/audit-logs ───────────────────────────────────────────────────────
 const getAuditLogs = async (req, res) => {
@@ -160,20 +161,14 @@ const getDailyActivityScoped = async (req, res) => {
     const { AuditLog, User, Document, DocumentAnalysis, AuditReport } = req.app.locals.models;
     const role = req.user?.role || 'viewer';
     const userId = req.user?.id;
-    const ownerScoped = ['viewer', 'document_manager'].includes(role);
+    const ownerScoped = isOwnerRole(role);
 
     const since = date ? new Date(date) : new Date(Date.now() - parseInt(days) * 86400000);
     since.setHours(0, 0, 0, 0);
     const until = new Date(); until.setHours(23, 59, 59, 999);
     const range = { [Op.between]: [since, until] };
 
-    const docWhere = { createdAt: range };
-    if (ownerScoped) {
-      docWhere[Op.or] = [
-        { uploadedBy: userId },
-        req.app.locals.sequelize.literal(`"metadata"->>'sharing' LIKE '%${userId}%'`)
-      ];
-    }
+    const docWhere = { createdAt: range, ...documentWhereForUser({ id: userId, role }) };
 
     const docs = await Document.findAll({
       where: docWhere,

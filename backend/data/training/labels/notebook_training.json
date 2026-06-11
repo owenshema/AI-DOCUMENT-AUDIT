@@ -1,0 +1,518 @@
+{
+  "source": "Untitled3.ipynb",
+  "templates": {
+    "SHIPPING_AGREEMENT": {
+      "name": "Shipping Agreement",
+      "spec_id": "shipping_agreement",
+      "keywords": [
+        "shipping agreement",
+        "sifco",
+        "sea freight",
+        "road freight",
+        "bill of loading"
+      ],
+      "required_fields": [
+        "consignee",
+        "model",
+        "chs",
+        "color",
+        "sea freight",
+        "road freight",
+        "b/l fee",
+        "local charges",
+        "total",
+        "method of loading",
+        "weight",
+        "bill of loading",
+        "final destination",
+        "name of vessel",
+        "voyage number",
+        "etd"
+      ],
+      "valid_tins": [
+        "121348946"
+      ],
+      "valid_issuers": [
+        "SUPER INTERNATIONAL FREIGHT SERVICES LLC"
+      ],
+      "required_signatures": [
+        "SIFCO SIGNATURE",
+        "CLIENT'S SIGNATURE"
+      ]
+    },
+    "FREIGHT_INVOICE": {
+      "name": "Sea Freight Invoice",
+      "spec_id": "sea_freight_invoice",
+      "keywords": [
+        "freight invoice",
+        "freight invoce",
+        "ganador",
+        "sea freight",
+        "port of loading"
+      ],
+      "required_fields": [
+        "consignee",
+        "date",
+        "sea freight",
+        "total",
+        "port of loading",
+        "port of discharge",
+        "bl number",
+        "final destination",
+        "name of vessel",
+        "voyage number",
+        "etd"
+      ],
+      "valid_tins": [],
+      "valid_issuers": [
+        "GANADOR GENERAL TRADING"
+      ],
+      "required_signatures": []
+    },
+    "PACKING_LIST": {
+      "name": "Packing List",
+      "spec_id": "packing_list",
+      "keywords": [
+        "packing list",
+        "packages",
+        "qty",
+        "total packages"
+      ],
+      "required_fields": [
+        "consigne",
+        "date",
+        "total",
+        "method of loading",
+        "weight",
+        "container number",
+        "bill of loading",
+        "final destination",
+        "name of vessel",
+        "voyage number",
+        "etd"
+      ],
+      "valid_tins": [],
+      "valid_issuers": [
+        "GANADOR GENERAL TRADING"
+      ],
+      "required_signatures": []
+    },
+    "HBL": {
+      "name": "House Bill of Lading",
+      "spec_id": "bill_of_lading",
+      "keywords": [
+        "bill of lading",
+        "shipper",
+        "notify party",
+        "port of discharge",
+        "place of receipt",
+        "vessel voyage"
+      ],
+      "required_fields": [
+        "shipper",
+        "consignee",
+        "notify party",
+        "bill of lading no",
+        "place of receipt",
+        "port of loading",
+        "port of discharge",
+        "gross weight",
+        "container no",
+        "seal"
+      ],
+      "valid_tins": [
+        "121348946"
+      ],
+      "valid_issuers": [
+        "AL SHAMALI INTERNATIONAL",
+        "SUPER INTERNATIONAL FREIGHT"
+      ],
+      "required_signatures": [
+        "authorised signatory"
+      ]
+    },
+    "TRUCKING_INVOICE": {
+      "name": "Trucking Invoice",
+      "spec_id": "trucking_invoice",
+      "keywords": [
+        "trucking invoice",
+        "top sifco",
+        "inland transport",
+        "plate number"
+      ],
+      "required_fields": [
+        "invoice no",
+        "date",
+        "currency",
+        "plate number",
+        "origin",
+        "destination",
+        "container no",
+        "rate",
+        "total amount"
+      ],
+      "valid_tins": [
+        "4003036334"
+      ],
+      "valid_issuers": [
+        "TOP SIFCO"
+      ],
+      "required_signatures": []
+    },
+    "SIFCO_INVOICE": {
+      "name": "SIFCO Freight Invoice",
+      "spec_id": "freight_invoice",
+      "keywords": [
+        "invoice",
+        "sifco",
+        "freight charges",
+        "bl fee",
+        "local charges",
+        "war cost"
+      ],
+      "required_fields": [
+        "invoice no",
+        "date",
+        "currency",
+        "origin",
+        "destination",
+        "container no",
+        "freight charges",
+        "bl fee",
+        "local charges",
+        "bank"
+      ],
+      "valid_tins": [
+        "121348946"
+      ],
+      "valid_issuers": [
+        "SUPER INTERNATIONAL FREIGHT SERVICES LLC"
+      ],
+      "required_signatures": []
+    }
+  },
+  "known_values": {
+    "bl_numbers": [
+      "DXB1022332",
+      "DXB1020247"
+    ],
+    "containers": [
+      "TEMU6439085",
+      "ECMU5567458"
+    ],
+    "voyages": [
+      "02SOGS1MA"
+    ],
+    "vessels": [
+      "CMA CGM SEMARANG",
+      "SEMARSNG"
+    ],
+    "tins": {
+      "121348946": "SUPER INTERNATIONAL FREIGHT SERVICES LLC \u2014 Kigali, Rwanda",
+      "4003036334": "TOP SIFCO SURL \u2014 Bujumbura, Burundi"
+    }
+  },
+  "reference_results": [
+    {
+      "filename": "01-packing-list-unique-hybrid.pdf",
+      "doc_type": "PACKING_LIST",
+      "doc_type_name": "Packing List",
+      "spec_id": "packing_list",
+      "confidence": 100.0,
+      "status": "FLAGGED",
+      "fields": {
+        "tin_numbers": [],
+        "bl_numbers": [
+          "DXB1020247"
+        ],
+        "container": "TEMU6439085",
+        "vessel": "SEMARSNG",
+        "voyage": "02SOGS1MA",
+        "consignee": "UNIQUE HYBRID &EV SPARE PARTS DATE: 15/02/2026",
+        "invoice_no": null,
+        "dates": [
+          "18/02/2026",
+          "15/02/2026"
+        ],
+        "total": 37.0,
+        "origin": null,
+        "destination": "KIGALI",
+        "weight": "1000KGS"
+      },
+      "issues": [
+        {
+          "severity": "HIGH",
+          "check": "Issuer",
+          "message": "Expected issuer not found: ['GANADOR GENERAL TRADING']"
+        }
+      ],
+      "text_length": 540,
+      "text_preview": "PACKING LIST\nConsigne:UNIQUE HYBRID &EV SPARE PARTS Date: 15/02/2026\nTIN:\nKIGALI-RWANDA\nTOTAL\nS.NO UNIT QTY\nPACKAGES\n1 PARSHOCK PCS 4 4\n2 CELL PCS 2 2\n3 BACK LIGHT PCS 9 9\n4 HEAD LIGHT PCS 8 8\n5 ABS PCS 3 3\n6 FULL BUMPER PC 1 1\n7 BUMPER PCS 4 4\n8 RADIATOR SUPPORT PC 1 1\n9 FENDER PC 1 1\n10 SUPPORT BAGGAGE PCS 2 2\n11 INVERTER PC 1 1\n12 GEARBOX PC 1 1\nTOTAL 37\nMETHOD OF LOADING:LCL\nWEIGHT:1000KGS\nCONTAINER NUMBER:TEMU6439085\nBILL OF LOADING:DXB1020247\nFINAL DESTINATION:KIGALI\nNAME OF VESSEL:SEMARSN"
+    },
+    {
+      "filename": "02-shipping-agreement-john.pdf",
+      "doc_type": "SHIPPING_AGREEMENT",
+      "doc_type_name": "Shipping Agreement",
+      "spec_id": "shipping_agreement",
+      "confidence": 100.0,
+      "status": "WARNING",
+      "fields": {
+        "tin_numbers": [
+          "121348946"
+        ],
+        "bl_numbers": [
+          "DXB1022332"
+        ],
+        "container": null,
+        "vessel": "CMA CGM SEMARANG",
+        "voyage": "02SOGS1MA",
+        "consignee": null,
+        "invoice_no": null,
+        "dates": [
+          "18/03/2026"
+        ],
+        "total": 4595.0,
+        "origin": null,
+        "destination": "KIGALI-RWANDA",
+        "weight": "6000KGS"
+      },
+      "issues": [
+        {
+          "severity": "MEDIUM",
+          "check": "Required Fields",
+          "message": "Missing: consignee"
+        },
+        {
+          "severity": "MEDIUM",
+          "check": "Signature",
+          "message": "Missing signature field: 'CLIENT'S SIGNATURE'"
+        }
+      ],
+      "text_length": 960,
+      "text_preview": "SUPER INTERNATIONAL FREIGHT SERVICES LLC\nMAKUZA PEACE PLAZA 4TH FLOOR/ KIGALI - RWANDA\nTel: +250788588583 /0798052490\nEmail: info@superfreightservice.com\nTIN NUMBER: 121348946\nRE: SHIPPING AGREEMENT BETWEEN SIFCO AND HATANGIMANA JOHN,\nSIFCO is a shipping company that operates in DUBAI, KIGALI, GOMA and BUKAVU\nThis agreement is to acknowledge that SIFCO has brought a CAR from Dubai to Kigali for HATANGIMANA\nJOHN,\nDetails of the CAR and the agreement price as below.\nDESCRIPTION OF THE CAR\nMITSUBIS"
+    },
+    {
+      "filename": "03-hbl-unique-hybrid.pdf",
+      "doc_type": "HBL",
+      "doc_type_name": "House Bill of Lading",
+      "spec_id": "bill_of_lading",
+      "confidence": 100.0,
+      "status": "FLAGGED",
+      "fields": {
+        "tin_numbers": [],
+        "bl_numbers": [
+          "DXB1020247"
+        ],
+        "container": "TEMU6439085",
+        "vessel": "CMA CGM SEMARANG",
+        "voyage": "CMA",
+        "consignee": "(NAME AND ADDRESS) NOT NEGOTIABLE UNLESS CONSIGNED TO FORWARDING AGENT REFERENCES",
+        "invoice_no": null,
+        "dates": [],
+        "total": null,
+        "origin": null,
+        "destination": "CHARGES ON A/C OF THE CNEE.",
+        "weight": null
+      },
+      "issues": [
+        {
+          "severity": "HIGH",
+          "check": "TIN",
+          "message": "TIN missing. Expected: ['121348946']"
+        },
+        {
+          "severity": "MEDIUM",
+          "check": "Voyage",
+          "message": "Voyage 'CMA' not in known voyages"
+        },
+        {
+          "severity": "MEDIUM",
+          "check": "Date",
+          "message": "No date found in document"
+        }
+      ],
+      "text_length": 2487,
+      "text_preview": "FOR COMBINED TRANSPORT OR PORT TO PORT SHIPMENT\nShipper / Exporter (Complete Name and Address)\nAL SHAMALI INTERNATIONAL FTREIGHT SERVICES LLC. Bill of Lading No: DXB1020247\nSUITE112, AL GARHOUD BEHIND GGICO METRO STN Export References:\nRED AVENUE\nDUBAI-UNITED ARAB EMIRATES\nConsignee (Name and Address) Not Negotiable Unless Consigned to Forwarding Agent References\nUNIQUE HYBRID & EV SPARE PARTS\nKIGALI-RWANDA\nTEL: +250785569180\nNotify Party (Complete Name and Address) Document Presentation\nSUPER I"
+    },
+    {
+      "filename": "04-freight-invoice-unique-hybrid.pdf",
+      "doc_type": "SIFCO_INVOICE",
+      "doc_type_name": "SIFCO Freight Invoice",
+      "spec_id": "freight_invoice",
+      "confidence": 100.0,
+      "status": "APPROVED",
+      "fields": {
+        "tin_numbers": [
+          "121348946"
+        ],
+        "bl_numbers": [],
+        "container": "TEMU6439085",
+        "vessel": null,
+        "voyage": null,
+        "consignee": null,
+        "invoice_no": "0308/2026/2",
+        "dates": [
+          "27-4-2026"
+        ],
+        "total": null,
+        "origin": "JEBEL ALI DESTINATION KIGALI-RWANDA",
+        "destination": "KIGALI-RWANDA",
+        "weight": null
+      },
+      "issues": [],
+      "text_length": 743,
+      "text_preview": "SUPER INTERNATIONAL FREIGHT SERVICES LLC\nMAKUZA PEACE PLAZA- 4TH FLOOR/ KIGALI - RWANDA\nTel: +250788713189 /0799373436\nEmail: info@superfreightservice.com\nTIN NUMBER: 121348946\nINVOICE\nUNIQUE HYBRID Invoice No. 0308/2026/2\nKIGALI-RWANDA Date 27-4-2026\nCurrency USD\nTEL; +250785569180 Our Job No.\nYour reference\nOrigin JEBEL ALI Destination KIGALI-RWANDA\nRemarks LINES: 1.5\nContainer No TEMU6439085\nDescription Qty/No of Pkg Rate VAT Tax Amt Total Amount\nFREIGHT CHARGES 37.00 375.00 0% 0.00 375.00\nBL"
+    },
+    {
+      "filename": "05-trucking-invoice-ecmu5567458.pdf",
+      "doc_type": "TRUCKING_INVOICE",
+      "doc_type_name": "Trucking Invoice",
+      "spec_id": "trucking_invoice",
+      "confidence": 100.0,
+      "status": "APPROVED",
+      "fields": {
+        "tin_numbers": [
+          "4003036334"
+        ],
+        "bl_numbers": [],
+        "container": "ECMU5567458",
+        "vessel": null,
+        "voyage": null,
+        "consignee": null,
+        "invoice_no": "015/2026/309",
+        "dates": [
+          "14-04-2026"
+        ],
+        "total": null,
+        "origin": "MOMBASA- KENYA DESTINATION KIGALI-RWANDA",
+        "destination": "KIGALI-RWANDA",
+        "weight": null
+      },
+      "issues": [],
+      "text_length": 732,
+      "text_preview": "AGAPE HOUSE \u2013 1st FLOOR/ OFFICE;10\nTel: +257 69 33 44 99 / +257 64 01 21 08\nMUKAZA ROHERO AVENUE de la RDC\nNIF NUMBER: 4003036334\nTRUCKING INVOICE\nTOP SIFCO LTD KIGALI Invoice No. 015/2026/309\nRwanda foam building, 2nd floor Date 14-04-2026\nTEL; +250 788 713 189/+250 783 439 481\nCurrency USD\nKIGALI \u2013 RWANDA\nPlate Number G6258A-T0415A\nYour reference\nOrigin MOMBASA- KENYA Destination KIGALI-RWANDA\nRemarks 40 FT\nCONTAINER No ECMU5567458\nDescription Qty/No of Pkg Rate VAT Tax Amt Total Amount\nINLAND"
+    },
+    {
+      "filename": "06-sea-freight-john.pdf",
+      "doc_type": "FREIGHT_INVOICE",
+      "doc_type_name": "Sea Freight Invoice",
+      "spec_id": "sea_freight_invoice",
+      "confidence": 100.0,
+      "status": "FLAGGED",
+      "fields": {
+        "tin_numbers": [],
+        "bl_numbers": [
+          "DXB1022332"
+        ],
+        "container": null,
+        "vessel": "CMA CGM SEMARANG",
+        "voyage": "02SOGS1MA",
+        "consignee": "HATANGIMANA JOHN DATE: 3/2/2026",
+        "invoice_no": null,
+        "dates": [
+          "3/2/2026",
+          "18/03/2026"
+        ],
+        "total": null,
+        "origin": null,
+        "destination": "KIGALI",
+        "weight": null
+      },
+      "issues": [
+        {
+          "severity": "HIGH",
+          "check": "Issuer",
+          "message": "Expected issuer not found: ['GANADOR GENERAL TRADING']"
+        }
+      ],
+      "text_length": 340,
+      "text_preview": "FREIGHT INVOCE\nConsignee:HATANGIMANA JOHN Date: 3/2/2026\nKIGALI-RWANDA\nRATES / TOTAL / USD\nS.NO DESCRIPTION OF GOODS UNIT\nUSD\nSEA FREIGHT 1 1500 1500\nTOTAL \\ 1500\nPORT OF LOADING: JEBEL ALI\nPORT OF DISCHARGE:DAR ES SALAM\nBL NUMBER: DXB1022332\nFINAL DESTINATION:KIGALI\nNAME OF VESSEL: CMA CGM SEMARANG\nVOYAGE NUMBER: 02SOGS1MA\nETD:18/03/2026"
+    }
+  ],
+  "supplements_by_spec": {
+    "packing_list": [
+      "Notebook type: Packing List\nAudit status: FLAGGED\nConfidence: 100.0%\nconsignee: UNIQUE HYBRID &EV SPARE PARTS DATE: 15/02/2026\ncontainer: TEMU6439085\nvessel: SEMARSNG\nvoyage: 02SOGS1MA\ndestination: KIGALI\ntotal: 37.0\nBL: DXB1020247"
+    ],
+    "shipping_agreement": [
+      "Notebook type: Shipping Agreement\nAudit status: WARNING\nConfidence: 100.0%\nvessel: CMA CGM SEMARANG\nvoyage: 02SOGS1MA\ndestination: KIGALI-RWANDA\ntotal: 4595.0\nBL: DXB1022332\nTIN: 121348946"
+    ],
+    "bill_of_lading": [
+      "Notebook type: House Bill of Lading\nAudit status: FLAGGED\nConfidence: 100.0%\nconsignee: (NAME AND ADDRESS) NOT NEGOTIABLE UNLESS CONSIGNED TO FORWARDING AGENT REFERENCES\ncontainer: TEMU6439085\nvessel: CMA CGM SEMARANG\nvoyage: CMA\ndestination: CHARGES ON A/C OF THE CNEE.\nBL: DXB1020247"
+    ],
+    "freight_invoice": [
+      "Notebook type: SIFCO Freight Invoice\nAudit status: APPROVED\nConfidence: 100.0%\ncontainer: TEMU6439085\norigin: JEBEL ALI DESTINATION KIGALI-RWANDA\ndestination: KIGALI-RWANDA\nTIN: 121348946"
+    ],
+    "trucking_invoice": [
+      "Notebook type: Trucking Invoice\nAudit status: APPROVED\nConfidence: 100.0%\ncontainer: ECMU5567458\norigin: MOMBASA- KENYA DESTINATION KIGALI-RWANDA\ndestination: KIGALI-RWANDA\nTIN: 4003036334"
+    ],
+    "sea_freight_invoice": [
+      "Notebook type: Sea Freight Invoice\nAudit status: FLAGGED\nConfidence: 100.0%\nconsignee: HATANGIMANA JOHN DATE: 3/2/2026\nvessel: CMA CGM SEMARANG\nvoyage: 02SOGS1MA\ndestination: KIGALI\nBL: DXB1022332"
+    ]
+  },
+  "markers_by_spec": {
+    "packing_list": [
+      "UNIQUE HYBRID &EV SPARE PARTS DATE: 15/02/2026",
+      "TEMU6439085",
+      "SEMARSNG",
+      "02SOGS1MA",
+      "DXB1020247",
+      "packing list",
+      "packages",
+      "qty",
+      "total packages"
+    ],
+    "shipping_agreement": [
+      "CMA CGM SEMARANG",
+      "02SOGS1MA",
+      "DXB1022332",
+      "121348946",
+      "shipping agreement",
+      "sifco",
+      "sea freight",
+      "road freight",
+      "bill of loading"
+    ],
+    "bill_of_lading": [
+      "(NAME AND ADDRESS) NOT NEGOTIABLE UNLESS CONSIGNED TO FORWARDING AGENT REFERENCES",
+      "TEMU6439085",
+      "CMA CGM SEMARANG",
+      "DXB1020247",
+      "bill of lading",
+      "shipper",
+      "notify party",
+      "port of discharge",
+      "place of receipt",
+      "vessel voyage"
+    ],
+    "freight_invoice": [
+      "TEMU6439085",
+      "121348946",
+      "invoice",
+      "sifco",
+      "freight charges",
+      "bl fee",
+      "local charges",
+      "war cost"
+    ],
+    "trucking_invoice": [
+      "ECMU5567458",
+      "4003036334",
+      "trucking invoice",
+      "top sifco",
+      "inland transport",
+      "plate number"
+    ],
+    "sea_freight_invoice": [
+      "HATANGIMANA JOHN DATE: 3/2/2026",
+      "CMA CGM SEMARANG",
+      "02SOGS1MA",
+      "DXB1022332",
+      "freight invoice",
+      "freight invoce",
+      "ganador",
+      "sea freight",
+      "port of loading"
+    ]
+  },
+  "audited_count": 6
+}

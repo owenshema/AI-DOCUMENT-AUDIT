@@ -5,6 +5,32 @@ import { documentAPI, analysisAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
 import apiClient from '../api/client';
 
+function formatFieldValue(value) {
+  if (value == null || value === '') return '';
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function flattenExtractedFields(fields) {
+  if (!fields || typeof fields !== 'object') return [];
+  var rows = [];
+  Object.entries(fields).forEach(function ([key, value]) {
+    if (value == null || value === '') return;
+    if (key === 'notebook_fields' && typeof value === 'object' && !Array.isArray(value)) {
+      Object.entries(value).forEach(function ([nestedKey, nestedValue]) {
+        if (nestedValue == null || nestedValue === '') return;
+        var formatted = formatFieldValue(nestedValue);
+        if (formatted) rows.push({ key: nestedKey, value: formatted });
+      });
+      return;
+    }
+    var formatted = formatFieldValue(value);
+    if (formatted) rows.push({ key: key, value: formatted });
+  });
+  return rows;
+}
+
 // ── Inline Document Viewer Modal ──────────────────────────────────────────────
 function DocumentViewer({ doc, onClose }) {
   const [blobUrl, setBlobUrl] = useState(null);
@@ -513,16 +539,18 @@ export default function AIAnalysisPage() {
               )}
 
               {/* Extracted Fields */}
-              {result.extracted_fields && Object.keys(result.extracted_fields).some(k => result.extracted_fields[k]) && (
+              {result.extracted_fields && flattenExtractedFields(result.extracted_fields).length > 0 && (
                 <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
                   <p className={`text-[10px] font-semibold mb-2 ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>📋 Extracted Data</p>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {Object.entries(result.extracted_fields).filter(([,v]) => v).map(([k, v]) => (
-                      <div key={k} className={`rounded-lg p-1.5 ${isDarkMode ? 'bg-white/5' : 'bg-white border border-gray-100'}`}>
-                        <p className={`text-[9px] uppercase tracking-wide mb-0.5 ${isDarkMode ? 'text-slate-600' : 'text-gray-400'}`}>{k.replace(/_/g, ' ')}</p>
-                        <p className={`text-[11px] font-medium truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}>{v}</p>
+                    {flattenExtractedFields(result.extracted_fields).map(function (item) {
+                      return (
+                      <div key={item.key} className={`rounded-lg p-1.5 ${isDarkMode ? 'bg-white/5' : 'bg-white border border-gray-100'}`}>
+                        <p className={`text-[9px] uppercase tracking-wide mb-0.5 ${isDarkMode ? 'text-slate-600' : 'text-gray-400'}`}>{item.key.replace(/_/g, ' ')}</p>
+                        <p className={`text-[11px] font-medium truncate ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`}>{item.value}</p>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

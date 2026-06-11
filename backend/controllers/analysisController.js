@@ -9,7 +9,7 @@ const path = require('path');
 const { Op } = require('sequelize');
 const aiService = require('../services/aiService');
 const emailService = require('../services/emailService');
-const { extractTextFromFile } = require('../services/pdfTextService');
+const { extractTextFromFile, resolveExistingPath, isImageFile } = require('../services/pdfTextService');
 
 function decideDocumentStatus(result) {
   var forgery = result.document_inspection && result.document_inspection.forgery_analysis;
@@ -146,20 +146,24 @@ const analyzeDocument = async (req, res) => {
 
     const { documentId } = req.params;
     const auditorComment = (req.body?.auditorComment || req.body?.comment || '').trim();
+    const documentTypeHint = (req.body?.documentTypeHint || req.body?.document_type || '').trim() || null;
     const { Document, DocumentAnalysis } = req.app.locals.models;
 
     const document = await Document.findByPk(documentId);
     if (!document) return res.status(404).json({ error: 'Document not found' });
 
-    // Always re-extract from PDF so audit uses full document text (not stale sparse cache)
+    // Always re-extract from file so audit uses full document text (not stale sparse cache)
     let textToAnalyze = null;
-    if (document.filePath) {
-      textToAnalyze = await extractTextFromFile(document.filePath, document.mimeType);
+    const filePath = resolveExistingPath(document.filePath);
+    if (filePath) {
+      textToAnalyze = await extractTextFromFile(filePath, document.mimeType);
       if (textToAnalyze) {
         await document.update({ extractedText: textToAnalyze.slice(0, 10000), ocrProcessed: true });
       } else {
-        console.warn('[analyze] PDF/text extraction returned empty for', document.fileName || document.id);
+        console.warn('[analyze] text extraction returned empty for', document.fileName || document.id);
       }
+    } else if (document.filePath) {
+      console.warn('[analyze] file not found on disk for', document.fileName || document.id, document.filePath);
     }
     if (!textToAnalyze) {
       textToAnalyze = document.extractedText || null;
@@ -167,24 +171,26 @@ const analyzeDocument = async (req, res) => {
 
     // 2. No metadata fallback for audit — file name/title do not identify SIFCO papers
     if (!textToAnalyze || textToAnalyze.trim().length < 25) {
+      const isImage = filePath && isImageFile(filePath, document.mimeType);
       return res.status(422).json({
-        error: 'Could not read document content from the PDF. Renaming the file does not change the audit — the system reads text inside the document (letterhead, SIFCO, amounts, B/L). Re-upload a searchable PDF and analyze again.',
+        error: isImage
+          ? 'Could not read enough text from this photo. Use a clear, well-lit image of the document (not a blurry WhatsApp screenshot), or upload a searchable PDF or DOCX instead.'
+          : 'Could not read document content. Renaming the file does not change the audit — the system reads text inside the document (letterhead, SIFCO, amounts, B/L). Re-upload a searchable PDF, DOCX, or a clear photo and analyze again.',
         documentId,
         fileName: document.fileName,
-        hint: 'filename_ignored',
+        hint: isImage ? 'ocr_failed' : 'filename_ignored',
       });
     }
 
     // 3. ML audit — content only (filename is NOT passed to the classifier)
     const result = await aiService.auditDocument(textToAnalyze, [], {
       contentOnly: true,
-      filePath: document.filePath,
+      filePath: filePath || document.filePath,
+      documentTypeHint,
     });
     const decision = decideDocumentStatus(result);
 
-    // 4. Persist analysis
-    await DocumentAnalysis.upsert({
-      documentId,
+    const analysisPayload = {
       analysisType:    'compliance_audit',
       status:          'completed',
       summary:         result.summary       || '',
@@ -205,6 +211,11 @@ const analyzeDocument = async (req, res) => {
         dataset_baseline:    result.dataset_baseline,
         document_type:       result.document_type,
         organization_match:  result.organization_match,
+        organization_message: result.organization_message,
+        organization_training: result.organization_training,
+        ml_training: result.organization_training?.ml_training,
+        decision,
+        engine: result.engine,
         document_inspection: result.document_inspection,
         auditor_comment:     auditorComment || null,
       },
@@ -215,7 +226,14 @@ const analyzeDocument = async (req, res) => {
       model:           result.engine || 'rule-based-v4',
       performedBy:     req.user?.id || null,
       completedAt:     new Date(),
-    });
+    };
+
+    const existingAnalysis = await DocumentAnalysis.findOne({ where: { documentId } });
+    if (existingAnalysis) {
+      await existingAnalysis.update(analysisPayload);
+    } else {
+      await DocumentAnalysis.create({ documentId, ...analysisPayload });
+    }
 
     await document.update({
       status: decision.status,
@@ -348,6 +366,7 @@ const getDocumentInsights = async (req, res) => {
       summary:         analysis.summary,
       recommendations: analysis.recommendations,
       results:         analysis.results,
+      decision:        analysis.results?.decision || document.metadata?.latestAuditDecision || null,
       auditorComment:  analysis.results?.auditor_comment || null,
       analyzedAt:      analysis.completedAt,
       confidenceScore: Math.round((analysis.confidence || 0.95) * 100),

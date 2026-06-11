@@ -27,6 +27,7 @@ const taskRoutes = require('./routes/taskRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const retentionRoutes = require('./routes/retentionRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const roleReportRoutes = require('./routes/roleReportRoutes');
 const auditLogRoutes = require('./routes/auditLogRoutes');
 const versionRoutes = require('./routes/versionRoutes');
 const securityRoutes = require('./routes/securityRoutes');
@@ -129,6 +130,7 @@ app.use('/api/tasks', verifyToken, apiLimiter, taskRoutes);
 app.use('/api/search', verifyToken, apiLimiter, searchRoutes);
 app.use('/api/retention', verifyToken, apiLimiter, retentionRoutes);
 app.use('/api/dashboard', verifyToken, apiLimiter, dashboardRoutes);
+app.use('/api/role-reports', verifyToken, apiLimiter, roleReportRoutes);
 app.use('/api/security', verifyToken, apiLimiter, securityRoutes);
 app.use('/api/audit-logs', verifyToken, verifyRole(['administrator', 'auditor']), apiLimiter, auditLogRoutes);
 
@@ -144,14 +146,19 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Database initialization and server startup
+let httpServer = null;
+
 const startServer = async () => {
   try {
-    // Initialize database
     const dbReady = await initializeDatabase();
 
-    if (dbReady) {
-      app.listen(port, () => {
-        console.log(`
+    if (!dbReady) {
+      console.error('✗ Database not ready — server not started');
+      process.exit(1);
+    }
+
+    httpServer = app.listen(port, () => {
+      console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║  AI-Powered Document Audit System  v1.0.0                 ║
 ║  PostgreSQL Database: AIDOCUMENT_DB                        ║
@@ -175,9 +182,17 @@ All 13 Modules Active:
 
 API Base: http://localhost:${port}/api
 Status:   GET /api/status
-        `);
-      });
-    }
+      `);
+    });
+
+    httpServer.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`✗ Port ${port} is already in use. Stop the other backend process and restart.`);
+      } else {
+        console.error('✗ HTTP server error:', error.message);
+      }
+      process.exit(1);
+    });
   } catch (error) {
     console.error('✗ Failed to start server:', error.message);
     process.exit(1);
@@ -187,15 +202,17 @@ Status:   GET /api/status
 // Start the server
 startServer();
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('\n✗ SIGTERM signal received: closing HTTP server');
-  sequelize.close();
-  process.exit(0);
-});
+function shutdown(signal) {
+  console.log(`\n✗ ${signal} received: closing HTTP server`);
+  const closeAndExit = () => {
+    sequelize.close().finally(() => process.exit(0));
+  };
+  if (httpServer) {
+    httpServer.close(closeAndExit);
+  } else {
+    closeAndExit();
+  }
+}
 
-process.on('SIGINT', () => {
-  console.log('\n✗ SIGINT signal received: closing HTTP server');
-  sequelize.close();
-  process.exit(0);
-});
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

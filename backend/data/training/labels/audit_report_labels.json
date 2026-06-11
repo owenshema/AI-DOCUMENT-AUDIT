@@ -1,0 +1,140 @@
+{
+  "sourceFile": "SIFCO_Audit_Report.xlsx",
+  "ingestedAt": "2026-06-11T21:22:03.881Z",
+  "rowCount": 16,
+  "records": [
+    {
+      "document_type": "Shipping Agreement",
+      "status": "WARNING",
+      "vessel": "CMA CGM SEMARANG",
+      "voyage": "02SOGS1MA",
+      "spec_id": "shipping_agreement",
+      "source_sheet": "Summary",
+      "source_row": 2,
+      "supplement_text": "Document type: Shipping Agreement\nVessel: CMA CGM SEMARANG\nVoyage: 02SOGS1MA\nAudit status: WARNING"
+    },
+    {
+      "document_type": "Freight Invoice",
+      "status": "FLAGGED",
+      "vessel": "CMA CGM SEMARANG",
+      "voyage": "02SOGS1MA",
+      "consignee": "HATANGIMANA JOHN DATE: 3/2/2026",
+      "spec_id": "freight_invoice",
+      "source_sheet": "Summary",
+      "source_row": 3,
+      "supplement_text": "Document type: Freight Invoice\nConsignee: HATANGIMANA JOHN DATE: 3/2/2026\nVessel: CMA CGM SEMARANG\nVoyage: 02SOGS1MA\nAudit status: FLAGGED"
+    },
+    {
+      "document_type": "Packing List",
+      "status": "FLAGGED",
+      "container_number": "TEMU6439085",
+      "vessel": "SEMARSNG",
+      "voyage": "02SOGS1MA",
+      "consignee": "UNIQUE HYBRID &EV SPARE PARTS DATE: 15/02/2026",
+      "spec_id": "packing_list",
+      "source_sheet": "Summary",
+      "source_row": 4,
+      "supplement_text": "Document type: Packing List\nConsignee: UNIQUE HYBRID &EV SPARE PARTS DATE: 15/02/2026\nContainer: TEMU6439085\nVessel: SEMARSNG\nVoyage: 02SOGS1MA\nAudit status: FLAGGED"
+    },
+    {
+      "document_type": "House Bill of Lading",
+      "status": "FLAGGED",
+      "container_number": "TEMU6439085",
+      "vessel": "CMA CGM SEMARANG",
+      "voyage": "CMA",
+      "consignee": "(NAME AND ADDRESS) NOT NEGOTIABLE UNLESS CONSIGNED TO FORWARDING AGENT REFERENCES",
+      "spec_id": "bill_of_lading",
+      "source_sheet": "Summary",
+      "source_row": 5,
+      "supplement_text": "Document type: House Bill of Lading\nConsignee: (NAME AND ADDRESS) NOT NEGOTIABLE UNLESS CONSIGNED TO FORWARDING AGENT REFERENCES\nContainer: TEMU6439085\nVessel: CMA CGM SEMARANG\nVoyage: CMA\nAudit status: FLAGGED"
+    },
+    {
+      "document_type": "Trucking Invoice",
+      "status": "APPROVED",
+      "container_number": "ECMU5567458",
+      "spec_id": "trucking_invoice",
+      "source_sheet": "Summary",
+      "source_row": 6,
+      "supplement_text": "Document type: Trucking Invoice\nContainer: ECMU5567458\nAudit status: APPROVED"
+    },
+    {
+      "document_type": "SIFCO Invoice",
+      "status": "APPROVED",
+      "container_number": "TEMU6439085",
+      "spec_id": "sea_freight_invoice",
+      "source_sheet": "Summary",
+      "source_row": 7,
+      "supplement_text": "Document type: SIFCO Invoice\nContainer: TEMU6439085\nAudit status: APPROVED"
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Issues",
+      "source_row": 2,
+      "supplement_text": ""
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Issues",
+      "source_row": 3,
+      "supplement_text": ""
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Issues",
+      "source_row": 4,
+      "supplement_text": ""
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Issues",
+      "source_row": 5,
+      "supplement_text": ""
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Issues",
+      "source_row": 6,
+      "supplement_text": ""
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Issues",
+      "source_row": 7,
+      "supplement_text": ""
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Issues",
+      "source_row": 8,
+      "supplement_text": ""
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Cross-Doc Issues",
+      "source_row": 2,
+      "supplement_text": ""
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Cross-Doc Issues",
+      "source_row": 3,
+      "supplement_text": ""
+    },
+    {
+      "_specGuess": "packing_list",
+      "spec_id": "packing_list",
+      "source_sheet": "Cross-Doc Issues",
+      "source_row": 4,
+      "supplement_text": ""
+    }
+  ]
+}

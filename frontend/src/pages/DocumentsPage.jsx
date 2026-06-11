@@ -312,10 +312,17 @@ export default function DocumentsPage() {
   };
 
   const role = user?.role || 'viewer';
+  const isOwnerPortal = role === 'viewer' || role === 'document_manager';
+  const pageTitle = isOwnerPortal ? 'My Documents' : 'Document Hub';
 
   return (
-    <AppShell title="Document Hub">
-      {/* Drop zone â€” hidden for viewers */}
+    <AppShell title={pageTitle}>
+      {isOwnerPortal && (
+        <p className="mb-4 text-xs text-slate-500">
+          Showing only documents you uploaded. Other users&apos; files are not visible here.
+        </p>
+      )}
+      {/* Drop zone — hidden for viewers */}
       <div
         ref={dropRef}
         onDragOver={e => { e.preventDefault(); setDragging(true); }}

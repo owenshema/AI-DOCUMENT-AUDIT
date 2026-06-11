@@ -1,0 +1,13 @@
+{
+  "watch": ["*.js", "routes", "controllers", "services", "middleware", "db", "config"],
+  "ignore": [
+    "uploads/**",
+    "data/**",
+    "forgery/dataset/**",
+    "forgery/model/**",
+    "test-*.js",
+    "node_modules/**"
+  ],
+  "ext": "js,json",
+  "delay": 2500
+}

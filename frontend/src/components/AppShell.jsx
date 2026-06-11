@@ -7,6 +7,7 @@ import {
 import useAuthStore from '../store/authStore';
 import { authAPI } from '../api/auth';
 import GlobalSearchBar from './GlobalSearchBar';
+import NotificationBell from './NotificationBell';
 
 // â”€â”€ Role-based nav config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // roles: null = all, array = restricted to those roles
@@ -119,12 +120,6 @@ export default function AppShell({ children, title }) {
 
       {/* Bottom */}
       <div className={`px-3 pb-4 pt-3 border-t space-y-1 ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
-        <button onClick={toggleTheme}
-          title={collapsed ? (isDarkMode ? 'Light mode' : 'Dark mode') : undefined}
-          className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-xl px-3 py-2 text-sm transition-colors ${isDarkMode ? 'text-slate-400 hover:bg-white/5 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}>
-          {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          {!collapsed && (isDarkMode ? 'Light mode' : 'Dark mode')}
-        </button>
         <button onClick={handleLogout}
           title={collapsed ? 'Sign out' : undefined}
           className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-xl px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors`}>
@@ -174,9 +169,11 @@ export default function AppShell({ children, title }) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Theme toggle (desktop) */}
+            <NotificationBell isDarkMode={isDarkMode} />
+
             <button onClick={toggleTheme}
-              className={`hidden sm:flex rounded-lg p-2 transition-colors ${isDarkMode ? 'text-slate-400 hover:bg-white/5 hover:text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+              title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              className={`rounded-lg p-2 transition-colors ${isDarkMode ? 'text-slate-400 hover:bg-white/5 hover:text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
               {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 

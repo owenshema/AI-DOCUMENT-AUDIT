@@ -105,10 +105,16 @@ function runColabAnalysis(filePath, documentText) {
   });
 }
 
+function isVisualDocument(filePath) {
+  if (!filePath) return false;
+  var ext = path.extname(String(filePath)).toLowerCase();
+  return ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff'].indexOf(ext) >= 0;
+}
+
 async function analyzeDocument(documentText, options) {
   options = options || {};
 
-  if (options.filePath && modelAvailable()) {
+  if (options.filePath && modelAvailable() && isVisualDocument(options.filePath)) {
     try {
       return await runColabAnalysis(options.filePath, documentText);
     } catch (err) {

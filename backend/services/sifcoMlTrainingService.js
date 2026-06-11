@@ -10,6 +10,9 @@ var path = require('path');
 
 var TRAINING_DIR = path.join(__dirname, '..', 'data', 'training');
 var CORPUS_PATH = path.join(TRAINING_DIR, 'corpus.json');
+var auditReportTraining = require('./auditReportTrainingService');
+var notebookTraining = require('./notebookTrainingService');
+var notebookAudit = require('./sifcoNotebookAuditService');
 
 /** Six SIFCO daily papers — fingerprints extracted from your reference PDFs */
 var REFERENCE_SPECS = [
@@ -142,10 +145,11 @@ var REFERENCE_SPECS = [
 
 var corpusCache = null;
 /** Acceptance uses DOCUMENT BODY only — file name is never required */
-var ACCEPT_SIMILARITY = 0.52;
-var ACCEPT_MARKER_RATIO = 0.70;
-var ACCEPT_MIN_SIMILARITY = 0.32;
-var ACCEPT_AMBIGUITY_MARGIN = 0.10;
+/** Notebook-first acceptance; ML fallback uses relaxed thresholds */
+var ACCEPT_SIMILARITY = 0.45;
+var ACCEPT_MARKER_RATIO = 0.55;
+var ACCEPT_MIN_SIMILARITY = 0.28;
+var ACCEPT_AMBIGUITY_MARGIN = 0.08;
 var MIN_BODY_LENGTH = 80;
 var REJECTED_COMPLIANCE_SCORE = 10;
 
@@ -296,6 +300,8 @@ function loadCorpus() {
     var filePath = path.join(TRAINING_DIR, spec.sourceFile);
     if (!fs.existsSync(filePath)) return;
     var raw = fs.readFileSync(filePath, 'utf8');
+    raw += auditReportTraining.getSupplementTextForSpec(spec.id);
+    raw += notebookTraining.getSupplementTextForSpec(spec.id);
     var tokens = tokenize(raw);
     allTokens = allTokens.concat(tokens);
     tokens.forEach(function (t, i, arr) {
@@ -332,10 +338,16 @@ function loadCorpus() {
   };
 
   try {
+    var excelLabels = auditReportTraining.loadAuditReportLabels();
+    var notebookLabels = notebookTraining.loadNotebookTraining();
     fs.writeFileSync(CORPUS_PATH, JSON.stringify({
       modelVersion: corpusCache.modelVersion,
       trainedAt: corpusCache.trainedAt,
       referenceCount: corpusCache.referenceCount,
+      auditReportRows: excelLabels.records.length,
+      auditReportSource: excelLabels.meta && excelLabels.meta.sourceFile,
+      notebookTrainingSource: notebookLabels.meta && notebookLabels.meta.source,
+      notebookReferenceAudits: notebookLabels.meta && notebookLabels.meta.auditedCount,
       types: docs.map(function (d) {
         return {
           id: d.spec.id,
@@ -402,14 +414,25 @@ function classifyDocument(documentText, context) {
     var markerBrand = scoreMarkers(normalized, ref.spec.brandMarkers);
     var markerSig = scoreMarkers(normalized, ref.spec.signatureMarkers);
     var markerOptional = scoreMarkers(normalized, ref.spec.optionalMarkers);
+    var extraMarkers = auditReportTraining.getExtraMarkersForSpec(ref.spec.id);
+    var notebookMarkers = notebookTraining.getExtraMarkersForSpec(ref.spec.id);
+    var markerExcel = extraMarkers.length ? scoreMarkers(normalized, extraMarkers) : 0;
+    var markerNotebook = notebookMarkers.length ? scoreMarkers(normalized, notebookMarkers) : 0;
     var titleBoost = titleHit ? 0.08 : 0;
+    var hintBoost = 0;
+    if (context.documentTypeHint && context.documentTypeHint !== 'any' && ref.spec.id === context.documentTypeHint) {
+      hintBoost = 0.06;
+    }
     var combined =
-      sim * 0.48 +
-      markerRequired * 0.36 +
+      sim * 0.46 +
+      markerRequired * 0.34 +
       markerBrand * 0.1 +
       markerSig * 0.05 +
-      markerOptional * 0.05 +
-      titleBoost;
+      markerOptional * 0.04 +
+      markerExcel * 0.03 +
+      markerNotebook * 0.03 +
+      titleBoost +
+      hintBoost;
 
     return {
       id: ref.spec.id,
@@ -451,12 +474,12 @@ function classifyDocument(documentText, context) {
     }
   }
 
-  if (accepted && best.markerBrand < 40 && best.markerRequired < 80) {
+  if (accepted && best.markerBrand < 35 && best.markerRequired < 72) {
     accepted = false;
   }
 
   var companyCriteriaFailed = false;
-  if (accepted && !passesCompanyCriteria(best, normalized)) {
+  if (accepted && best.markerRequired < 78 && !passesCompanyCriteria(best, normalized)) {
     accepted = false;
     companyCriteriaFailed = true;
   }
@@ -473,43 +496,60 @@ function classifyDocument(documentText, context) {
 }
 
 /**
- * Run ML-trained audit — output compatible with existing API shape.
+ * Run trained audit — notebook rules first (Untitled3.ipynb), ML similarity as fallback.
  */
 function runTrainedAudit(documentText, context) {
-  var result = classifyDocument(documentText, context);
-  var accepted = result.accepted;
-  var best = result.bestMatch;
+  context = context || {};
+  var mlResult = classifyDocument(documentText, context);
+  var notebookResult = notebookAudit.auditText(extractBodyTextForAudit(documentText || ''));
 
-  var trainingDetail = {
-    model: 'sifco-ml-v1',
-    trained_on: REFERENCE_SPECS.map(function (s) { return s.referencePdf; }),
-    reference_count: loadCorpus().referenceCount,
-    best_match: best ? {
-      type: best.id,
-      label: best.label,
-      reference_pdf: best.referencePdf,
-      similarity_percent: Math.round((best.similarity || 0) * 100),
-      confidence_percent: Math.round((best.combinedScore || 0) * 100),
-      marker_match_percent: best.markerRequired,
-      brand_match_percent: best.markerBrand,
-      signature_detected: best.signatureFound,
-      title_detected: best.titleDetected,
-    } : null,
-    all_type_scores: (result.allScores || []).map(function (s) {
-      return {
-        type: s.id,
-        label: s.label,
-        similarity_percent: Math.round(s.similarity * 100),
-        confidence_percent: Math.round(s.combinedScore * 100),
-      };
-    }),
-  };
-
+  var accepted = false;
+  var best = mlResult.bestMatch;
+  var auditEngine = 'sifco-notebook-trained';
+  var compliance_score = REJECTED_COMPLIANCE_SCORE;
   var message;
-  if (!accepted) {
-    if (result.reason === 'unreadable') {
-      message = result.message;
-    } else if (result.reason === 'company_criteria_failed') {
+  var violations = [];
+  var documentType = 'unknown';
+  var paperLabel = null;
+  var paperPurpose = null;
+  var referencePdf = null;
+
+  if (notebookResult.ok && notebookResult.specId) {
+    accepted = true;
+    compliance_score = notebookResult.complianceScore;
+    documentType = notebookResult.specId;
+    paperLabel = notebookResult.docTypeName;
+    message = notebookResult.message;
+    violations = notebookAudit.issuesToViolations(notebookResult.issues);
+    var nbSpec = specForId(notebookResult.specId);
+    paperPurpose = nbSpec ? nbSpec.purpose : null;
+    referencePdf = nbSpec ? nbSpec.referencePdf : null;
+    best = (mlResult.allScores || []).find(function (s) { return s.id === notebookResult.specId; }) || best;
+  } else if (mlResult.accepted && mlResult.bestMatch) {
+    accepted = true;
+    auditEngine = 'sifco-ml-trained';
+    compliance_score = 100;
+    documentType = mlResult.bestMatch.id;
+    best = mlResult.bestMatch;
+    paperLabel = best.label;
+    paperPurpose = best.purpose;
+    referencePdf = best.referencePdf;
+    message =
+      'Validated against SIFCO training reference "' + best.referencePdf + '" — classified as ' + best.label +
+      ' with ' + Math.round(best.combinedScore * 100) + '% match confidence.';
+  } else {
+    auditEngine = 'sifco-ml-trained';
+    if (mlResult.reason === 'unreadable' || notebookResult.reason === 'unreadable') {
+      message = mlResult.message || notebookResult.message;
+    } else if (notebookResult.reason === 'unknown_type') {
+      message = notebookResult.message;
+      if (mlResult.bestMatch && mlResult.bestMatch.markerRequired >= 30) {
+        message += ' Closest ML match: ' + mlResult.bestMatch.label + ' (' + Math.round(mlResult.bestMatch.combinedScore * 100) + '%).';
+      }
+    } else if (notebookResult.reason === 'fraud_or_critical') {
+      message = notebookResult.message;
+      violations = notebookAudit.issuesToViolations(notebookResult.issues);
+    } else if (mlResult.reason === 'company_criteria_failed') {
       message =
         'Document rejected: does not meet SIFCO company criteria — missing required partner branding, authorized signature, or official stamp/seal for the trained paper format.';
     } else if (best && best.markerRequired >= 30) {
@@ -520,28 +560,75 @@ function runTrainedAudit(documentText, context) {
       message =
         'This document does not match any of the six SIFCO daily papers used for training (packing list, HBL, shipping agreement, freight invoice, trucking invoice, sea freight invoice).';
     }
-  } else {
-    message =
-      'Validated against SIFCO training reference "' + best.referencePdf + '" — classified as ' + best.label +
-      ' with ' + Math.round(best.combinedScore * 100) + '% match confidence.';
+    if (!violations.length) {
+      violations = [{
+        code: 'ML-REJECT',
+        title: 'Not a trained SIFCO document',
+        summary: message,
+        detail: best
+          ? 'Closest type: ' + best.label + ' (' + Math.round(best.combinedScore * 100) + '%).'
+          : 'Upload one of the six reference document types used in daily SIFCO customer operations.',
+      }];
+    }
   }
 
-  var compliance_score = accepted ? 100 : REJECTED_COMPLIANCE_SCORE;
+  var trainingDetail = {
+    model: 'sifco-ml-v1',
+    trained_on: REFERENCE_SPECS.map(function (s) { return s.referencePdf; }),
+    reference_count: loadCorpus().referenceCount,
+    notebook_audit: notebookResult.ok || notebookResult.reason ? {
+      status: notebookResult.status,
+      confidence_percent: notebookResult.confidence,
+      doc_type_name: notebookResult.docTypeName,
+      issue_count: (notebookResult.issues || []).length,
+    } : null,
+    best_match: best ? {
+      type: best.id,
+      label: best.label || paperLabel,
+      reference_pdf: best.referencePdf || referencePdf,
+      similarity_percent: Math.round((best.similarity || 0) * 100),
+      confidence_percent: Math.round((best.combinedScore || notebookResult.confidence || 0) * (best.combinedScore ? 100 : 1)),
+      marker_match_percent: best.markerRequired,
+      brand_match_percent: best.markerBrand,
+      signature_detected: best.signatureFound,
+      title_detected: best.titleDetected,
+    } : (notebookResult.specId ? {
+      type: notebookResult.specId,
+      label: paperLabel,
+      reference_pdf: referencePdf,
+      confidence_percent: notebookResult.confidence,
+    } : null),
+    all_type_scores: (mlResult.allScores || []).map(function (s) {
+      return {
+        type: s.id,
+        label: s.label,
+        similarity_percent: Math.round(s.similarity * 100),
+        confidence_percent: Math.round(s.combinedScore * 100),
+      };
+    }),
+  };
+
+  var riskLevel = 'high';
+  if (accepted) {
+    if (compliance_score >= 95) riskLevel = 'low';
+    else if (compliance_score >= 75) riskLevel = 'medium';
+    else riskLevel = 'medium';
+  }
 
   return {
-    document_type: accepted && best ? best.id : 'unknown',
+    document_type: accepted ? documentType : 'unknown',
     organization_match: accepted,
     trained_reference_match: accepted,
     organization_message: message,
-    organization_category: accepted && best ? best.id : null,
+    organization_category: accepted ? documentType : null,
     organization_training: {
-      paper_label: best ? best.label : null,
-      paper_purpose: best ? best.purpose : null,
-      training_profile: 'sifco-ml-v1',
+      paper_label: paperLabel || (best ? best.label : null),
+      paper_purpose: paperPurpose || (best ? best.purpose : null),
+      training_profile: 'sifco-notebook-v2',
       ml_training: trainingDetail,
-      reference_pdf: best ? best.referencePdf : null,
-      similarity_percent: best ? Math.round(best.similarity * 100) : 0,
-      confidence_percent: best ? Math.round(best.combinedScore * 100) : 0,
+      reference_pdf: referencePdf || (best ? best.referencePdf : null),
+      similarity_percent: best ? Math.round((best.similarity || 0) * 100) : (notebookResult.confidence || 0),
+      confidence_percent: accepted ? compliance_score : REJECTED_COMPLIANCE_SCORE,
       signature_detected: best ? best.signatureFound : false,
       brand_match_percent: best ? best.markerBrand : 0,
     },
@@ -549,40 +636,39 @@ function runTrainedAudit(documentText, context) {
     ai_generated_percentage: 0,
     ai_threshold_exceeded: false,
     ai_validity_percentage: compliance_score,
-    risk_level: accepted ? (best.combinedScore >= 0.65 ? 'low' : 'medium') : 'high',
+    risk_level: riskLevel,
     sentiment: accepted ? 'positive' : 'negative',
     summary: message,
     missing_fields: [],
     extracted_fields: accepted ? {
-      paper_type: best ? best.label : null,
-      matched_reference: best ? best.referencePdf : null,
-      confidence: best ? Math.round(best.combinedScore * 100) + '%' : null,
+      paper_type: paperLabel || (best ? best.label : null),
+      matched_reference: referencePdf || (best ? best.referencePdf : null),
+      confidence: compliance_score + '%',
+      notebook_fields: notebookResult.fields || {},
     } : {
       paper_type: null,
       matched_reference: null,
       confidence: REJECTED_COMPLIANCE_SCORE + '%',
     },
-    violations: [],
-    inconsistencies: accepted ? [] : [{
-      code: 'ML-REJECT',
-      title: 'Not a trained SIFCO document',
-      summary: message,
-      detail: best
-        ? 'Closest type: ' + best.label + ' (' + Math.round(best.combinedScore * 100) + '%). Required training markers were not met.'
-        : 'Upload one of the six reference document types used in daily SIFCO customer operations.',
-    }],
-    recommendations: [],
-    fraud_flags: [],
-    policy_rules_checked: 0,
-    engine: 'sifco-ml-trained',
+    violations: violations,
+    inconsistencies: accepted ? [] : violations,
+    recommendations: accepted && violations.length
+      ? violations.map(function (v) { return v.summary; })
+      : [],
+    fraud_flags: violations.filter(function (v) { return v.severity === 'CRITICAL'; }),
+    policy_rules_checked: (notebookResult.issues || []).length,
+    engine: auditEngine,
     document_inspection: accepted
-      ? buildAcceptedInspection(documentText, best)
+      ? buildAcceptedInspection(documentText, best || { id: documentType, label: paperLabel, purpose: paperPurpose })
       : buildRejectedInspection(),
   };
 }
 
 function rebuildTrainingFromDisk() {
   corpusCache = null;
+  auditReportTraining.clearCache();
+  notebookTraining.clearCache();
+  notebookAudit.clearCache();
   return loadCorpus();
 }
 

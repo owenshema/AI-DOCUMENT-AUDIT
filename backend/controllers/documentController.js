@@ -6,6 +6,7 @@
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
+const { documentWhereForUser, userOwnsDocument } = require('../utils/ownerScope');
 
 const getStoredFilePath = (document) => {
   const storedPath = document.filePath;
@@ -65,14 +66,7 @@ const getStoredFilePath = (document) => {
   return null;
 };
 
-const userCanAccessDocument = (document, userId, role) => {
-  // Admins and auditors see everything; owners only see their own documents.
-  if (role === 'administrator' || role === 'auditor') return true;
-  // Viewers and document managers only see their own documents
-  if (document.uploadedBy === userId) return true;
-  const sharing = document.metadata?.sharing || [];
-  return JSON.stringify(sharing).includes(userId);
-};
+const userCanAccessDocument = (document, userId, role) => userOwnsDocument(document, userId, role);
 
 const DOCUMENT_STATUSES = ['uploaded', 'in_review', 'in_progress', 'submitted', 'reviewed', 'changes_requested', 'approved', 'rejected'];
 
@@ -183,13 +177,7 @@ const getAllDocuments = async (req, res) => {
     if (status) where.status = status;
     if (department) where.department = department;
 
-    // Apply role-based data ownership filters
-    if (role === 'viewer' || role === 'document_manager') {
-      where[Op.or] = [
-        { uploadedBy: userId },
-        req.app.locals.sequelize.literal(`"metadata"->>'sharing' LIKE '%${userId}%'`)
-      ];
-    }
+    Object.assign(where, documentWhereForUser({ id: userId, role }));
 
     // Fetch with pagination
     const { count, rows } = await Document.findAndCountAll({
@@ -259,18 +247,13 @@ const uploadDocument = async (req, res) => {
       });
     }
 
-    const resolvedPath = req.file?.path ? path.resolve(req.file.path) : '';
-    let extractedText = null;
-    if (resolvedPath) {
-      try {
-        const { extractTextFromFile } = require('../services/pdfTextService');
-        extractedText = await extractTextFromFile(resolvedPath, req.file.mimetype);
-      } catch (extractErr) {
-        console.warn('Upload text extraction failed:', extractErr.message);
-      }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file received. Select a PDF, DOCX, or other supported file and try again.' });
     }
 
-    // Create document record (extract PDF body on upload — audit does not use file name)
+    const resolvedPath = req.file.path ? path.resolve(req.file.path) : '';
+
+    // Create document record immediately — text extraction runs during AI analysis
     const document = await Document.create({
       id: uuidv4(),
       title,
@@ -286,17 +269,40 @@ const uploadDocument = async (req, res) => {
       status: 'in_review',
       uploadedBy: validUserId,
       uploadedAt: new Date(),
-      extractedText: extractedText ? extractedText.slice(0, 10000) : null,
-      ocrProcessed: Boolean(extractedText),
+      extractedText: null,
+      ocrProcessed: false,
       tags: tags ? tags.split(',').map(t => t.trim()) : [],
       metadata: {
-        originalName: req.file?.originalname || 'file',
-        storedFileName: req.file?.filename || null,
+        originalName: req.file.originalname,
+        storedFileName: req.file.filename,
         uploadedFrom: req.ip || 'unknown',
         userAgent: req.get('user-agent') || 'unknown',
-        textExtractedOnUpload: Boolean(extractedText),
+        textExtractedOnUpload: false,
       }
     });
+
+    // Optional background preview extraction — does not block the upload response
+    if (resolvedPath) {
+      const { extractTextFromFile } = require('../services/pdfTextService');
+      extractTextFromFile(resolvedPath, req.file.mimetype)
+        .then((extractedText) => {
+          if (!extractedText) return;
+          return Document.update(
+            {
+              extractedText: extractedText.slice(0, 10000),
+              ocrProcessed: true,
+              metadata: {
+                ...(document.metadata || {}),
+                textExtractedOnUpload: true,
+              },
+            },
+            { where: { id: document.id } }
+          );
+        })
+        .catch((extractErr) => {
+          console.warn('Background upload text extraction failed:', extractErr.message);
+        });
+    }
 
     res.status(201).json({
       message: 'Document uploaded successfully',
