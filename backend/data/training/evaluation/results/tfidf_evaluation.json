@@ -1,0 +1,451 @@
+{
+  "generated_at": "2026-06-14T21:53:52.836Z",
+  "algorithm": "TF-IDF + cosine similarity",
+  "model_version": "sifco-ml-v1",
+  "reference_documents": 6,
+  "thresholds": {
+    "accept_similarity": 0.45,
+    "accept_marker_ratio": 0.55,
+    "accept_min_similarity": 0.28
+  },
+  "evaluation_modes": {
+    "full_corpus": {
+      "description": "All 6 reference documents included in training corpus (operational mode)",
+      "metrics": {
+        "classification_accuracy": 0.6364,
+        "accept_reject_accuracy": 1,
+        "macro_precision": 1,
+        "macro_recall": 1,
+        "macro_f1": 1,
+        "accept_precision": 1,
+        "accept_recall": 1,
+        "accept_f1": 1,
+        "reject_precision": 1,
+        "reject_recall": 1,
+        "reject_f1": 1
+      },
+      "confusion_matrix_top1": {
+        "bill_of_lading": {
+          "bill_of_lading": 1,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "freight_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 1,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "packing_list": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 1,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "reject": {
+          "bill_of_lading": 1,
+          "freight_invoice": 2,
+          "packing_list": 0,
+          "reject": 1,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 1,
+          "trucking_invoice": 0
+        },
+        "sea_freight_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 1,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "shipping_agreement": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 1,
+          "trucking_invoice": 0
+        },
+        "trucking_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 1
+        }
+      },
+      "accept_reject_matrix": {
+        "accept": {
+          "accept": 6,
+          "reject": 0
+        },
+        "reject": {
+          "accept": 0,
+          "reject": 5
+        }
+      },
+      "per_class": {
+        "bill_of_lading": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "freight_invoice": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "packing_list": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "sea_freight_invoice": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "shipping_agreement": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "trucking_invoice": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "reject": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        }
+      }
+    },
+    "leave_one_out": {
+      "description": "Each positive sample evaluated with its own reference excluded from corpus (honest generalization test)",
+      "metrics": {
+        "classification_accuracy": 0.0909,
+        "accept_reject_accuracy": 0.5455,
+        "macro_precision": 0.1429,
+        "macro_recall": 0.1429,
+        "macro_f1": 0.1429
+      },
+      "confusion_matrix_top1": {
+        "bill_of_lading": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 1,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "freight_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 1
+        },
+        "packing_list": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 1,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "reject": {
+          "bill_of_lading": 1,
+          "freight_invoice": 2,
+          "packing_list": 0,
+          "reject": 1,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 1,
+          "trucking_invoice": 0
+        },
+        "sea_freight_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 1,
+          "trucking_invoice": 0
+        },
+        "shipping_agreement": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 1,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "trucking_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 1,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        }
+      },
+      "per_class": {
+        "bill_of_lading": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "freight_invoice": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "packing_list": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "sea_freight_invoice": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "shipping_agreement": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "trucking_invoice": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "reject": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        }
+      }
+    }
+  },
+  "predictions": [
+    {
+      "id": "pos-01",
+      "name": "01-packing-list-unique-hybrid.txt",
+      "actual": "packing_list",
+      "expectedType": "packing_list",
+      "mustAccept": true,
+      "predictedTop1": "packing_list",
+      "predictedAccepted": true,
+      "predictedType": "packing_list",
+      "similarity": 0.859,
+      "combinedScore": 1.054,
+      "classificationCorrect": true,
+      "acceptCorrect": true
+    },
+    {
+      "id": "pos-02",
+      "name": "02-shipping-agreement-john.txt",
+      "actual": "shipping_agreement",
+      "expectedType": "shipping_agreement",
+      "mustAccept": true,
+      "predictedTop1": "shipping_agreement",
+      "predictedAccepted": true,
+      "predictedType": "shipping_agreement",
+      "similarity": 0.913,
+      "combinedScore": 1.09,
+      "classificationCorrect": true,
+      "acceptCorrect": true
+    },
+    {
+      "id": "pos-03",
+      "name": "03-hbl-unique-hybrid.txt",
+      "actual": "bill_of_lading",
+      "expectedType": "bill_of_lading",
+      "mustAccept": true,
+      "predictedTop1": "bill_of_lading",
+      "predictedAccepted": true,
+      "predictedType": "bill_of_lading",
+      "similarity": 0.963,
+      "combinedScore": 1.089,
+      "classificationCorrect": true,
+      "acceptCorrect": true
+    },
+    {
+      "id": "pos-04",
+      "name": "04-freight-invoice-unique-hybrid.txt",
+      "actual": "freight_invoice",
+      "expectedType": "freight_invoice",
+      "mustAccept": true,
+      "predictedTop1": "freight_invoice",
+      "predictedAccepted": true,
+      "predictedType": "freight_invoice",
+      "similarity": 0.898,
+      "combinedScore": 1.049,
+      "classificationCorrect": true,
+      "acceptCorrect": true
+    },
+    {
+      "id": "pos-05",
+      "name": "05-trucking-invoice-ecmu5567458.txt",
+      "actual": "trucking_invoice",
+      "expectedType": "trucking_invoice",
+      "mustAccept": true,
+      "predictedTop1": "trucking_invoice",
+      "predictedAccepted": true,
+      "predictedType": "trucking_invoice",
+      "similarity": 0.897,
+      "combinedScore": 1.083,
+      "classificationCorrect": true,
+      "acceptCorrect": true
+    },
+    {
+      "id": "pos-06",
+      "name": "06-sea-freight-john.txt",
+      "actual": "sea_freight_invoice",
+      "expectedType": "sea_freight_invoice",
+      "mustAccept": true,
+      "predictedTop1": "sea_freight_invoice",
+      "predictedAccepted": true,
+      "predictedType": "sea_freight_invoice",
+      "similarity": 0.82,
+      "combinedScore": 1.007,
+      "classificationCorrect": true,
+      "acceptCorrect": true
+    },
+    {
+      "id": "neg-01",
+      "name": "foreign_business_letter",
+      "actual": "reject",
+      "expectedType": null,
+      "mustAccept": false,
+      "predictedTop1": "freight_invoice",
+      "predictedAccepted": false,
+      "predictedType": "reject",
+      "similarity": 0.176,
+      "combinedScore": 0.263,
+      "classificationCorrect": false,
+      "acceptCorrect": true
+    },
+    {
+      "id": "neg-02",
+      "name": "metadata_only_upload",
+      "actual": "reject",
+      "expectedType": null,
+      "mustAccept": false,
+      "predictedTop1": "reject",
+      "predictedAccepted": false,
+      "predictedType": "reject",
+      "similarity": 0,
+      "combinedScore": 0,
+      "classificationCorrect": true,
+      "acceptCorrect": true
+    },
+    {
+      "id": "neg-03",
+      "name": "empty_shipping_keywords",
+      "actual": "reject",
+      "expectedType": null,
+      "mustAccept": false,
+      "predictedTop1": "bill_of_lading",
+      "predictedAccepted": false,
+      "predictedType": "reject",
+      "similarity": 0.184,
+      "combinedScore": 0.327,
+      "classificationCorrect": false,
+      "acceptCorrect": true
+    },
+    {
+      "id": "neg-04",
+      "name": "unrelated_medical_invoice",
+      "actual": "reject",
+      "expectedType": null,
+      "mustAccept": false,
+      "predictedTop1": "freight_invoice",
+      "predictedAccepted": false,
+      "predictedType": "reject",
+      "similarity": 0.22,
+      "combinedScore": 0.332,
+      "classificationCorrect": false,
+      "acceptCorrect": true
+    },
+    {
+      "id": "neg-05",
+      "name": "ai_generated_placeholder",
+      "actual": "reject",
+      "expectedType": null,
+      "mustAccept": false,
+      "predictedTop1": "shipping_agreement",
+      "predictedAccepted": false,
+      "predictedType": "reject",
+      "similarity": 0.258,
+      "combinedScore": 0.119,
+      "classificationCorrect": false,
+      "acceptCorrect": true
+    }
+  ]
+}

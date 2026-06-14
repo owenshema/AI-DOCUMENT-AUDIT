@@ -143,7 +143,103 @@ var REFERENCE_SPECS = [
   },
 ];
 
-var corpusCache = null;
+var corpusCacheByKey = {};
+
+function corpusCacheKey(options) {
+  options = options || {};
+  if (options.excludeSpecIds && options.excludeSpecIds.length) {
+    return 'ex:' + options.excludeSpecIds.slice().sort().join(',');
+  }
+  return 'default';
+}
+
+function loadCorpus(options) {
+  options = options || {};
+  var cacheKey = corpusCacheKey(options);
+  if (!options.skipCache && corpusCacheByKey[cacheKey]) {
+    return corpusCacheByKey[cacheKey];
+  }
+
+  var excludeSet = {};
+  (options.excludeSpecIds || []).forEach(function (id) { excludeSet[id] = true; });
+
+  var docs = [];
+  var allTokens = [];
+  var docFreq = {};
+
+  REFERENCE_SPECS.forEach(function (spec) {
+    if (excludeSet[spec.id]) return;
+    var filePath = path.join(TRAINING_DIR, spec.sourceFile);
+    if (!fs.existsSync(filePath)) return;
+    var raw = fs.readFileSync(filePath, 'utf8');
+    raw += auditReportTraining.getSupplementTextForSpec(spec.id);
+    raw += notebookTraining.getSupplementTextForSpec(spec.id);
+    var tokens = tokenize(raw);
+    allTokens = allTokens.concat(tokens);
+    tokens.forEach(function (t, i, arr) {
+      if (arr.indexOf(t) === i) docFreq[t] = (docFreq[t] || 0) + 1;
+    });
+    docs.push({
+      spec: spec,
+      raw: raw,
+      normalized: normalizeText(raw),
+      tokens: tokens,
+    });
+  });
+
+  var vocab = {};
+  Object.keys(docFreq).forEach(function (t) { vocab[t] = 1; });
+
+  var nDocs = docs.length || 1;
+  var idfMap = {};
+  Object.keys(docFreq).forEach(function (term) {
+    idfMap[term] = Math.log((nDocs + 1) / (docFreq[term] + 1)) + 1;
+  });
+
+  docs.forEach(function (d) {
+    d.vector = buildTfVector(d.tokens, idfMap, vocab);
+  });
+
+  var corpus = {
+    docs: docs,
+    idfMap: idfMap,
+    vocab: vocab,
+    trainedAt: new Date().toISOString(),
+    modelVersion: 'sifco-ml-v1',
+    referenceCount: docs.length,
+  };
+
+  if (cacheKey === 'default' && options.writeCorpusJson !== false) {
+    try {
+      var excelLabels = auditReportTraining.loadAuditReportLabels();
+      var notebookLabels = notebookTraining.loadNotebookTraining();
+      fs.writeFileSync(CORPUS_PATH, JSON.stringify({
+        modelVersion: corpus.modelVersion,
+        trainedAt: corpus.trainedAt,
+        referenceCount: corpus.referenceCount,
+        auditReportRows: excelLabels.records.length,
+        auditReportSource: excelLabels.meta && excelLabels.meta.sourceFile,
+        notebookTrainingSource: notebookLabels.meta && notebookLabels.meta.source,
+        notebookReferenceAudits: notebookLabels.meta && notebookLabels.meta.auditedCount,
+        types: docs.map(function (d) {
+          return {
+            id: d.spec.id,
+            label: d.spec.label,
+            sourceFile: d.spec.sourceFile,
+            referencePdf: d.spec.referencePdf,
+            tokenCount: d.tokens.length,
+          };
+        }),
+      }, null, 2));
+    } catch (e) {
+      console.warn('Could not write corpus.json:', e.message);
+    }
+  }
+
+  corpusCacheByKey[cacheKey] = corpus;
+  return corpus;
+}
+
 /** Acceptance uses DOCUMENT BODY only — file name is never required */
 /** Notebook-first acceptance; ML fallback uses relaxed thresholds */
 var ACCEPT_SIMILARITY = 0.45;
@@ -289,82 +385,6 @@ function extractBodyTextForAudit(documentText) {
   return body.trim();
 }
 
-function loadCorpus() {
-  if (corpusCache) return corpusCache;
-
-  var docs = [];
-  var allTokens = [];
-  var docFreq = {};
-
-  REFERENCE_SPECS.forEach(function (spec) {
-    var filePath = path.join(TRAINING_DIR, spec.sourceFile);
-    if (!fs.existsSync(filePath)) return;
-    var raw = fs.readFileSync(filePath, 'utf8');
-    raw += auditReportTraining.getSupplementTextForSpec(spec.id);
-    raw += notebookTraining.getSupplementTextForSpec(spec.id);
-    var tokens = tokenize(raw);
-    allTokens = allTokens.concat(tokens);
-    tokens.forEach(function (t, i, arr) {
-      if (arr.indexOf(t) === i) docFreq[t] = (docFreq[t] || 0) + 1;
-    });
-    docs.push({
-      spec: spec,
-      raw: raw,
-      normalized: normalizeText(raw),
-      tokens: tokens,
-    });
-  });
-
-  var vocab = {};
-  Object.keys(docFreq).forEach(function (t) { vocab[t] = 1; });
-
-  var nDocs = docs.length || 1;
-  var idfMap = {};
-  Object.keys(docFreq).forEach(function (term) {
-    idfMap[term] = Math.log((nDocs + 1) / (docFreq[term] + 1)) + 1;
-  });
-
-  docs.forEach(function (d) {
-    d.vector = buildTfVector(d.tokens, idfMap, vocab);
-  });
-
-  corpusCache = {
-    docs: docs,
-    idfMap: idfMap,
-    vocab: vocab,
-    trainedAt: new Date().toISOString(),
-    modelVersion: 'sifco-ml-v1',
-    referenceCount: docs.length,
-  };
-
-  try {
-    var excelLabels = auditReportTraining.loadAuditReportLabels();
-    var notebookLabels = notebookTraining.loadNotebookTraining();
-    fs.writeFileSync(CORPUS_PATH, JSON.stringify({
-      modelVersion: corpusCache.modelVersion,
-      trainedAt: corpusCache.trainedAt,
-      referenceCount: corpusCache.referenceCount,
-      auditReportRows: excelLabels.records.length,
-      auditReportSource: excelLabels.meta && excelLabels.meta.sourceFile,
-      notebookTrainingSource: notebookLabels.meta && notebookLabels.meta.source,
-      notebookReferenceAudits: notebookLabels.meta && notebookLabels.meta.auditedCount,
-      types: docs.map(function (d) {
-        return {
-          id: d.spec.id,
-          label: d.spec.label,
-          sourceFile: d.spec.sourceFile,
-          referencePdf: d.spec.referencePdf,
-          tokenCount: d.tokens.length,
-        };
-      }),
-    }, null, 2));
-  } catch (e) {
-    console.warn('Could not write corpus.json:', e.message);
-  }
-
-  return corpusCache;
-}
-
 function classifyDocument(documentText, context) {
   context = context || {};
   var text = extractBodyTextForAudit(documentText || '');
@@ -393,7 +413,7 @@ function classifyDocument(documentText, context) {
     };
   }
 
-  var corpus = loadCorpus();
+  var corpus = loadCorpus(context.corpusOptions || {});
   if (!corpus.docs.length) {
     return {
       accepted: false,
@@ -664,8 +684,12 @@ function runTrainedAudit(documentText, context) {
   };
 }
 
+function clearCorpusCache() {
+  corpusCacheByKey = {};
+}
+
 function rebuildTrainingFromDisk() {
-  corpusCache = null;
+  clearCorpusCache();
   auditReportTraining.clearCache();
   notebookTraining.clearCache();
   notebookAudit.clearCache();
@@ -676,6 +700,10 @@ module.exports = {
   runTrainedAudit: runTrainedAudit,
   classifyDocument: classifyDocument,
   loadCorpus: loadCorpus,
+  clearCorpusCache: clearCorpusCache,
   rebuildTrainingFromDisk: rebuildTrainingFromDisk,
   REFERENCE_SPECS: REFERENCE_SPECS,
+  ACCEPT_SIMILARITY: ACCEPT_SIMILARITY,
+  ACCEPT_MARKER_RATIO: ACCEPT_MARKER_RATIO,
+  ACCEPT_MIN_SIMILARITY: ACCEPT_MIN_SIMILARITY,
 };

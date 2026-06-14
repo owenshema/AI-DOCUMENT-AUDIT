@@ -583,6 +583,44 @@ const getAnalysisStats = async (req, res) => {
   }
 };
 
+const getEvaluationMetrics = async (req, res) => {
+  try {
+    const path = require('path');
+    const fs = require('fs');
+    const resultsDir = path.join(__dirname, '..', 'data', 'training', 'evaluation', 'results');
+    const tfidfPath = path.join(resultsDir, 'tfidf_evaluation.json');
+    const fullPath = path.join(resultsDir, 'full_audit_evaluation.json');
+
+    if (!fs.existsSync(tfidfPath)) {
+      return res.status(404).json({
+        error: 'Evaluation not run yet. Execute: cd backend && npm run evaluate:full',
+      });
+    }
+
+    const tfidf = JSON.parse(fs.readFileSync(tfidfPath, 'utf8'));
+    const payload = {
+      algorithm: tfidf.algorithm,
+      generated_at: tfidf.generated_at,
+      reference_documents: tfidf.reference_documents,
+      metrics: tfidf.evaluation_modes.full_corpus.metrics,
+      confusion_matrix: tfidf.evaluation_modes.full_corpus.confusion_matrix_top1,
+      per_class: tfidf.evaluation_modes.full_corpus.per_class,
+      leave_one_out: tfidf.evaluation_modes.leave_one_out.metrics,
+    };
+
+    if (fs.existsSync(fullPath)) {
+      const full = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+      payload.pipeline_accuracy = full.pipeline && full.pipeline.accuracy;
+      payload.business_value = full.business_value;
+      payload.architecture_layers = full.architecture_layers;
+    }
+
+    res.json(payload);
+  } catch (error) {
+    res.status(500).json({ error: error.message || 'Failed to load evaluation metrics' });
+  }
+};
+
 module.exports = {
   analyzeDocument,
   analyzeText,
@@ -592,4 +630,5 @@ module.exports = {
   getAnalysisStatus,
   getAnalysisTrend,
   getAnalysisStats,
+  getEvaluationMetrics,
 };

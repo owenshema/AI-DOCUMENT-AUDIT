@@ -1,0 +1,48 @@
+{
+  "description": "Evaluation dataset for TF-IDF classification and full audit pipeline",
+  "positive_cases": [
+    { "id": "pos-01", "sourceFile": "01-packing-list-unique-hybrid.txt", "expectedType": "packing_list", "mustAccept": true },
+    { "id": "pos-02", "sourceFile": "02-shipping-agreement-john.txt", "expectedType": "shipping_agreement", "mustAccept": true },
+    { "id": "pos-03", "sourceFile": "03-hbl-unique-hybrid.txt", "expectedType": "bill_of_lading", "mustAccept": true },
+    { "id": "pos-04", "sourceFile": "04-freight-invoice-unique-hybrid.txt", "expectedType": "freight_invoice", "mustAccept": true },
+    { "id": "pos-05", "sourceFile": "05-trucking-invoice-ecmu5567458.txt", "expectedType": "trucking_invoice", "mustAccept": true },
+    { "id": "pos-06", "sourceFile": "06-sea-freight-john.txt", "expectedType": "sea_freight_invoice", "mustAccept": true }
+  ],
+  "negative_cases": [
+    {
+      "id": "neg-01",
+      "name": "foreign_business_letter",
+      "mustAccept": false,
+      "expectedType": null,
+      "text": "ACME CORPORATION INVOICE\n123 Main Street New York\nInvoice # ACME-99999\nTotal: $5000\nPayment due upon receipt\nGeneric Logistics LLC"
+    },
+    {
+      "id": "neg-02",
+      "name": "metadata_only_upload",
+      "mustAccept": false,
+      "expectedType": null,
+      "text": "Title: my-random-name.pdf\nFile: my-random-name.pdf\nCategory: compliance"
+    },
+    {
+      "id": "neg-03",
+      "name": "empty_shipping_keywords",
+      "mustAccept": false,
+      "expectedType": null,
+      "text": "invoice date total consignee container bill of lading freight destination origin signature stamp vessel weight"
+    },
+    {
+      "id": "neg-04",
+      "name": "unrelated_medical_invoice",
+      "mustAccept": false,
+      "expectedType": null,
+      "text": "City Hospital Medical Invoice\nPatient: John Doe\nProcedure: Annual checkup\nAmount: 250 USD\nPay within 30 days."
+    },
+    {
+      "id": "neg-05",
+      "name": "ai_generated_placeholder",
+      "mustAccept": false,
+      "expectedType": null,
+      "text": "As an AI language model I cannot assist with creating fraudulent shipping documents for logistics companies."
+    }
+  ]
+}

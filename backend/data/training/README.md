@@ -47,3 +47,14 @@ Use `doc_id` values like `04-freight-invoice-unique-hybrid` to attach rows to th
 - TF-IDF text similarity against each reference
 - Fingerprint markers (Super International, SIFCO, Al Shamali, Top Sifco, Agape House, signatures, B/L layout)
 - No generic violation rules — accept/reject is based on training match confidence
+
+## Thesis evaluation metrics
+
+Generate accuracy, precision, recall, F1, and confusion matrix:
+
+```bash
+cd backend
+npm run evaluate:full
+```
+
+Results: `data/training/evaluation/results/`. See project root `THESIS_EVALUATION.md`.

@@ -62,4 +62,5 @@ test('foreign doc rejected', function () {
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
+console.log('Tip: run "npm run evaluate:full" for thesis metrics (accuracy, F1, confusion matrix).');
 process.exit(failed > 0 ? 1 : 0);

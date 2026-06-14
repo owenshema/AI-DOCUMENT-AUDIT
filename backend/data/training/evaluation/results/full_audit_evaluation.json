@@ -1,0 +1,649 @@
+{
+  "generated_at": "2026-06-14T21:53:52.860Z",
+  "architecture_layers": [
+    "OCR Extraction (pdfTextService + Tesseract)",
+    "TF-IDF + Cosine Similarity (sifcoMlTrainingService)",
+    "Document Classification (6 SIFCO paper types)",
+    "Rule-Based Validation (sifcoNotebookAuditService)",
+    "Integrity Risk Scoring (forgeryDetectionService)",
+    "Audit Report Generation (reportBuilderService)"
+  ],
+  "reference_document_count": 6,
+  "test_sample_count": 11,
+  "ocr": {
+    "available": true,
+    "note": "OCR via pdfTextService + Tesseract (ocr_extract.py) on PDF/image uploads"
+  },
+  "tfidf_evaluation": {
+    "full_corpus": {
+      "description": "All 6 reference documents included in training corpus (operational mode)",
+      "metrics": {
+        "classification_accuracy": 0.6364,
+        "accept_reject_accuracy": 1,
+        "macro_precision": 1,
+        "macro_recall": 1,
+        "macro_f1": 1,
+        "accept_precision": 1,
+        "accept_recall": 1,
+        "accept_f1": 1,
+        "reject_precision": 1,
+        "reject_recall": 1,
+        "reject_f1": 1
+      },
+      "confusion_matrix_top1": {
+        "bill_of_lading": {
+          "bill_of_lading": 1,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "freight_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 1,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "packing_list": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 1,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "reject": {
+          "bill_of_lading": 1,
+          "freight_invoice": 2,
+          "packing_list": 0,
+          "reject": 1,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 1,
+          "trucking_invoice": 0
+        },
+        "sea_freight_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 1,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "shipping_agreement": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 1,
+          "trucking_invoice": 0
+        },
+        "trucking_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 1
+        }
+      },
+      "accept_reject_matrix": {
+        "accept": {
+          "accept": 6,
+          "reject": 0
+        },
+        "reject": {
+          "accept": 0,
+          "reject": 5
+        }
+      },
+      "per_class": {
+        "bill_of_lading": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "freight_invoice": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "packing_list": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "sea_freight_invoice": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "shipping_agreement": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "trucking_invoice": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "reject": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        }
+      }
+    },
+    "leave_one_out": {
+      "description": "Each positive sample evaluated with its own reference excluded from corpus (honest generalization test)",
+      "metrics": {
+        "classification_accuracy": 0.0909,
+        "accept_reject_accuracy": 0.5455,
+        "macro_precision": 0.1429,
+        "macro_recall": 0.1429,
+        "macro_f1": 0.1429
+      },
+      "confusion_matrix_top1": {
+        "bill_of_lading": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 1,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "freight_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 1
+        },
+        "packing_list": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 1,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "reject": {
+          "bill_of_lading": 1,
+          "freight_invoice": 2,
+          "packing_list": 0,
+          "reject": 1,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 1,
+          "trucking_invoice": 0
+        },
+        "sea_freight_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 1,
+          "trucking_invoice": 0
+        },
+        "shipping_agreement": {
+          "bill_of_lading": 0,
+          "freight_invoice": 0,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 1,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        },
+        "trucking_invoice": {
+          "bill_of_lading": 0,
+          "freight_invoice": 1,
+          "packing_list": 0,
+          "reject": 0,
+          "sea_freight_invoice": 0,
+          "shipping_agreement": 0,
+          "trucking_invoice": 0
+        }
+      },
+      "per_class": {
+        "bill_of_lading": {
+          "tp": 0,
+          "fp": 0,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "freight_invoice": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "packing_list": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "sea_freight_invoice": {
+          "tp": 0,
+          "fp": 2,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "shipping_agreement": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "trucking_invoice": {
+          "tp": 0,
+          "fp": 1,
+          "fn": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "reject": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        }
+      }
+    }
+  },
+  "pipeline": {
+    "accuracy": 1,
+    "integrity_flagged_count": 10,
+    "results": [
+      {
+        "id": "pos-01",
+        "name": "01-packing-list-unique-hybrid.txt",
+        "expected_accept": true,
+        "actual_accept": true,
+        "document_type": "packing_list",
+        "engine": "sifco-notebook-trained",
+        "compliance_score": 65,
+        "violation_count": 2,
+        "integrity_suspicious": true,
+        "integrity_score": 100,
+        "integrity_flags": [
+          "MISSING_STAMP",
+          "MISSING_SIGNATURE",
+          "MISSING_LOGO",
+          "MANY_MISSING_FIELDS"
+        ],
+        "missing_fields": [
+          "invoice",
+          "consignee",
+          "bill of lading",
+          "freight",
+          "origin",
+          "signature",
+          "stamp"
+        ],
+        "accept_correct": true
+      },
+      {
+        "id": "pos-02",
+        "name": "02-shipping-agreement-john.txt",
+        "expected_accept": true,
+        "actual_accept": true,
+        "document_type": "shipping_agreement",
+        "engine": "sifco-notebook-trained",
+        "compliance_score": 82,
+        "violation_count": 2,
+        "integrity_suspicious": true,
+        "integrity_score": 55,
+        "integrity_flags": [
+          "MISSING_STAMP",
+          "MANY_MISSING_FIELDS"
+        ],
+        "missing_fields": [
+          "invoice",
+          "date",
+          "consignee",
+          "container",
+          "origin",
+          "stamp"
+        ],
+        "accept_correct": true
+      },
+      {
+        "id": "pos-03",
+        "name": "03-hbl-unique-hybrid.txt",
+        "expected_accept": true,
+        "actual_accept": true,
+        "document_type": "bill_of_lading",
+        "engine": "sifco-notebook-trained",
+        "compliance_score": 65,
+        "violation_count": 3,
+        "integrity_suspicious": false,
+        "integrity_score": 0,
+        "integrity_flags": [],
+        "missing_fields": [
+          "invoice",
+          "signature"
+        ],
+        "accept_correct": true
+      },
+      {
+        "id": "pos-04",
+        "name": "04-freight-invoice-unique-hybrid.txt",
+        "expected_accept": true,
+        "actual_accept": true,
+        "document_type": "freight_invoice",
+        "engine": "sifco-notebook-trained",
+        "compliance_score": 100,
+        "violation_count": 0,
+        "integrity_suspicious": true,
+        "integrity_score": 80,
+        "integrity_flags": [
+          "MISSING_STAMP",
+          "MISSING_SIGNATURE",
+          "MANY_MISSING_FIELDS"
+        ],
+        "missing_fields": [
+          "consignee",
+          "bill of lading",
+          "signature",
+          "stamp",
+          "vessel",
+          "weight"
+        ],
+        "accept_correct": true
+      },
+      {
+        "id": "pos-05",
+        "name": "05-trucking-invoice-ecmu5567458.txt",
+        "expected_accept": true,
+        "actual_accept": true,
+        "document_type": "trucking_invoice",
+        "engine": "sifco-notebook-trained",
+        "compliance_score": 100,
+        "violation_count": 0,
+        "integrity_suspicious": true,
+        "integrity_score": 80,
+        "integrity_flags": [
+          "MISSING_STAMP",
+          "MISSING_SIGNATURE",
+          "MANY_MISSING_FIELDS"
+        ],
+        "missing_fields": [
+          "consignee",
+          "bill of lading",
+          "freight",
+          "signature",
+          "stamp",
+          "vessel",
+          "weight"
+        ],
+        "accept_correct": true
+      },
+      {
+        "id": "pos-06",
+        "name": "06-sea-freight-john.txt",
+        "expected_accept": true,
+        "actual_accept": true,
+        "document_type": "sea_freight_invoice",
+        "engine": "sifco-notebook-trained",
+        "compliance_score": 65,
+        "violation_count": 2,
+        "integrity_suspicious": true,
+        "integrity_score": 100,
+        "integrity_flags": [
+          "MISSING_STAMP",
+          "MISSING_SIGNATURE",
+          "MISSING_LOGO",
+          "MANY_MISSING_FIELDS"
+        ],
+        "missing_fields": [
+          "invoice",
+          "container",
+          "bill of lading",
+          "origin",
+          "signature",
+          "stamp",
+          "weight"
+        ],
+        "accept_correct": true
+      },
+      {
+        "id": "neg-01",
+        "name": "foreign_business_letter",
+        "expected_accept": false,
+        "actual_accept": false,
+        "document_type": "unknown",
+        "engine": "sifco-ml-trained",
+        "compliance_score": 10,
+        "violation_count": 1,
+        "integrity_suspicious": true,
+        "integrity_score": 100,
+        "integrity_flags": [
+          "MISSING_STAMP",
+          "MISSING_SIGNATURE",
+          "MISSING_LOGO",
+          "MANY_MISSING_FIELDS"
+        ],
+        "missing_fields": [
+          "date",
+          "consignee",
+          "container",
+          "bill of lading",
+          "freight",
+          "destination",
+          "origin",
+          "signature",
+          "stamp",
+          "vessel",
+          "weight"
+        ],
+        "accept_correct": true
+      },
+      {
+        "id": "neg-02",
+        "name": "metadata_only_upload",
+        "expected_accept": false,
+        "actual_accept": false,
+        "document_type": "unknown",
+        "engine": "sifco-ml-trained",
+        "compliance_score": 10,
+        "violation_count": 1,
+        "integrity_suspicious": true,
+        "integrity_score": 100,
+        "integrity_flags": [
+          "MISSING_STAMP",
+          "MISSING_SIGNATURE",
+          "MISSING_LOGO",
+          "MANY_MISSING_FIELDS",
+          "LOW_TEXT_CONTENT"
+        ],
+        "missing_fields": [
+          "invoice",
+          "date",
+          "total",
+          "consignee",
+          "container",
+          "bill of lading",
+          "freight",
+          "destination",
+          "origin",
+          "signature",
+          "stamp",
+          "vessel",
+          "weight"
+        ],
+        "accept_correct": true
+      },
+      {
+        "id": "neg-03",
+        "name": "empty_shipping_keywords",
+        "expected_accept": false,
+        "actual_accept": false,
+        "document_type": "unknown",
+        "engine": "sifco-ml-trained",
+        "compliance_score": 10,
+        "violation_count": 1,
+        "integrity_suspicious": true,
+        "integrity_score": 40,
+        "integrity_flags": [
+          "MISSING_LOGO",
+          "LOW_TEXT_CONTENT"
+        ],
+        "missing_fields": [],
+        "accept_correct": true
+      },
+      {
+        "id": "neg-04",
+        "name": "unrelated_medical_invoice",
+        "expected_accept": false,
+        "actual_accept": false,
+        "document_type": "unknown",
+        "engine": "sifco-ml-trained",
+        "compliance_score": 10,
+        "violation_count": 1,
+        "integrity_suspicious": true,
+        "integrity_score": 100,
+        "integrity_flags": [
+          "MISSING_STAMP",
+          "MISSING_SIGNATURE",
+          "MISSING_LOGO",
+          "MANY_MISSING_FIELDS",
+          "LOW_TEXT_CONTENT"
+        ],
+        "missing_fields": [
+          "date",
+          "total",
+          "consignee",
+          "container",
+          "bill of lading",
+          "freight",
+          "destination",
+          "origin",
+          "signature",
+          "stamp",
+          "vessel",
+          "weight"
+        ],
+        "accept_correct": true
+      },
+      {
+        "id": "neg-05",
+        "name": "ai_generated_placeholder",
+        "expected_accept": false,
+        "actual_accept": false,
+        "document_type": "unknown",
+        "engine": "sifco-ml-trained",
+        "compliance_score": 10,
+        "violation_count": 1,
+        "integrity_suspicious": true,
+        "integrity_score": 100,
+        "integrity_flags": [
+          "MISSING_STAMP",
+          "MISSING_SIGNATURE",
+          "MISSING_LOGO",
+          "MANY_MISSING_FIELDS",
+          "LOW_TEXT_CONTENT"
+        ],
+        "missing_fields": [
+          "invoice",
+          "date",
+          "total",
+          "consignee",
+          "container",
+          "bill of lading",
+          "freight",
+          "destination",
+          "origin",
+          "signature",
+          "stamp",
+          "vessel",
+          "weight"
+        ],
+        "accept_correct": true
+      }
+    ]
+  },
+  "audit_reports": {
+    "report_sections": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9"
+    ],
+    "has_executive_summary": false,
+    "generated": true
+  },
+  "business_value": {
+    "assumptions": {
+      "manual_review_minutes_per_document": 20,
+      "automated_review_seconds_per_document": 5,
+      "documents_per_month": 500
+    },
+    "time_savings": {
+      "manual_hours_per_month": 166.7,
+      "automated_hours_per_month": 0.69,
+      "hours_saved_per_month": 166,
+      "percent_time_reduction": 99.6
+    },
+    "quality": {
+      "negative_samples_correctly_rejected": 5,
+      "false_accepts_on_test_set": 0,
+      "tfidf_classification_accuracy_percent": 63.6,
+      "pipeline_accept_accuracy_percent": 100
+    },
+    "narrative": "Automating document audit reduces manual review from ~20 minutes to ~5 seconds per document while applying consistent TF-IDF matching, rule validation, and integrity risk scoring."
+  }
+}

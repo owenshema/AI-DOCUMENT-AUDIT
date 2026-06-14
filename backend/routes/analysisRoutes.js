@@ -14,6 +14,7 @@ router.post('/parse', ctrl.parseDocumentText);
 router.post('/bulk/analyze',   ctrl.bulkAnalyze);
 router.get('/trend/history',   ctrl.getAnalysisTrend);
 router.get('/stats/overview',  ctrl.getAnalysisStats);
+router.get('/evaluation/metrics', ctrl.getEvaluationMetrics);
 
 // Document-based analysis
 router.post('/:documentId/analyze',   ctrl.analyzeDocument);

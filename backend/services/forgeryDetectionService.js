@@ -1,7 +1,7 @@
 'use strict';
 /**
- * Forgery detection — Colab pipeline (OpenCV + Tesseract + EfficientNet ONNX).
- * Matches Document_Forgery_Detection.ipynb predict_document().
+ * Integrity risk scoring — Colab pipeline (OpenCV + Tesseract + EfficientNet ONNX).
+ * Flags suspicious documents via missing stamps, signatures, logos, and field gaps.
  */
 
 var path = require('path');
@@ -67,7 +67,7 @@ function analyzeText(documentText) {
     risk_level: level,
     flags: flags,
     missing_fields: missing,
-    engine: 'forgery-text-fallback',
+    engine: 'integrity-risk-scoring',
   };
 }
 
