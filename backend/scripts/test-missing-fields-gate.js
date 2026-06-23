@@ -20,6 +20,10 @@ if (!full.organization_match) {
   console.error('FAIL: full reference should still pass');
   process.exit(1);
 }
+if (full.compliance_score < 90) {
+  console.error('FAIL: full reference should score >= 90%, got ' + full.compliance_score);
+  process.exit(1);
+}
 
 var stripped = base
   .replace(/TIN NUMBER: 121348946/gi, '')
@@ -33,12 +37,12 @@ if (!tampered.organization_match) {
   console.error('FAIL: tampered document should be recognized as valid SIFCO type');
   process.exit(1);
 }
-if (tampered.compliance_score > 65 || tampered.compliance_score < 55) {
-  console.error('FAIL: expected compliance ~60%, got ' + tampered.compliance_score);
+if (tampered.compliance_score > 78 || tampered.compliance_score < 70) {
+  console.error('FAIL: expected compliance 70–78%, got ' + tampered.compliance_score);
   process.exit(1);
 }
-if (tampered.risk_level !== 'high' && tampered.risk_level !== 'critical') {
-  console.error('FAIL: expected high/critical risk, got ' + tampered.risk_level);
+if (tampered.risk_level !== 'medium' && tampered.risk_level !== 'high') {
+  console.error('FAIL: expected medium/high risk, got ' + tampered.risk_level);
   process.exit(1);
 }
 if (!tampered.missing_fields || !tampered.missing_fields.length) {
@@ -46,5 +50,5 @@ if (!tampered.missing_fields || !tampered.missing_fields.length) {
   process.exit(1);
 }
 
-console.log('\nOK — valid SIFCO type with ~40% score and missing fields shown');
+console.log('\nOK — valid SIFCO type with 70–78% score and missing fields shown');
 process.exit(0);

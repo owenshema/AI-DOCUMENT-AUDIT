@@ -27,8 +27,27 @@ function modelAvailable() {
 
 function isSifcoPaperText(text) {
   var n = (text || '').toLowerCase();
-  return /packing\s+list|bill\s+of\s+lading|shipping\s+agreement|trucking\s+invoice|freight\s+invo/i.test(n) &&
-    /sifco|super\s+international|al\s+shamali|agape\s+house|top\s+sifco|ganador|superfreightservice|unique\s+hybrid/i.test(n);
+  var brand = /sifco|super\s+international|al\s+shamali|agape\s+house|top\s+sifco|ganador|superfreightservice|unique\s+hybrid/i.test(n);
+  var paper = /packing\s+list|bill\s+of\s+lading|\bb\s*\/\s*l\b|shipping\s+agreement|trucking\s+invoice|freight\s+invo|sea\s+freight|freight\s+charges|\binvoice\b|house\s+bill|bl\s+fee|bl\s+number/i.test(n);
+  if (brand && paper) return true;
+  if (/sea\s+freight|freight\s+invo/i.test(n) &&
+    /port\s+of\s+(loading|discharge)|bl\s+number|final\s+destination|consignee|name\s+of\s+vessel/i.test(n)) {
+    return true;
+  }
+  return false;
+}
+
+function sanitizeForgeryResult(result, documentText) {
+  if (!result || typeof result !== 'object') return result;
+  if (isSifcoPaperText(documentText)) {
+    result.sifco_document = true;
+    result.missing_fields = [];
+    if (Number(result.forgery_score) > 30) {
+      result.forgery_score = Math.min(Number(result.forgery_score) || 0, 25);
+    }
+    result.is_suspicious = Number(result.forgery_score) >= 45;
+  }
+  return result;
 }
 
 function analyzeText(documentText) {
@@ -124,7 +143,7 @@ function runColabAnalysis(filePath, documentText) {
       try { fs.unlinkSync(tempTextPath); } catch (e) { /* ignore */ }
     }
     try {
-      return JSON.parse(result.stdout.trim());
+      return sanitizeForgeryResult(JSON.parse(result.stdout.trim()), documentText);
     } catch (parseErr) {
       throw new Error('invalid_forgery_json');
     }
@@ -158,7 +177,7 @@ async function analyzeDocument(documentText, options) {
     try {
       return await runColabAnalysis(options.filePath, documentText);
     } catch (err) {
-      var fallback = analyzeText(documentText);
+      var fallback = sanitizeForgeryResult(analyzeText(documentText), documentText);
       fallback.fallback_reason = 'colab_pipeline_error: ' + (err.message || 'unknown');
       return fallback;
     }
@@ -168,18 +187,20 @@ async function analyzeDocument(documentText, options) {
     try {
       return await runColabAnalysis(options.imagePath, documentText);
     } catch (err) {
-      var imageFallback = analyzeText(documentText);
+      var imageFallback = sanitizeForgeryResult(analyzeText(documentText), documentText);
       imageFallback.fallback_reason = 'colab_pipeline_error: ' + (err.message || 'unknown');
       return imageFallback;
     }
   }
 
-  return analyzeText(documentText);
+  return sanitizeForgeryResult(analyzeText(documentText), documentText);
 }
 
 module.exports = {
   analyzeDocument: analyzeDocument,
   analyzeText: analyzeText,
+  isSifcoPaperText: isSifcoPaperText,
+  sanitizeForgeryResult: sanitizeForgeryResult,
   modelAvailable: modelAvailable,
   REQUIRED_FIELDS: REQUIRED_FIELDS,
   FORGERY_DIR: FORGERY_DIR,

@@ -580,8 +580,61 @@ function hasCriticalIssues(issues) {
   return (issues || []).some(function (i) { return i.severity === 'CRITICAL'; });
 }
 
+var MISSING_FIELD_SCORE_MIN = 70;
+var MISSING_FIELD_SCORE_MAX = 78;
+
+function isMissingFieldIssue(issue) {
+  return /missing|blank|not found|not readable|not in document|appears empty/i.test((issue && issue.message) || '');
+}
+
+function isSignatureOnlyGap(label) {
+  return /^(Client[\s-]*)?Signature\b/i.test(String(label || ''));
+}
+
+function substantiveMissingFields(missingFields) {
+  return (missingFields || []).filter(function (f) { return f && !isSignatureOnlyGap(f); });
+}
+
+function isSubstantiveGapIssue(issue) {
+  if (!issue || isSignatureOnlyGap(issue.check)) return false;
+  return isMissingFieldIssue(issue);
+}
+
+function countRequiredFieldGaps(issues) {
+  return (issues || []).filter(function (i) {
+    return i.severity === 'HIGH' && isSubstantiveGapIssue(i);
+  }).length;
+}
+
+function countWarnFieldGaps(issues) {
+  return (issues || []).filter(function (i) {
+    return i.severity === 'MEDIUM' && isSubstantiveGapIssue(i);
+  }).length;
+}
+
+function hasRequiredFieldGaps(issues) {
+  return countRequiredFieldGaps(issues) >= 1;
+}
+
+function scoreForRequiredFieldGaps(issues) {
+  var gapCount = countRequiredFieldGaps(issues);
+  if (!gapCount) return null;
+  var gapScore = MISSING_FIELD_SCORE_MAX - Math.max(0, gapCount - 1) * 2;
+  return Math.max(MISSING_FIELD_SCORE_MIN, Math.min(MISSING_FIELD_SCORE_MAX, Math.round(gapScore)));
+}
+
+function scoreForFieldIncomplete(issues) {
+  var req = countRequiredFieldGaps(issues);
+  if (req >= 1) return scoreForRequiredFieldGaps(issues);
+  var warn = countWarnFieldGaps(issues);
+  if (warn >= 2) {
+    return Math.max(74, Math.min(78, 78 - Math.max(0, warn - 2) * 2));
+  }
+  return null;
+}
+
 /**
- * Valid SIFCO document with missing / risky fields — score from ~40% up based on gaps.
+ * Valid SIFCO document with missing fields — compliance stays in 70–78%.
  * Critical fraud/arithmetic errors score 10–35%.
  */
 function complianceScoreFromFieldGaps(issues, missingFields, options) {
@@ -596,33 +649,27 @@ function complianceScoreFromFieldGaps(issues, missingFields, options) {
     return Math.max(10, Math.min(35, 32 - criticalCount * 6));
   }
 
-  var highCount = issues.filter(function (i) { return i.severity === 'HIGH'; }).length;
-  var mediumCount = issues.filter(function (i) { return i.severity === 'MEDIUM'; }).length;
-  var missingCount = missingFields.length;
+  if (hasRequiredFieldGaps(issues)) {
+    return scoreForRequiredFieldGaps(issues);
+  }
+
+  var warnMissing = countWarnFieldGaps(issues);
+  if (warnMissing >= 2) {
+    return Math.max(74, Math.min(78, 78 - Math.max(0, warnMissing - 2) * 2));
+  }
+  var otherMedium = issues.filter(function (i) {
+    return i.severity === 'MEDIUM' && !isSubstantiveGapIssue(i);
+  }).length;
+  var highNonMissing = issues.filter(function (i) {
+    return i.severity === 'HIGH' && !isSubstantiveGapIssue(i);
+  }).length;
 
   var score = 100;
-  score -= missingCount * 10;
-  score -= highCount * 9;
-  score -= mediumCount * 4;
+  score -= warnMissing * 4;
+  score -= otherMedium * 3;
+  score -= highNonMissing * 8;
 
-  if (missingCount === 0 && highCount === 0 && mediumCount <= 3) {
-    return Math.max(82, Math.min(100, Math.round(score)));
-  }
-
-  if (missingCount >= 1 || highCount >= 1 || mediumCount >= 1) {
-    score = Math.max(60, score);
-  }
-  if (missingCount >= 4 || highCount >= 3) {
-    score = Math.min(score, 52);
-  }
-  if (missingCount >= 6 || (missingCount >= 4 && highCount >= 2)) {
-    score = Math.min(score, 45);
-  }
-  if (missingCount >= 8) {
-    score = Math.min(score, 40);
-  }
-
-  return Math.max(10, Math.min(100, Math.round(score)));
+  return Math.max(88, Math.min(100, Math.round(score)));
 }
 
 function riskLevelFromScore(score, recognizedValid) {
@@ -713,8 +760,7 @@ function issuesToMissingFields(issues) {
           if (f && missing.indexOf(f) < 0) missing.push(f.trim());
         });
       }
-    } else if ((sev === 'HIGH' || sev === 'CRITICAL') &&
-      /missing|blank|not found|not readable|not in document/i.test(i.message || '')) {
+    } else if (isSubstantiveGapIssue(i)) {
       var label = i.check + (i.message ? ': ' + i.message : '');
       if (missing.indexOf(label) < 0) missing.push(label);
     }
@@ -753,7 +799,14 @@ module.exports = {
   hasBlockingIssues: hasBlockingIssues,
   hasMandatoryMissing: hasMandatoryMissing,
   hasCriticalIssues: hasCriticalIssues,
+  hasRequiredFieldGaps: hasRequiredFieldGaps,
+  scoreForRequiredFieldGaps: scoreForRequiredFieldGaps,
+  scoreForFieldIncomplete: scoreForFieldIncomplete,
+  scoreForMissingFieldGaps: scoreForFieldIncomplete,
+  substantiveMissingFields: substantiveMissingFields,
   complianceScoreFromFieldGaps: complianceScoreFromFieldGaps,
+  MISSING_FIELD_SCORE_MIN: MISSING_FIELD_SCORE_MIN,
+  MISSING_FIELD_SCORE_MAX: MISSING_FIELD_SCORE_MAX,
   riskLevelFromScore: riskLevelFromScore,
   fieldRiskPercent: fieldRiskPercent,
   complianceScoreFromStatus: complianceScoreFromStatus,

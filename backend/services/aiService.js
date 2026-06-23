@@ -181,7 +181,10 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
     };
   }
 
-  if ((!ruleResult.missing_fields || !ruleResult.missing_fields.length) && forgeryResult.missing_fields && !forgeryResult.sifco_document) {
+  // Per-type notebook validation only — never use generic forgery field lists on SIFCO papers.
+  if (!isOurs && !sifcoType &&
+    (!ruleResult.missing_fields || !ruleResult.missing_fields.length) &&
+    forgeryResult.missing_fields && !forgeryResult.sifco_document) {
     ruleResult.missing_fields = forgeryResult.missing_fields;
   }
 
@@ -251,6 +254,23 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
 
   const overall = require('./auditScoreService').computeOverallAuditScore(ruleResult);
   Object.assign(ruleResult, overall);
+
+  var notebookAudit = require('./sifcoNotebookAuditService');
+  var gapIssues = (ruleResult.violations || []).map(function (v) {
+    return { severity: v.severity, message: v.summary, check: v.title };
+  });
+  var requiredGapScore = notebookAudit.scoreForFieldIncomplete(gapIssues);
+  if (requiredGapScore != null) {
+    ruleResult.compliance_score = requiredGapScore;
+    ruleResult.ai_validity_percentage = requiredGapScore;
+    if (ruleResult.risk_level === 'low') {
+      ruleResult.risk_level = 'medium';
+    }
+    var gapOverall = require('./auditScoreService').computeOverallAuditScore(
+      Object.assign({}, ruleResult, { compliance_score: requiredGapScore })
+    );
+    Object.assign(ruleResult, gapOverall);
+  }
 
   return ruleResult;
 }

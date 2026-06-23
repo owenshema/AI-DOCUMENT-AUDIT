@@ -40,10 +40,25 @@ function isPassingAuditResults(results) {
     && results.document_type !== 'unknown';
 }
 
+function applyRequiredFieldOverallCap(overall, auditResult) {
+  var issues = (auditResult.violations || []).map(function (v) {
+    return { severity: v.severity, message: v.summary, check: v.title };
+  });
+  var notebookAudit = require('./sifcoNotebookAuditService');
+  var capped = notebookAudit.scoreForFieldIncomplete(issues);
+  if (capped == null) return overall;
+  return Math.min(overall, capped);
+}
+
 function computeOverallAuditScore(auditResult) {
   auditResult = auditResult || {};
   var forgeryAnalysis = auditResult.document_inspection && auditResult.document_inspection.forgery_analysis;
   var forgeryRisk = clamp(Number(forgeryAnalysis && forgeryAnalysis.forgery_score) || 0, 0, 100);
+  if (forgeryAnalysis && forgeryAnalysis.sifco_document) {
+    forgeryRisk = Math.min(forgeryRisk, 20);
+  } else if (isSifcoDocumentType(auditResult.document_type) && auditResult.organization_match) {
+    forgeryRisk = Math.min(forgeryRisk, 25);
+  }
   var forgeryBlocked = !!(forgeryAnalysis && forgeryAnalysis.is_suspicious && forgeryRisk >= 45 &&
     !forgeryAnalysis.sifco_document && !isSifcoDocumentType(auditResult.document_type));
 
@@ -51,7 +66,7 @@ function computeOverallAuditScore(auditResult) {
     var compliance = clamp(Number(auditResult.compliance_score) || 0, 0, 100);
     var integrity = clamp(100 - forgeryRisk, 0, 100);
     var overall = round(compliance * COMPLIANCE_WEIGHT + integrity * INTEGRITY_WEIGHT);
-    overall = clamp(overall, 0, 100);
+    overall = applyRequiredFieldOverallCap(clamp(overall, 0, 100), auditResult);
     var status = overallAuditStatus(overall);
     return {
       overall_audit_score: overall,
@@ -73,7 +88,7 @@ function computeOverallAuditScore(auditResult) {
     var sCompliance = clamp(Number(auditResult.compliance_score) || 60, 0, 100);
     var sIntegrity = clamp(100 - forgeryRisk, 0, 100);
     var sOverall = round(sCompliance * COMPLIANCE_WEIGHT + sIntegrity * INTEGRITY_WEIGHT);
-    sOverall = clamp(Math.max(60, sOverall), 0, 100);
+    sOverall = applyRequiredFieldOverallCap(clamp(sOverall, 0, 100), auditResult);
     var sStatus = overallAuditStatus(sOverall);
     return {
       overall_audit_score: sOverall,
