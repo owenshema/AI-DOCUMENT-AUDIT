@@ -402,15 +402,6 @@ export default function AIAnalysisPage() {
     setViewerLocalFile(null);
   };
 
-  useEffect(() => {
-    if (!result) return;
-    const suggested = result.decision?.status || result.documentStatus || 'in_review';
-    setStatusDraft(prev => ({
-      status: AUDIT_STATUSES.includes(suggested) ? suggested : 'in_review',
-      reason: prev.reason || result.decision?.reason || '',
-    }));
-  }, [result]);
-
   const handleDrop = (e) => {
     e.preventDefault(); setDragging(false);
     const f = e.dataTransfer.files?.[0];
@@ -433,7 +424,7 @@ export default function AIAnalysisPage() {
       setAuditedDocId(uploadedId);
       setAuditedDoc(uploadedDoc?.id ? uploadedDoc : { id: uploadedId, title: file.name, fileName: file.name, fileFormat: file.name.split('.').pop() });
     } catch (e) {
-      setError(e?.response?.data?.error || 'Upload failed.');
+      setError(e?.response?.data?.error || e?.message || 'Upload failed.');
       setStep('error'); setBusy(false); return;
     }
     setStep('analyzing');
@@ -442,7 +433,7 @@ export default function AIAnalysisPage() {
       setResult(res?.analysis || res);
       setStep('done');
     } catch (e) {
-      setError(e?.response?.data?.error || 'Analysis failed.');
+      setError(e?.response?.data?.error || e?.message || 'Analysis failed.');
       setStep('error');
     }
     setBusy(false);
@@ -459,7 +450,7 @@ export default function AIAnalysisPage() {
       setResult(res?.analysis || res);
       setStep('done');
     } catch (e) {
-      setError(e?.response?.data?.error || 'Analysis failed.');
+      setError(e?.response?.data?.error || e?.message || 'Analysis failed.');
       setStep('error');
     }
     setBusy(false);
@@ -650,7 +641,7 @@ export default function AIAnalysisPage() {
                       ? 'Not assessed'
                       : (aiDetection.source === 'sapling' ? 'Sapling AI' : 'Heuristic'))
                   : null;
-                const overallLabel = result?.overall_audit_status || (overallScore >= 85 ? 'Excellent' : overallScore >= 70 ? 'Good' : overallScore >= 50 ? 'Review Required' : 'Failed');
+                const overallLabel = result?.overall_audit_status || (overallScore >= 85 ? 'Excellent' : overallScore >= 60 ? 'Good' : overallScore >= 40 ? 'Review Required' : 'Failed');
                 return (
                   <div className="space-y-3">
                     <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-indigo-500/25 bg-indigo-500/8' : 'border-indigo-200 bg-indigo-50'}`}>
@@ -658,7 +649,7 @@ export default function AIAnalysisPage() {
                         <ScoreArc score={overallScore} dark={isDarkMode} />
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${sub}`}>Overall Audit Health</p>
-                          <p className={`text-2xl font-bold ${overallScore >= 85 ? 'text-emerald-400' : overallScore >= 70 ? 'text-indigo-400' : overallScore >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                          <p className={`text-2xl font-bold ${overallScore >= 85 ? 'text-emerald-400' : overallScore >= 60 ? 'text-indigo-400' : overallScore >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
                             {overallScore}%
                           </p>
                           <p className={`text-xs font-semibold ${text}`}>{overallLabel}</p>
@@ -693,12 +684,10 @@ export default function AIAnalysisPage() {
 
               {(result.decision?.title || result.summary) && (
                 <div className={`rounded-xl border px-3 py-3 text-xs leading-relaxed ${
-                  result.decision?.status === 'approved' || result.organization_match
-                    ? (isDarkMode ? 'border-emerald-500/25 bg-emerald-500/8 text-emerald-100' : 'border-emerald-200 bg-emerald-50 text-emerald-900')
-                    : (isDarkMode ? 'border-red-500/25 bg-red-500/8 text-red-100' : 'border-red-200 bg-red-50 text-red-900')
+                  isDarkMode ? 'border-indigo-500/25 bg-indigo-500/8 text-slate-200' : 'border-indigo-200 bg-indigo-50 text-gray-800'
                 }`}>
                   <p className="font-semibold text-sm mb-1">
-                    {result.decision?.title || (result.organization_match ? 'Audit approved' : 'Audit rejected')}
+                    {result.decision?.title || 'Analysis summary'}
                   </p>
                   <p>{result.decision?.reason || result.summary}</p>
                   {result.decision?.detail && (
@@ -715,12 +704,12 @@ export default function AIAnalysisPage() {
               {/* Auditor status update — after AI audit completes */}
               {auditedDocId && canUpdateStatus && step === 'done' && (
                 <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-indigo-500/25 bg-indigo-500/5' : 'border-indigo-200 bg-indigo-50'}`}>
-                  <p className={`text-xs font-semibold mb-3 ${text}`}>Update document status</p>
+                  <p className={`text-xs font-semibold mb-1 ${text}`}>Auditor decision</p>
                   <p className={`text-[11px] mb-3 ${sub}`}>
-                    AI suggested: <span className={`font-medium ${result.decision?.status === 'approved' ? 'text-emerald-400' : result.decision?.status === 'rejected' ? 'text-red-400' : text}`}>
-                      {(result.decision?.status || 'in_review').replace(/_/g, ' ')}
-                    </span>
-                    {' '}— confirm or change below, then notify the document owner.
+                    Review the analysis and set the document status.
+                    {overallScore >= 60
+                      ? ' This document scored 60% or above — you may approve it or request changes.'
+                      : ' Scores below 60% may warrant changes requested or rejection.'}
                   </p>
                   <div className="grid gap-2 sm:grid-cols-[180px_1fr_auto]">
                     <select
@@ -741,7 +730,7 @@ export default function AIAnalysisPage() {
                       onClick={handleStatusUpdate}
                       disabled={statusSaving}
                       className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-600 disabled:opacity-40">
-                      {statusSaving ? 'Saving...' : 'Update & Notify'}
+                      {statusSaving ? 'Saving...' : 'Save & notify owner'}
                     </button>
                   </div>
                   {statusMsg && (

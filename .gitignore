@@ -10,6 +10,8 @@ backend/uploads/
 .venv312/
 backend/data/audit_temp/
 backend/data/temp_audit_page.png
+**/__pycache__/
+*.pyc
 *_log.txt
 training_log.txt
 forgery_training_log.txt

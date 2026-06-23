@@ -10,6 +10,9 @@ const { Op } = require('sequelize');
 const aiService = require('../services/aiService');
 const emailService = require('../services/emailService');
 const reportLayout = require('../services/reportLayout');
+const shipmentConsistency = require('../services/sifcoShipmentConsistencyService');
+const notebookAudit = require('../services/sifcoNotebookAuditService');
+const { resolveNeedsAuditNotifications } = require('./documentController');
 const { extractTextFromFile, resolveExistingPath, isImageFile } = require('../services/pdfTextService');
 
 /**
@@ -51,75 +54,110 @@ function systemReportDecision(result) {
   };
 }
 
-function decideDocumentStatus(result) {
+function buildAuditAnalysisSummary(result) {
   var forgery = result.document_inspection && result.document_inspection.forgery_analysis;
   var forgeryScore = Number(forgery && forgery.forgery_score) || 0;
   var forgeryBlocked = !!(forgery && forgery.is_suspicious && forgeryScore >= 45);
+  var validated = !!result.trained_reference_match;
   var mlOk = !!result.organization_match;
   var overall = result.overall_audit_score != null ? result.overall_audit_score : result.compliance_score;
-  var scoreOk = typeof overall === 'number' ? overall >= 70 : mlOk;
+  var scoreOk = typeof overall === 'number' ? overall >= 60 : validated || mlOk;
   var aiBlocked = !!result.ai_threshold_exceeded;
   var aiPct = Number(result.ai_generated_percentage) || 0;
   var aiThreshold = (result.ai_detection && result.ai_detection.threshold_percent) || 25;
+  var missingFields = result.missing_fields || [];
+  var mandatoryMissing = notebookAudit.hasMandatoryMissing(
+    missingFields,
+    (result.violations || []).map(function (v) {
+      return { severity: v.severity, message: v.summary, check: v.title };
+    })
+  );
+  var hasCritical = (result.violations || []).some(function (v) { return v.severity === 'CRITICAL'; });
 
-  if (mlOk && !forgeryBlocked && scoreOk && !aiBlocked) {
+  var base = {
+    status: 'pending_auditor',
+    awaitingAuditor: true,
+  };
+
+  if ((validated || (mlOk && scoreOk && !mandatoryMissing && !hasCritical)) && !forgeryBlocked && !aiBlocked) {
     var ml = result.organization_training && result.organization_training.ml_training;
     var ref = ml && ml.best_match ? ml.best_match.reference_pdf : '';
-    return {
-      status: 'approved',
-      title: 'SIFCO document validated',
+    return Object.assign({}, base, {
+      title: 'Strong SIFCO document match',
       reason: result.organization_message,
       detail: ref ? 'Matched training reference: ' + ref : result.summary,
       nextSteps: [
-        'Document matches a trained SIFCO daily paper.',
-        'Proceed with workflow or compliance reporting.',
+        'Review findings and set status to approved, changes requested, or rejected.',
+        'Scores at 60% or above are generally acceptable pending your review.',
       ],
       code: 'ML-OK',
-    };
+      scoreBand: overall >= 60 ? 'good' : 'review',
+    });
   }
 
   if (forgeryBlocked) {
-    return {
-      status: 'rejected',
-      title: 'Document integrity check failed',
+    return Object.assign({}, base, {
+      title: 'Document integrity concerns',
       reason: result.organization_message || ('Forgery risk score ' + forgeryScore + '/100 exceeds threshold.'),
       detail: (forgery.flags || []).slice(0, 5).join('; ') || 'Visual or text integrity indicators flagged this document.',
       nextSteps: [
         'Verify stamps, signatures, and letterhead against the original SIFCO reference.',
-        'Re-upload a scanned copy of the authentic document.',
+        'Set status to rejected or changes requested after your review.',
       ],
-      code: 'FORGERY-REJECT',
-    };
+      code: 'FORGERY-FLAG',
+      scoreBand: 'failed',
+    });
   }
 
-  // Authenticity gate: a document that would otherwise pass is rejected when too
-  // much of its content is AI-generated (exceeds the configured threshold).
+  if (mandatoryMissing || (hasCritical && mlOk)) {
+    var scoreNote = typeof overall === 'number' ? (' Compliance score: ' + overall + '%.') : '';
+    var isValidIncomplete = mlOk && !hasCritical;
+    return Object.assign({}, base, {
+      title: isValidIncomplete ? 'Valid SIFCO type — fields incomplete' : 'Required SIFCO fields missing',
+      reason: result.organization_message || 'Document is missing required fields for this paper type.',
+      detail: (missingFields.length
+        ? 'Missing fields: ' + missingFields.slice(0, 8).join(', ') + '.'
+        : ((result.violations || []).filter(function (v) { return v.severity === 'CRITICAL'; })[0] || {}).summary || '') + scoreNote,
+      nextSteps: [
+        'Consider changes requested if the document is valid but incomplete.',
+        'Use rejected only if the document cannot be accepted.',
+      ],
+      code: 'MISSING-FIELDS',
+      scoreBand: overall >= 60 ? 'review' : 'failed',
+    });
+  }
+
   if (aiBlocked && mlOk && scoreOk) {
-    return {
-      status: 'rejected',
+    return Object.assign({}, base, {
       title: 'AI-generated content detected',
       reason: 'Authenticity check failed: ' + aiPct + '% of the content is likely AI-generated (limit ' + aiThreshold + '%).',
       detail: (result.ai_detection && result.ai_detection.detail) ||
         'The document text shows strong signs of being machine-generated rather than an authentic SIFCO record.',
       nextSteps: [
         'Confirm the document was produced by a person, not an AI text generator.',
-        'Re-upload the original, authentic SIFCO document.',
+        'Set the final status after your review.',
       ],
-      code: 'AI-CONTENT-REJECT',
-    };
+      code: 'AI-CONTENT-FLAG',
+      scoreBand: 'failed',
+    });
   }
 
-  return {
-    status: 'rejected',
-    title: 'Not a SIFCO trained document',
+  return Object.assign({}, base, {
+    title: 'Does not match trained SIFCO papers',
     reason: result.organization_message,
     detail: (result.inconsistencies && result.inconsistencies[0] && result.inconsistencies[0].detail) || '',
     nextSteps: [
-      'Upload only packing list, HBL, shipping agreement, freight invoice, trucking invoice, or sea freight invoice.',
-      'Use the same format as the six reference PDFs provided for training.',
+      'Confirm the document type (packing list, HBL, shipping agreement, freight invoice, trucking invoice, or sea freight invoice).',
+      'Set status to rejected or changes requested based on your review.',
     ],
-    code: 'ML-REJECT',
-  };
+    code: 'ML-NO-MATCH',
+    scoreBand: 'failed',
+  });
+}
+
+/** @deprecated alias — analysis summary only; auditor sets workflow status */
+function decideDocumentStatus(result) {
+  return buildAuditAnalysisSummary(result);
 }
 
 async function notifyAuditCompletion(models, document, result, decision, auditor, auditorComment = '') {
@@ -245,10 +283,9 @@ const analyzeDocument = async (req, res) => {
       filePath: filePath || document.filePath,
       documentTypeHint,
     });
-    let decision = decideDocumentStatus(result);
-
-    // Exception: a report produced by this system is valid by definition.
-    if (reportLayout.isSystemGeneratedReport(textToAnalyze)) {
+    let decision = buildAuditAnalysisSummary(result);
+    const isSystemReport = reportLayout.isSystemGeneratedReport(textToAnalyze);
+    if (isSystemReport) {
       decision = systemReportDecision(result);
     }
 
@@ -299,7 +336,7 @@ const analyzeDocument = async (req, res) => {
     }
 
     await document.update({
-      status: decision.status,
+      status: isSystemReport ? 'approved' : 'in_progress',
       ocrProcessed: Boolean(textToAnalyze) || document.ocrProcessed,
       metadata: {
         ...(document.metadata || {}),
@@ -315,15 +352,19 @@ const analyzeDocument = async (req, res) => {
         statusDetail: decision.detail,
         statusNextSteps: decision.nextSteps,
         statusCode: decision.code,
+        awaitingAuditorDecision: !isSystemReport,
       },
       lastModifiedBy: req.user?.id || null,
       lastModifiedAt: new Date(),
     });
 
-    try {
-      await notifyAuditCompletion(req.app.locals.models, document, result, decision, req.user, auditorComment);
-    } catch (notifyError) {
-      console.warn('Audit completion notification failed:', notifyError.message);
+    if (isSystemReport) {
+      await resolveNeedsAuditNotifications(req.app.locals.models, documentId);
+      try {
+        await notifyAuditCompletion(req.app.locals.models, document, result, decision, req.user, auditorComment);
+      } catch (notifyError) {
+        console.warn('Audit completion notification failed:', notifyError.message);
+      }
     }
 
     res.json({
@@ -456,6 +497,7 @@ const bulkAnalyze = async (req, res) => {
     }
 
     const results = [];
+    const bundleEntries = [];
     for (const docId of documentIds) {
       try {
         const doc = await Document.findByPk(docId);
@@ -480,10 +522,9 @@ const bulkAnalyze = async (req, res) => {
           contentOnly: true,
           filePath: doc.filePath,
         });
-        let decision = decideDocumentStatus(result);
-
-        // Exception: a report produced by this system is valid by definition.
-        if (reportLayout.isSystemGeneratedReport(text)) {
+        let decision = buildAuditAnalysisSummary(result);
+        const isSystemReport = reportLayout.isSystemGeneratedReport(text);
+        if (isSystemReport) {
           decision = systemReportDecision(result);
         }
 
@@ -520,7 +561,7 @@ const bulkAnalyze = async (req, res) => {
         });
 
         await doc.update({
-          status: decision.status,
+          status: isSystemReport ? 'approved' : 'in_progress',
           ocrProcessed: Boolean(text) || doc.ocrProcessed,
           metadata: {
             ...(doc.metadata || {}),
@@ -533,15 +574,24 @@ const bulkAnalyze = async (req, res) => {
             statusTitle: decision.title,
             statusDetail: decision.detail,
             statusCode: decision.code,
+            awaitingAuditorDecision: !isSystemReport,
           },
           lastModifiedBy: req.user?.id || null,
           lastModifiedAt: new Date(),
         });
 
+        if (isSystemReport) {
+          await resolveNeedsAuditNotifications(req.app.locals.models, docId);
+        }
+
+        if (result.organization_match) {
+          bundleEntries.push({ documentId: docId, text, auditResult: result });
+        }
+
         results.push({
           documentId: docId,
           status:     'success',
-          documentStatus: decision.status,
+          documentStatus: isSystemReport ? 'approved' : 'in_progress',
           riskLevel:  result.risk_level,
           score:      result.compliance_score,
           overall_audit_score: result.overall_audit_score,
@@ -556,10 +606,13 @@ const bulkAnalyze = async (req, res) => {
       }
     }
 
+    const shipmentCheck = shipmentConsistency.auditShipmentBundle(bundleEntries);
+
     res.json({
       message:    'Bulk analysis complete',
       successful: results.filter(r => r.status === 'success').length,
       failed:     results.filter(r => r.status === 'error').length,
+      shipment_consistency: shipmentCheck,
       results,
     });
   } catch (error) {

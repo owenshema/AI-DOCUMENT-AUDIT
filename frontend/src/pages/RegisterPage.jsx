@@ -89,6 +89,15 @@ export default function RegisterPage() {
     setError(''); setLoading(true);
     try {
       const res = await authAPI.verifyOTP(userId, otp, 'verify_email');
+      if (res.requiresApproval || res.user?.approvalStatus === 'pending' || res.user?.isActive === false) {
+        if (res.token || res.accessToken) {
+          setToken(res.token || res.accessToken);
+          setUser(res.user);
+          localStorage.setItem('user', JSON.stringify(res.user));
+        }
+        navigate('/pending-approval', { replace: true });
+        return;
+      }
       setToken(res.token || res.accessToken);
       setUser(res.user);
       localStorage.setItem('user', JSON.stringify(res.user));

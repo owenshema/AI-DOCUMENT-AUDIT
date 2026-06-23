@@ -64,6 +64,18 @@ function sniffFileType(buffer) {
 // mislabeled file (e.g. a PDF named .docx) must be presented with a correct
 // extension. When `desiredExt` differs from the on-disk extension, run OCR on
 // a temporary copy that carries the right extension.
+function pythonCommands() {
+  var commands = [];
+  var envBin = process.env.PYTHON_BIN || process.env.PYTHON;
+  if (envBin) {
+    commands.push(envBin.trim().split(/\s+/));
+  }
+  commands.push(['py', '-3.12']);
+  commands.push(['python3']);
+  commands.push(['python']);
+  return commands;
+}
+
 async function extractOcrText(filePath, desiredExt) {
   var ocrPath = filePath;
   var tempPath = null;
@@ -77,16 +89,24 @@ async function extractOcrText(filePath, desiredExt) {
       ocrPath = filePath;
     }
   }
+  var cwd = path.join(__dirname, '..', 'forgery');
+  var lastError = null;
   try {
-    var result = await execFileAsync('py', ['-3.12', OCR_SCRIPT, ocrPath], {
-      cwd: path.join(__dirname, '..', 'forgery'),
-      timeout: 120000,
-      maxBuffer: 10 * 1024 * 1024,
-    });
-    var text = (result.stdout || '').trim();
-    return text || null;
-  } catch (e) {
-    console.warn('OCR extraction failed:', e.message);
+    for (var i = 0; i < pythonCommands().length; i++) {
+      var cmd = pythonCommands()[i];
+      try {
+        var result = await execFileAsync(cmd[0], cmd.slice(1).concat([OCR_SCRIPT, ocrPath]), {
+          cwd: cwd,
+          timeout: 120000,
+          maxBuffer: 10 * 1024 * 1024,
+        });
+        var text = (result.stdout || '').trim();
+        if (text) return text;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (lastError) console.warn('OCR extraction failed:', lastError.message);
     return null;
   } finally {
     if (tempPath) {

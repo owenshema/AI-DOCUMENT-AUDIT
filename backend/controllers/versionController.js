@@ -166,16 +166,18 @@ const restoreVersion = async (req, res) => {
 const compareVersions = async (req, res) => {
   try {
     const { documentId } = req.params;
-    const { versionA, versionB } = req.query;
+    const { versionA, versionB, v1, v2 } = req.query;
+    const a = versionA || v1;
+    const b = versionB || v2;
     const { DocumentVersion } = req.app.locals.models;
 
-    if (!versionA || !versionB) {
+    if (!a || !b) {
       return res.status(400).json({ error: 'versionA and versionB query params are required' });
     }
 
     const [verA, verB] = await Promise.all([
-      DocumentVersion.findOne({ where: { documentId, versionNumber: parseInt(versionA) } }),
-      DocumentVersion.findOne({ where: { documentId, versionNumber: parseInt(versionB) } })
+      DocumentVersion.findOne({ where: { documentId, versionNumber: parseInt(a) } }),
+      DocumentVersion.findOne({ where: { documentId, versionNumber: parseInt(b) } })
     ]);
 
     if (!verA || !verB) return res.status(404).json({ error: 'One or both versions not found' });

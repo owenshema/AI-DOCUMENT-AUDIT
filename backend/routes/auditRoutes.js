@@ -31,9 +31,11 @@ const REPORT_ACCESS = {
 
 // Dynamic access check based on reportType in body
 const checkReportAccess = (req, res, next) => {
+  const userRole = req.user?.role;
+  if (userRole === 'administrator') return next();
+
   const reportType = req.body?.reportType || 'daily_report';
   const allowed = REPORT_ACCESS[reportType] || REPORT_ACCESS.daily_report;
-  const userRole = req.user?.role;
   if (!userRole || !allowed.includes(userRole)) {
     return res.status(403).json({
       error: `You do not have permission to generate a "${reportType.replace(/_/g, ' ')}". Required: ${allowed.join(', ')}.`

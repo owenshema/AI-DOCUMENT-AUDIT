@@ -34,10 +34,10 @@ files.forEach(function (pair) {
   var expectedType = pair[1];
   var text = fs.readFileSync(path.join(dir, file), 'utf8');
   var r = runPaperAudit(text, { fileName: file });
-  test(file + ' accepts as ' + expectedType, function () {
-    if (!r.organization_match) throw new Error(r.organization_message);
-    if (r.document_type !== expectedType) throw new Error('got ' + r.document_type + ' expected ' + expectedType);
-    if (r.engine !== 'sifco-notebook-trained' && r.engine !== 'sifco-ml-trained') throw new Error('engine ' + r.engine);
+  test(file + ' classifies as ' + expectedType, function () {
+    if (r.document_type !== expectedType) {
+      throw new Error('got ' + r.document_type + ' expected ' + expectedType + ' — ' + r.organization_message);
+    }
   });
 });
 

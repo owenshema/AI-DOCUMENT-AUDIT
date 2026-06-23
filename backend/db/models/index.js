@@ -29,6 +29,7 @@ const WorkflowModel         = require('./Workflow');
 const SearchModel           = require('./Search');
 const RetentionPolicyModel  = require('./RetentionPolicy');
 const NotificationModel     = require('./Notification');
+const DocumentVersionModel  = require('./DocumentVersion');
 
 // Initialise
 const User             = UserModel(sequelize);
@@ -43,6 +44,7 @@ const Workflow         = WorkflowModel(sequelize);
 const Search           = SearchModel(sequelize);
 const RetentionPolicy  = RetentionPolicyModel(sequelize);
 const Notification     = NotificationModel(sequelize);
+const DocumentVersion  = DocumentVersionModel(sequelize);
 
 // ── Associations ──────────────────────────────────────────────────────────────
 
@@ -81,6 +83,12 @@ Task.belongsTo(Workflow, { foreignKey: 'workflowId', as: 'workflow' });
 Policy.hasMany(ComplianceCheck, { foreignKey: 'policyId', as: 'checks' });
 ComplianceCheck.belongsTo(Policy, { foreignKey: 'policyId' });
 
+// Document ↔ DocumentVersion
+Document.hasMany(DocumentVersion, { foreignKey: 'documentId', as: 'versions' });
+DocumentVersion.belongsTo(Document, { foreignKey: 'documentId', as: 'document' });
+DocumentVersion.belongsTo(User, { foreignKey: 'changedBy', as: 'editor' });
+User.hasMany(DocumentVersion, { foreignKey: 'changedBy', as: 'documentVersions' });
+
 module.exports = {
   sequelize,
   Sequelize,
@@ -96,4 +104,5 @@ module.exports = {
   Search,
   RetentionPolicy,
   Notification,
+  DocumentVersion,
 };

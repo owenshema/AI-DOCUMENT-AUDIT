@@ -217,28 +217,17 @@ const notifyDocumentOwner = async (models, document, status, reason, actorId) =>
 
 const extractPreviewText = async (filePath, mimeType) => {
   const ext = path.extname(filePath).toLowerCase();
-  const header = fs.readFileSync(filePath).subarray(0, 8).toString('hex');
-
-  if (ext === '.txt' || ext === '.csv' || ext === '.md') {
-    return fs.readFileSync(filePath, 'utf8');
-  }
 
   if (ext === '.docx' || (mimeType && mimeType.includes('wordprocessingml'))) {
+    const header = fs.readFileSync(filePath).subarray(0, 8).toString('hex');
     if (!header.startsWith('504b')) {
       throw new Error('This file is named DOCX but is not a valid Word document.');
     }
-    const mammoth = require('mammoth');
-    const result = await mammoth.extractRawText({ path: filePath });
-    return result.value || '';
   }
 
-  if (ext === '.pdf' || (mimeType && mimeType.includes('pdf'))) {
-    const { extractPdfText } = require('../services/pdfTextService');
-    const text = await extractPdfText(fs.readFileSync(filePath));
-    return text || '';
-  }
-
-  return '';
+  const { extractTextFromFile } = require('../services/pdfTextService');
+  const text = await extractTextFromFile(filePath, mimeType);
+  return text || '';
 };
 
 const getAllDocuments = async (req, res) => {
@@ -863,5 +852,6 @@ module.exports = {
   previewDocumentText,
   shareDocument,
   getAccessLogs,
-  bulkUpload
+  bulkUpload,
+  resolveNeedsAuditNotifications,
 };

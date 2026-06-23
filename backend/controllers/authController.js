@@ -385,6 +385,13 @@ const verifyOTP = async (req, res) => {
         otpPurpose: null,
         emailVerified: true
       });
+      if (!user.isActive || user.approvalStatus === 'pending') {
+        return res.json({
+          message:     'Email verified. Your account is pending administrator approval.',
+          requiresApproval: true,
+          user:        safeUser(user),
+        });
+      }
       const token = issueJWT(user);
       return res.json({
         message:     'Email verified successfully',

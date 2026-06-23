@@ -37,7 +37,7 @@ apiClient.interceptors.response.use(
   (error) => {
     const status = error.response?.status;
     const requestUrl = error.config?.url || '';
-    const isAuthRequest = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
+    const isAuthRequest = /\/auth\/(login|register|verify-otp|verify-totp|resend-otp|forgot-password|reset-password)/.test(requestUrl);
 
     // Do not hard-redirect on failed login/register.
     if (status === 401 && !isAuthRequest) {

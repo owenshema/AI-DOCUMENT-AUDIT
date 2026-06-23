@@ -25,10 +25,32 @@ function modelAvailable() {
   return fs.existsSync(ANALYZE_SCRIPT);
 }
 
+function isSifcoPaperText(text) {
+  var n = (text || '').toLowerCase();
+  return /packing\s+list|bill\s+of\s+lading|shipping\s+agreement|trucking\s+invoice|freight\s+invo/i.test(n) &&
+    /sifco|super\s+international|al\s+shamali|agape\s+house|top\s+sifco|ganador|superfreightservice|unique\s+hybrid/i.test(n);
+}
+
 function analyzeText(documentText) {
   var text = (documentText || '').toLowerCase();
   var flags = [];
   var score = 0;
+
+  if (isSifcoPaperText(documentText)) {
+    if (text.replace(/\s/g, '').length < 80) {
+      score += 15;
+      flags.push('LOW_TEXT_CONTENT');
+    }
+    return {
+      is_suspicious: score >= 45,
+      forgery_score: Math.min(100, score),
+      risk_level: score >= 60 ? 'HIGH' : score >= 30 ? 'MEDIUM' : 'LOW',
+      flags: flags,
+      missing_fields: [],
+      engine: 'integrity-risk-scoring-sifco',
+      sifco_document: true,
+    };
+  }
 
   var found = {};
   REQUIRED_FIELDS.forEach(function (field) {
@@ -39,30 +61,30 @@ function analyzeText(documentText) {
   var missing = REQUIRED_FIELDS.filter(function (f) { return !found[f]; });
 
   if (!/stamp|seal|shipped on board/i.test(text)) {
-    score += 30;
+    score += 15;
     flags.push('MISSING_STAMP');
   }
-  if (!/signature|signed|authorized/i.test(text)) {
-    score += 25;
+  if (!/signature|signed|authorized|signatory/i.test(text)) {
+    score += 10;
     flags.push('MISSING_SIGNATURE');
   }
-  if (!/sifco|ganador|super international/i.test(text)) {
-    score += 20;
+  if (!/sifco|ganador|super international|al shamali|top sifco/i.test(text)) {
+    score += 15;
     flags.push('MISSING_LOGO');
   }
-  if (missing.length > 4) {
-    score += 25;
+  if (missing.length > 6) {
+    score += 10;
     flags.push('MANY_MISSING_FIELDS');
   }
   if (text.replace(/\s/g, '').length < 100) {
-    score += 20;
+    score += 15;
     flags.push('LOW_TEXT_CONTENT');
   }
 
   var level = score >= 60 ? 'HIGH' : score >= 30 ? 'MEDIUM' : 'LOW';
 
   return {
-    is_suspicious: score >= 30,
+    is_suspicious: score >= 45,
     forgery_score: Math.min(100, score),
     risk_level: level,
     flags: flags,
@@ -101,7 +123,11 @@ function runColabAnalysis(filePath, documentText) {
     if (tempTextPath && fs.existsSync(tempTextPath)) {
       try { fs.unlinkSync(tempTextPath); } catch (e) { /* ignore */ }
     }
-    return JSON.parse(result.stdout.trim());
+    try {
+      return JSON.parse(result.stdout.trim());
+    } catch (parseErr) {
+      throw new Error('invalid_forgery_json');
+    }
   });
 }
 

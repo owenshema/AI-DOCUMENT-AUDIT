@@ -117,7 +117,10 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
   ruleResult.document_inspection = ruleResult.document_inspection || {};
   ruleResult.document_inspection.forgery_analysis = forgeryResult;
 
-  const isOurs = !!ruleResult.organization_match;
+  var sifcoType = ruleResult.document_type && ruleResult.document_type !== 'unknown';
+  var isOurs = !!ruleResult.organization_match || sifcoType;
+  var savedCompliance = ruleResult.compliance_score;
+  var savedMessage = ruleResult.organization_message;
 
   if (isOurs) {
     if (forgeryResult.stamp) {
@@ -156,7 +159,12 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
     };
     di.request = di.request || { has_request: false };
     di.dates = di.dates || { all_dates: [], issues: [] };
-  } else {
+    if (sifcoType && !ruleResult.organization_match) {
+      ruleResult.organization_match = true;
+      ruleResult.compliance_score = savedCompliance > 10 ? savedCompliance : 60;
+      ruleResult.ai_validity_percentage = ruleResult.compliance_score;
+    }
+  } else if (!sifcoType) {
     ruleResult.compliance_score = 10;
     ruleResult.ai_validity_percentage = 10;
     ruleResult.document_inspection = {
@@ -173,12 +181,12 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
     };
   }
 
-  if ((!ruleResult.missing_fields || !ruleResult.missing_fields.length) && forgeryResult.missing_fields) {
+  if ((!ruleResult.missing_fields || !ruleResult.missing_fields.length) && forgeryResult.missing_fields && !forgeryResult.sifco_document) {
     ruleResult.missing_fields = forgeryResult.missing_fields;
   }
 
   var forgeryScore = Number(forgeryResult.forgery_score) || 0;
-  if (forgeryResult.is_suspicious && forgeryScore >= 45) {
+  if (forgeryResult.is_suspicious && forgeryScore >= 45 && !isOurs && !sifcoType) {
     ruleResult.organization_match = false;
     ruleResult.trained_reference_match = false;
     ruleResult.risk_level = 'high';
@@ -207,7 +215,20 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
     }
     ruleResult.organization_message =
       'Document rejected: integrity check failed (forgery risk ' + forgeryScore + '/100). ' +
-      (ruleResult.organization_message || '');
+      (savedMessage || '');
+  } else if (forgeryResult.is_suspicious && forgeryScore >= 45 && (isOurs || sifcoType)) {
+    ruleResult.inconsistencies = ruleResult.inconsistencies || [];
+    if (!ruleResult.inconsistencies.some(function (i) { return i.code === 'FORGERY-FLAG'; })) {
+      ruleResult.inconsistencies.push({
+        code: 'FORGERY-FLAG',
+        title: 'Integrity note',
+        summary: 'Integrity check score ' + forgeryScore + '/100 — review stamps/signatures manually.',
+        detail: (forgeryResult.flags || []).slice(0, 5).join('; ') || '',
+      });
+    }
+    if (ruleResult.risk_level === 'low') {
+      ruleResult.risk_level = 'medium';
+    }
   } else if (forgeryResult.is_suspicious && ruleResult.risk_level === 'low') {
     ruleResult.risk_level = forgeryResult.risk_level === 'HIGH' ? 'high' : 'medium';
   }

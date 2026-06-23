@@ -23,19 +23,19 @@ var REFERENCE_SPECS = [
     referencePdf: 'UNIQUE HYBRID&EV SPARE PARTS PACKING LIST.pdf',
     purpose: 'Lists spare parts/packages, weights, container and B/L for shipment to Kigali.',
     titlePatterns: [/packing\s+list/i],
-    brandMarkers: [/unique\s+hybrid/i, /kigali/i, /rwanda/i],
+    brandMarkers: [/unique\s+hybrid/i, /ganador/i, /super\s+international/i, /kigali/i, /rwanda/i],
     signatureMarkers: [],
     requiredMarkers: [
       /packing\s+list/i,
       /(?:consignee|consigne)/i,
       /(?:method\s+of\s+loading|lcl|fcl)/i,
       /(?:weight|kgs)/i,
-      /(?:container|temu|ecmu)/i,
-      /(?:bill\s+of\s+loading|b\/l|dxb\d+)/i,
-      /(?:final\s+destination|kigali)/i,
+      /(?:container|[a-z]{4}\d{7})/i,
+      /(?:bill\s+of\s+(?:loading|lading)|b\/l)/i,
+      /(?:final\s+destination|kigali|mombasa)/i,
       /(?:pcs|packages|qty)/i,
     ],
-    optionalMarkers: [/voyage/i, /vessel/i, /etd/i],
+    optionalMarkers: [/voyage/i, /vessel/i, /etd/i, /unique\s+hybrid/i, /dxb\d+/i],
     filenameHints: [/packing\s*list/i, /unique\s+hybrid/i],
   },
   {
@@ -51,12 +51,11 @@ var REFERENCE_SPECS = [
       /bill\s+of\s+lading/i,
       /(?:shipper|exporter)/i,
       /consignee/i,
-      /(?:port\s+of\s+(?:loading|discharge)|jebel|mombasa)/i,
-      /(?:container|temu|ecmu|seal)/i,
-      /dxb\d{5,}/i,
-      /unique\s+hybrid/i,
+      /(?:port\s+of\s+(?:loading|discharge)|jebel|mombasa|dar\s+es\s+sal)/i,
+      /(?:container|[a-z]{4}\d{7}|seal)/i,
+      /(?:notify\s+party|place\s+of\s+receipt)/i,
     ],
-    optionalMarkers: [/freight\s*:\s*collect/i, /voyage/i, /vessel/i],
+    optionalMarkers: [/freight\s*:\s*collect/i, /voyage/i, /vessel/i, /unique\s+hybrid/i, /dxb\d+/i],
     filenameHints: [/hbl/i, /bill\s+of\s+lading/i, /unique\s+hybrid/i],
   },
   {
@@ -87,18 +86,17 @@ var REFERENCE_SPECS = [
     referencePdf: 'UNIQUE HYBRID.pdf',
     purpose: 'Super International freight billing to Unique Hybrid with bank details.',
     titlePatterns: [/\binvoice\b/i],
-    brandMarkers: [/super\s+international/i, /superfreightservice/i, /121348946/i, /unique\s+hybrid/i],
+    brandMarkers: [/super\s+international/i, /superfreightservice/i, /121348946/i, /unique\s+hybrid/i, /ganador/i],
     signatureMarkers: [],
     requiredMarkers: [
-      /super\s+international/i,
+      /(?:super\s+international|ganador)/i,
       /\binvoice\b/i,
-      /unique\s+hybrid/i,
-      /(?:freight\s+charge|bl\s+fee|local\s+charge)/i,
-      /bank\s+of\s+kigali/i,
-      /(?:jebel|kigali)/i,
+      /(?:freight\s+charge|bl\s+fee|local\s+charge|sea\s+freight)/i,
+      /(?:bank|a\/c\s+name|account)/i,
+      /(?:jebel|kigali|mombasa)/i,
       /usd/i,
     ],
-    optionalMarkers: [/war\s+cost/i, /temu|ecmu/i],
+    optionalMarkers: [/war\s+cost/i, /unique\s+hybrid/i, /temu|ecmu/i, /dxb\d+/i],
     filenameHints: [/unique\s+hybrid/i, /freight/i, /invoice/i],
   },
   {
@@ -115,7 +113,7 @@ var REFERENCE_SPECS = [
       /(?:top\s+sifco|agape\s+house)/i,
       /inland\s+transport/i,
       /(?:mombasa|kigali)/i,
-      /(?:ecmu|container|plate)/i,
+      /(?:ecmu|temu|[a-z]{4}\d{7}|container|plate)/i,
       /usd/i,
     ],
     optionalMarkers: [/invoice\s+no/i],
@@ -128,17 +126,16 @@ var REFERENCE_SPECS = [
     referencePdf: 'JOHN SEA FREIGHT.pdf',
     purpose: 'Sea freight charge invoice with ports, B/L and consignee.',
     titlePatterns: [/sea\s+freight/i, /freight\s+invoce/i],
-    brandMarkers: [/hatangimana|john/i],
+    brandMarkers: [/hatangimana|john/i, /ganador/i, /super\s+international/i, /\bsifco\b/i],
     signatureMarkers: [],
     requiredMarkers: [
-      /(?:sea\s+freight|freight\s+invoce)/i,
+      /(?:sea\s+freight|freight\s+invoce|freight\s+invoice)/i,
       /consignee/i,
       /port\s+of\s+(?:loading|discharge)/i,
-      /(?:jebel|dar\s+es\s+salam|kigali)/i,
-      /dxb\d+/i,
-      /(?:vessel|voyage)/i,
+      /(?:jebel|dar\s+es\s+salam|kigali|mombasa)/i,
+      /(?:vessel|voyage|b\/l|bill\s+of\s+lading)/i,
     ],
-    optionalMarkers: [/etd/i],
+    optionalMarkers: [/etd/i, /dxb\d+/i],
     filenameHints: [/sea\s+freight/i, /john/i, /freight/i],
   },
 ];
@@ -242,9 +239,9 @@ function loadCorpus(options) {
 
 /** Acceptance uses DOCUMENT BODY only — file name is never required */
 /** Notebook-first acceptance; ML fallback uses relaxed thresholds */
-var ACCEPT_SIMILARITY = 0.45;
-var ACCEPT_MARKER_RATIO = 0.55;
-var ACCEPT_MIN_SIMILARITY = 0.28;
+var ACCEPT_SIMILARITY = 0.40;
+var ACCEPT_MARKER_RATIO = 0.50;
+var ACCEPT_MIN_SIMILARITY = 0.22;
 var ACCEPT_AMBIGUITY_MARGIN = 0.08;
 var MIN_BODY_LENGTH = 80;
 var REJECTED_COMPLIANCE_SCORE = 10;
@@ -254,6 +251,34 @@ function specForId(id) {
     if (REFERENCE_SPECS[i].id === id) return REFERENCE_SPECS[i];
   }
   return null;
+}
+
+var SPEC_TO_NOTEBOOK_TYPE = {
+  packing_list: 'PACKING_LIST',
+  bill_of_lading: 'HBL',
+  shipping_agreement: 'SHIPPING_AGREEMENT',
+  freight_invoice: 'SIFCO_INVOICE',
+  trucking_invoice: 'TRUCKING_INVOICE',
+  sea_freight_invoice: 'FREIGHT_INVOICE',
+};
+
+function specIdToNotebookType(specId) {
+  return SPEC_TO_NOTEBOOK_TYPE[specId] || null;
+}
+
+function runFullFieldValidation(documentText, specId, notebookResult) {
+  var body = extractBodyTextForAudit(documentText || '');
+  var docType = (notebookResult && notebookResult.docType) || specIdToNotebookType(specId);
+  if (!docType) return { issues: [], fields: {}, missing_fields: [] };
+
+  var fields = (notebookResult && notebookResult.fields) || notebookAudit.extractFields(body);
+  var issues = notebookAudit.checkDocument(body, docType, fields);
+  return {
+    issues: issues,
+    fields: fields,
+    missing_fields: notebookAudit.issuesToMissingFields(issues),
+    docType: docType,
+  };
 }
 
 function buildRejectedInspection() {
@@ -299,26 +324,29 @@ function buildAcceptedInspection(documentText, best) {
 
 function passesCompanyCriteria(best, normalizedText) {
   if (!best) return false;
-  if (best.markerBrand < 50) return false;
+  var sifcoCore = /\bsifco\b|super\s+international|al\s+shamali|agape\s+house|top\s+sifco|ganador|superfreightservice/i.test(normalizedText);
+  if (best.markerRequired >= 62) return true;
+  if (sifcoCore && best.markerRequired >= 45) return true;
+  if (best.markerBrand >= 30 && best.markerRequired >= 50) return true;
 
   var spec = specForId(best.id);
   if (spec && spec.signatureMarkers && spec.signatureMarkers.length > 0) {
-    if (!best.signatureFound && best.markerSignature < 50) return false;
+    if (!best.signatureFound && best.markerSignature < 35 && !sifcoCore) return false;
   }
 
   if (best.id === 'bill_of_lading') {
-    if (!/shipped\s+on\s+board|seal|authorised\s+signatory|authorized\s+signatory/i.test(normalizedText)) {
+    if (!sifcoCore && !/shipped\s+on\s+board|seal|authorised\s+signatory|authorized\s+signatory|bill\s+of\s+lading/i.test(normalizedText)) {
       return false;
     }
   }
 
   if (best.id === 'shipping_agreement') {
-    if (!/\bsifco\b/i.test(normalizedText) || !/super\s+international/i.test(normalizedText)) {
+    if (!/\bsifco\b/i.test(normalizedText) && !/super\s+international/i.test(normalizedText)) {
       return false;
     }
   }
 
-  return true;
+  return sifcoCore || best.markerBrand >= 25;
 }
 
 function normalizeText(text) {
@@ -480,7 +508,7 @@ function classifyDocument(documentText, context) {
   var markerOk = best.markerRequired >= ACCEPT_MARKER_RATIO * 100;
   var similarityOk = best.similarity >= ACCEPT_MIN_SIMILARITY;
   var combinedOk = best.combinedScore >= ACCEPT_SIMILARITY;
-  var titleOrStrongMarkers = best.titleDetected || best.markerRequired >= 85;
+  var titleOrStrongMarkers = best.titleDetected || best.markerRequired >= 62;
 
   var accepted = combinedOk && markerOk && similarityOk && titleOrStrongMarkers;
 
@@ -494,12 +522,12 @@ function classifyDocument(documentText, context) {
     }
   }
 
-  if (accepted && best.markerBrand < 35 && best.markerRequired < 72) {
+  if (accepted && best.markerBrand < 20 && best.markerRequired < 55) {
     accepted = false;
   }
 
   var companyCriteriaFailed = false;
-  if (accepted && best.markerRequired < 78 && !passesCompanyCriteria(best, normalized)) {
+  if (accepted && best.markerRequired < 72 && !passesCompanyCriteria(best, normalized)) {
     accepted = false;
     companyCriteriaFailed = true;
   }
@@ -541,36 +569,106 @@ function runTrainedAudit(documentText, context) {
   var nbMlScore = (notebookResult.ok && notebookResult.specId)
     ? (mlResult.allScores || []).find(function (s) { return s.id === notebookResult.specId; })
     : null;
-  var notebookStructuralOk = nbMlScore
-    ? (nbMlScore.markerRequired >= 50 || nbMlScore.markerBrand >= 50)
-    : false;
-
-  if (notebookResult.ok && notebookResult.specId && notebookStructuralOk) {
-    accepted = true;
-    compliance_score = notebookResult.complianceScore;
-    documentType = notebookResult.specId;
-    paperLabel = notebookResult.docTypeName;
-    message = notebookResult.message;
-    violations = notebookAudit.issuesToViolations(notebookResult.issues);
-    var nbSpec = specForId(notebookResult.specId);
-    paperPurpose = nbSpec ? nbSpec.purpose : null;
-    referencePdf = nbSpec ? nbSpec.referencePdf : null;
-    best = nbMlScore || best;
+  var mlSameType = nbMlScore || (mlResult.bestMatch && notebookResult.specId && mlResult.bestMatch.id === notebookResult.specId ? mlResult.bestMatch : null);
+  var notebookStructuralOk = false;
+  if (notebookResult.specId) {
+    if (mlSameType) {
+      notebookStructuralOk = mlSameType.markerRequired >= 35 || mlSameType.markerBrand >= 35 ||
+        mlSameType.combinedScore >= 0.40;
+    } else {
+      notebookStructuralOk = notebookResult.confidence >= 55;
+    }
   } else if (mlResult.accepted && mlResult.bestMatch) {
+    notebookStructuralOk = true;
+  }
+
+  var matchedSpecId = notebookResult.specId || (mlResult.accepted && mlResult.bestMatch ? mlResult.bestMatch.id : null);
+  var fieldValidation = matchedSpecId
+    ? runFullFieldValidation(documentText, matchedSpecId, notebookResult)
+    : { issues: notebookResult.issues || [], fields: notebookResult.fields || {}, missing_fields: [] };
+
+  var allIssues = fieldValidation.issues.length ? fieldValidation.issues : (notebookResult.issues || []);
+  var missing_fields = notebookAudit.issuesToMissingFields(allIssues);
+  var fieldBlock = notebookAudit.hasBlockingIssues(allIssues);
+  var criticalIssues = notebookAudit.hasCriticalIssues(allIssues);
+  var mandatoryMissing = notebookAudit.hasMandatoryMissing(missing_fields, allIssues);
+  var validButIncomplete = !!(matchedSpecId && mandatoryMissing && !criticalIssues);
+  violations = notebookAudit.issuesToViolations(allIssues);
+
+  var recognized = false;
+  if (notebookResult.specId && notebookResult.confidence >= 40) {
+    recognized = true;
+    matchedSpecId = matchedSpecId || notebookResult.specId;
+  }
+  if (notebookResult.specId && (notebookStructuralOk || notebookResult.confidence >= 55)) {
+    recognized = true;
+  } else if (mlResult.accepted && mlResult.bestMatch) {
+    recognized = true;
+    matchedSpecId = matchedSpecId || mlResult.bestMatch.id;
+  } else if (matchedSpecId && mlResult.bestMatch && mlResult.bestMatch.combinedScore >= 0.32) {
+    recognized = true;
+  } else if (mlResult.bestMatch && mlResult.bestMatch.markerRequired >= 30) {
+    recognized = true;
+    matchedSpecId = matchedSpecId || mlResult.bestMatch.id;
+  }
+
+  if (recognized && !fieldBlock && !mandatoryMissing) {
     accepted = true;
-    auditEngine = 'sifco-ml-trained';
-    compliance_score = 100;
-    documentType = mlResult.bestMatch.id;
-    best = mlResult.bestMatch;
-    paperLabel = best.label;
-    paperPurpose = best.purpose;
-    referencePdf = best.referencePdf;
-    message =
-      'Validated against SIFCO training reference "' + best.referencePdf + '" — classified as ' + best.label +
-      ' with ' + Math.round(best.combinedScore * 100) + '% match confidence.';
+    auditEngine = notebookResult.specId && notebookStructuralOk ? 'sifco-notebook-trained' : 'sifco-ml-trained';
+    compliance_score = notebookAudit.complianceScoreFromFieldGaps(allIssues, missing_fields, { recognizedAsSifco: true });
+    documentType = matchedSpecId || notebookResult.specId || mlResult.bestMatch.id;
+    paperLabel = notebookResult.docTypeName || (mlResult.bestMatch && mlResult.bestMatch.label) || documentType;
+    var passSpec = specForId(documentType);
+    paperPurpose = passSpec ? passSpec.purpose : null;
+    referencePdf = passSpec ? passSpec.referencePdf : null;
+    best = nbMlScore || mlResult.bestMatch || best;
+    if (notebookResult.specId && notebookResult.message && !fieldBlock) {
+      message = notebookResult.message;
+    } else {
+      message = 'Validated as SIFCO ' + paperLabel + ' — compliance ' + compliance_score + '%.';
+    }
+    if (missing_fields.length) {
+      message += ' Notes: ' + missing_fields.slice(0, 3).join(', ') + '.';
+    }
+  } else if (recognized && (fieldBlock || mandatoryMissing)) {
+    auditEngine = notebookResult.specId ? 'sifco-notebook-trained' : 'sifco-ml-trained';
+    accepted = false;
+    compliance_score = notebookAudit.complianceScoreFromFieldGaps(allIssues, missing_fields, {
+      recognizedAsSifco: true,
+      hasCritical: criticalIssues,
+    });
+    documentType = matchedSpecId;
+    paperLabel = notebookResult.docTypeName || (best ? best.label : matchedSpecId);
+    var blockSpec = specForId(matchedSpecId);
+    paperPurpose = blockSpec ? blockSpec.purpose : null;
+    referencePdf = blockSpec ? blockSpec.referencePdf : null;
+    if (criticalIssues) {
+      message = 'SIFCO document rejected — critical validation failed.';
+      var crit = allIssues.filter(function (i) { return i.severity === 'CRITICAL'; })[0];
+      if (crit) message += ' ' + crit.message;
+    } else {
+      message = 'Valid SIFCO ' + (paperLabel || documentType) + ' — compliance ' + compliance_score +
+        '% due to missing or incomplete fields.';
+      if (missing_fields.length) {
+        message += ' Missing: ' + missing_fields.slice(0, 6).join(', ') + '.';
+      } else {
+        var topIssue = allIssues.filter(function (i) { return i.severity === 'HIGH'; })[0];
+        if (topIssue) message += ' ' + topIssue.message;
+      }
+    }
   } else {
     auditEngine = 'sifco-ml-trained';
-    if (mlResult.reason === 'unreadable' || notebookResult.reason === 'unreadable') {
+    if (notebookResult.specId && notebookResult.confidence >= 40) {
+      recognized = true;
+      matchedSpecId = notebookResult.specId;
+      documentType = notebookResult.specId;
+      paperLabel = notebookResult.docTypeName || documentType;
+      var fallbackSpec = specForId(matchedSpecId);
+      paperPurpose = fallbackSpec ? fallbackSpec.purpose : null;
+      referencePdf = fallbackSpec ? fallbackSpec.referencePdf : null;
+      compliance_score = notebookAudit.complianceScoreFromFieldGaps(allIssues, missing_fields, { recognizedAsSifco: true });
+      message = 'SIFCO ' + (paperLabel || documentType) + ' recognized (' + notebookResult.confidence + '% match) — compliance ' + compliance_score + '%.';
+    } else if (mlResult.reason === 'unreadable' || notebookResult.reason === 'unreadable') {
       message = mlResult.message || notebookResult.message;
     } else if (notebookResult.reason === 'unknown_type') {
       message = notebookResult.message;
@@ -611,7 +709,9 @@ function runTrainedAudit(documentText, context) {
       status: notebookResult.status,
       confidence_percent: notebookResult.confidence,
       doc_type_name: notebookResult.docTypeName,
-      issue_count: (notebookResult.issues || []).length,
+      issue_count: allIssues.length,
+      missing_field_count: missing_fields.length,
+      field_validation_blocked: fieldBlock,
     } : null,
     best_match: best ? {
       type: best.id,
@@ -639,19 +739,18 @@ function runTrainedAudit(documentText, context) {
     }),
   };
 
-  var riskLevel = 'high';
-  if (accepted) {
-    if (compliance_score >= 95) riskLevel = 'low';
-    else if (compliance_score >= 75) riskLevel = 'medium';
-    else riskLevel = 'medium';
-  }
+  var orgRecognized = accepted || validButIncomplete || recognized ||
+    !!(notebookResult.specId && notebookResult.confidence >= 40);
+  var highCount = allIssues.filter(function (i) { return i.severity === 'HIGH'; }).length;
+  var fieldRiskPct = notebookAudit.fieldRiskPercent(compliance_score, missing_fields.length, highCount);
+  var riskLevel = notebookAudit.riskLevelFromScore(compliance_score, orgRecognized);
 
   return {
-    document_type: accepted ? documentType : 'unknown',
-    organization_match: accepted,
+    document_type: documentType !== 'unknown' ? documentType : (matchedSpecId || 'unknown'),
+    organization_match: orgRecognized,
     trained_reference_match: accepted,
     organization_message: message,
-    organization_category: accepted ? documentType : null,
+    organization_category: orgRecognized ? (documentType || matchedSpecId) : null,
     organization_training: {
       paper_label: paperLabel || (best ? best.label : null),
       paper_purpose: paperPurpose || (best ? best.purpose : null),
@@ -659,35 +758,39 @@ function runTrainedAudit(documentText, context) {
       ml_training: trainingDetail,
       reference_pdf: referencePdf || (best ? best.referencePdf : null),
       similarity_percent: best ? Math.round((best.similarity || 0) * 100) : (notebookResult.confidence || 0),
-      confidence_percent: accepted ? compliance_score : REJECTED_COMPLIANCE_SCORE,
+      confidence_percent: orgRecognized ? compliance_score : REJECTED_COMPLIANCE_SCORE,
       signature_detected: best ? best.signatureFound : false,
       brand_match_percent: best ? best.markerBrand : 0,
+      field_risk_percent: fieldRiskPct,
+      missing_field_count: missing_fields.length,
+      valid_but_incomplete: validButIncomplete,
     },
     compliance_score: compliance_score,
     ai_generated_percentage: 0,
     ai_threshold_exceeded: false,
     ai_validity_percentage: compliance_score,
     risk_level: riskLevel,
-    sentiment: accepted ? 'positive' : 'negative',
+    sentiment: accepted ? 'positive' : (validButIncomplete ? 'neutral' : 'negative'),
     summary: message,
-    missing_fields: [],
+    missing_fields: missing_fields,
     extracted_fields: accepted ? {
       paper_type: paperLabel || (best ? best.label : null),
       matched_reference: referencePdf || (best ? best.referencePdf : null),
       confidence: compliance_score + '%',
-      notebook_fields: notebookResult.fields || {},
+      notebook_fields: fieldValidation.fields || notebookResult.fields || {},
     } : {
-      paper_type: null,
-      matched_reference: null,
+      paper_type: paperLabel || null,
+      matched_reference: referencePdf || null,
       confidence: REJECTED_COMPLIANCE_SCORE + '%',
+      notebook_fields: fieldValidation.fields || notebookResult.fields || {},
     },
     violations: violations,
-    inconsistencies: accepted ? [] : violations,
-    recommendations: accepted && violations.length
+    inconsistencies: violations.length ? violations : [],
+    recommendations: violations.length
       ? violations.map(function (v) { return v.summary; })
       : [],
     fraud_flags: violations.filter(function (v) { return v.severity === 'CRITICAL'; }),
-    policy_rules_checked: (notebookResult.issues || []).length,
+    policy_rules_checked: allIssues.length,
     engine: auditEngine,
     document_inspection: accepted
       ? buildAcceptedInspection(documentText, best || { id: documentType, label: paperLabel, purpose: paperPurpose })

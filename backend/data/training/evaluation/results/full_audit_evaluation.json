@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-14T21:53:52.860Z",
+  "generated_at": "2026-06-23T17:03:22.130Z",
   "architecture_layers": [
     "OCR Extraction (pdfTextService + Tesseract)",
     "TF-IDF + Cosine Similarity (sifcoMlTrainingService)",

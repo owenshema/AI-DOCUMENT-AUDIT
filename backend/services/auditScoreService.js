@@ -18,9 +18,17 @@ function round(n) {
 
 function overallAuditStatus(score) {
   if (score >= 85) return { label: 'Excellent', code: 'excellent', color: 'green' };
-  if (score >= 70) return { label: 'Good', code: 'good', color: 'emerald' };
-  if (score >= 50) return { label: 'Review Required', code: 'review', color: 'amber' };
+  if (score >= 60) return { label: 'Good', code: 'good', color: 'emerald' };
+  if (score >= 40) return { label: 'Review Required', code: 'review', color: 'amber' };
   return { label: 'Failed', code: 'failed', color: 'red' };
+}
+
+function isSifcoDocumentType(documentType) {
+  if (!documentType || documentType === 'unknown') return false;
+  return [
+    'packing_list', 'bill_of_lading', 'shipping_agreement', 'freight_invoice',
+    'trucking_invoice', 'sea_freight_invoice',
+  ].indexOf(documentType) >= 0;
 }
 
 function isPassingAuditResults(results) {
@@ -36,16 +44,22 @@ function computeOverallAuditScore(auditResult) {
   auditResult = auditResult || {};
   var forgeryAnalysis = auditResult.document_inspection && auditResult.document_inspection.forgery_analysis;
   var forgeryRisk = clamp(Number(forgeryAnalysis && forgeryAnalysis.forgery_score) || 0, 0, 100);
-  var forgeryBlocked = !!(forgeryAnalysis && forgeryAnalysis.is_suspicious && forgeryRisk >= 45);
+  var forgeryBlocked = !!(forgeryAnalysis && forgeryAnalysis.is_suspicious && forgeryRisk >= 45 &&
+    !forgeryAnalysis.sifco_document && !isSifcoDocumentType(auditResult.document_type));
 
   if (auditResult.organization_match && !forgeryBlocked) {
+    var compliance = clamp(Number(auditResult.compliance_score) || 0, 0, 100);
+    var integrity = clamp(100 - forgeryRisk, 0, 100);
+    var overall = round(compliance * COMPLIANCE_WEIGHT + integrity * INTEGRITY_WEIGHT);
+    overall = clamp(overall, 0, 100);
+    var status = overallAuditStatus(overall);
     return {
-      overall_audit_score: 100,
-      overall_audit_status: 'Excellent',
-      overall_audit_status_code: 'excellent',
+      overall_audit_score: overall,
+      overall_audit_status: status.label,
+      overall_audit_status_code: status.code,
       overall_audit_breakdown: {
-        compliance_percent: 100,
-        integrity_percent: 100,
+        compliance_percent: compliance,
+        integrity_percent: integrity,
         forgery_risk_percent: forgeryRisk,
         weights: {
           compliance: COMPLIANCE_WEIGHT,
@@ -55,7 +69,29 @@ function computeOverallAuditScore(auditResult) {
     };
   }
 
-  if (!auditResult.organization_match || forgeryBlocked) {
+  if (isSifcoDocumentType(auditResult.document_type) && !forgeryBlocked) {
+    var sCompliance = clamp(Number(auditResult.compliance_score) || 60, 0, 100);
+    var sIntegrity = clamp(100 - forgeryRisk, 0, 100);
+    var sOverall = round(sCompliance * COMPLIANCE_WEIGHT + sIntegrity * INTEGRITY_WEIGHT);
+    sOverall = clamp(Math.max(60, sOverall), 0, 100);
+    var sStatus = overallAuditStatus(sOverall);
+    return {
+      overall_audit_score: sOverall,
+      overall_audit_status: sStatus.label,
+      overall_audit_status_code: sStatus.code,
+      overall_audit_breakdown: {
+        compliance_percent: sCompliance,
+        integrity_percent: sIntegrity,
+        forgery_risk_percent: forgeryRisk,
+        weights: {
+          compliance: COMPLIANCE_WEIGHT,
+          integrity: INTEGRITY_WEIGHT,
+        },
+      },
+    };
+  }
+
+  if ((!auditResult.organization_match && !isSifcoDocumentType(auditResult.document_type)) || forgeryBlocked) {
     return {
       overall_audit_score: 10,
       overall_audit_status: 'Failed',

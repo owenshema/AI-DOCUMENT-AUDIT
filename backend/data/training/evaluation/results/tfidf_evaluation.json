@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-14T21:53:52.836Z",
+  "generated_at": "2026-06-23T17:03:22.113Z",
   "algorithm": "TF-IDF + cosine similarity",
   "model_version": "sifco-ml-v1",
   "reference_documents": 6,

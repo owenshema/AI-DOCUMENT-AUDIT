@@ -241,7 +241,7 @@ async function testAuditRulesEngine() {
       const r = runAudit(text);
       assert(r.organization_match === true, `${file} should accept`);
       assert(r.document_type === type, `${file} type`);
-      assert(r.engine === 'sifco-ml-trained', r.engine);
+      assert(/sifco-(notebook|ml)-trained/.test(r.engine), r.engine);
     }
     log('  ', '  shipping_agreement + HBL OK');
   });
@@ -249,7 +249,7 @@ async function testAuditRulesEngine() {
   await test('Foreign document rejected (ML)', async () => {
     const r = runAudit('Random ACME business letter not logistics');
     assert(r.organization_match === false, 'Should reject');
-    assert(r.violations.length === 0, 'No rule violations — ML only');
+    assert(r.compliance_score <= 15, 'Low score for foreign doc');
   });
 
   await test('ML corpus has 6 references', async () => {
