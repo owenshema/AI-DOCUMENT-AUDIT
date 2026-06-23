@@ -90,7 +90,7 @@ const UploadPage = () => {
               ref={fileInputRef}
               type="file"
               multiple
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.txt,.csv,.tsv,.md,.json,.log,.html,.htm,.xml,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,image/*"
               className="hidden"
               onChange={(e) => addFiles(e.target.files)}
             />

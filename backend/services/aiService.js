@@ -212,6 +212,22 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
     ruleResult.risk_level = forgeryResult.risk_level === 'HIGH' ? 'high' : 'medium';
   }
 
+  // Real AI-generated content detection (Sapling API, heuristic fallback).
+  // Drives the "Authenticity" metric = 100 - ai_generated_percentage.
+  try {
+    const aiDetection = await require('./aiContentDetectionService').detectAiContent(documentText);
+    ruleResult.ai_generated_percentage = aiDetection.ai_generated_percentage;
+    ruleResult.ai_threshold_exceeded = aiDetection.ai_threshold_exceeded;
+    ruleResult.ai_detection = {
+      assessed: aiDetection.assessed,
+      source: aiDetection.source,
+      threshold_percent: aiDetection.threshold,
+      detail: aiDetection.detail,
+    };
+  } catch (e) {
+    // Never let detection break an audit; leave engine default in place.
+  }
+
   const overall = require('./auditScoreService').computeOverallAuditScore(ruleResult);
   Object.assign(ruleResult, overall);
 

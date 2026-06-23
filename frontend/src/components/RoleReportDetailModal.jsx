@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { X, Download, RefreshCw, Calendar, Shield } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { X, Download, RefreshCw, Calendar, Shield, ChevronDown, FileText, FileSpreadsheet, FileType, FileCode } from 'lucide-react';
 import { roleReportsAPI } from '../api/auth';
 
 const SUMMARY_LABELS = {
@@ -45,20 +45,19 @@ function formatCellValue(value) {
   return String(value);
 }
 
-function downloadCsv(report) {
-  if (!report?.rows?.length || !report?.columns?.length) return;
-  var header = report.columns.map(function (c) { return c.label; }).join(',');
-  var lines = report.rows.map(function (row) {
-    return report.columns.map(function (c) {
-      var val = row[c.key] != null ? String(row[c.key]) : '';
-      return '"' + val.replace(/"/g, '""') + '"';
-    }).join(',');
-  });
-  var blob = new Blob([[header].concat(lines).join('\n')], { type: 'text/csv' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
+const EXPORT_FORMATS = [
+  { id: 'pdf', label: 'PDF document', ext: 'pdf', Icon: FileText },
+  { id: 'excel', label: 'Excel spreadsheet', ext: 'xlsx', Icon: FileSpreadsheet },
+  { id: 'word', label: 'Word document', ext: 'doc', Icon: FileType },
+  { id: 'csv', label: 'CSV file', ext: 'csv', Icon: FileCode },
+  { id: 'txt', label: 'Plain text', ext: 'txt', Icon: FileCode },
+];
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
   a.href = url;
-  a.download = (report.id || 'report') + '.csv';
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -70,6 +69,9 @@ export default function RoleReportDetailModal({ reportMeta, isDarkMode, onClose 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [days, setDays] = useState(90);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState('');
+  const exportRef = useRef(null);
 
   const card = isDarkMode ? 'bg-[#1a1d24] border-white/10' : 'bg-white border-gray-200';
   const text = isDarkMode ? 'text-white' : 'text-gray-900';
@@ -91,6 +93,27 @@ export default function RoleReportDetailModal({ reportMeta, isDarkMode, onClose 
   }, [reportMeta?.id, days]);
 
   useEffect(function () { loadReport(); }, [loadReport]);
+
+  useEffect(function () {
+    function onClickOutside(e) {
+      if (exportRef.current && !exportRef.current.contains(e.target)) setExportOpen(false);
+    }
+    document.addEventListener('mousedown', onClickOutside);
+    return function () { document.removeEventListener('mousedown', onClickOutside); };
+  }, []);
+
+  const handleExport = useCallback(function (fmt) {
+    if (!reportMeta?.id) return;
+    setExportOpen(false);
+    setExporting(fmt.id);
+    setError('');
+    roleReportsAPI.exportReport(reportMeta.id, fmt.id, { days: days })
+      .then(function (res) {
+        saveBlob(new Blob([res.data]), (reportMeta.id || 'report') + '.' + fmt.ext);
+      })
+      .catch(function (e) { setError('Export failed. Please try again.'); })
+      .finally(function () { setExporting(''); });
+  }, [reportMeta?.id, days]);
 
   if (!reportMeta) return null;
 
@@ -197,12 +220,37 @@ export default function RoleReportDetailModal({ reportMeta, isDarkMode, onClose 
 
         <div className={`flex justify-end gap-2 border-t px-6 py-4 ${isDarkMode ? 'border-white/10' : 'border-gray-200'}`}>
           {report?.rows?.length > 0 && (
-            <button
-              onClick={function () { downloadCsv(report); }}
-              className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium ${isDarkMode ? 'border-white/10 text-slate-300 hover:bg-white/5' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-            >
-              <Download className="h-4 w-4" /> Export CSV
-            </button>
+            <div className="relative" ref={exportRef}>
+              <button
+                onClick={function () { setExportOpen(function (o) { return !o; }); }}
+                disabled={!!exporting}
+                className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium disabled:opacity-50 ${isDarkMode ? 'border-white/10 text-slate-300 hover:bg-white/5' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+              >
+                {exporting ? (
+                  <><RefreshCw className="h-4 w-4 animate-spin" /> Exporting {exporting.toUpperCase()}...</>
+                ) : (
+                  <><Download className="h-4 w-4" /> Export <ChevronDown className="h-3.5 w-3.5 opacity-70" /></>
+                )}
+              </button>
+              {exportOpen && (
+                <div className={`absolute bottom-full right-0 mb-2 w-52 overflow-hidden rounded-xl border shadow-xl ${isDarkMode ? 'border-white/10 bg-[#1a1d24]' : 'border-gray-200 bg-white'}`}>
+                  {EXPORT_FORMATS.map(function (fmt) {
+                    const Icon = fmt.Icon;
+                    return (
+                      <button
+                        key={fmt.id}
+                        onClick={function () { handleExport(fmt); }}
+                        className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm ${isDarkMode ? 'text-slate-300 hover:bg-white/5' : 'text-gray-700 hover:bg-gray-50'}`}
+                      >
+                        <Icon className="h-4 w-4 text-indigo-400" />
+                        <span className="flex-1">{fmt.label}</span>
+                        <span className={`text-[10px] uppercase ${sub}`}>.{fmt.ext}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
           <button onClick={onClose} className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600">
             Close

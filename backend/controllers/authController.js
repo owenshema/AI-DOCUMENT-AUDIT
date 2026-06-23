@@ -28,6 +28,32 @@ const OTP_EXPIRY_MS      = 10 * 60 * 1000; // 10 min
 const APPROVAL_REQUIRED_ROLES = ['auditor', 'document_manager'];
 const ALLOW_DEV_OTP = process.env.NODE_ENV !== 'production' && process.env.SMTP_SEND_REAL !== 'true';
 
+function wasEmailDelivered(result) {
+  if (!result) return false;
+  if (result.configured === true) return true;
+  const id = String(result.messageId || '').trim();
+  return id.length > 0 && id !== 'console' && id !== 'console-dev';
+}
+
+async function dispatchOTP(user, otp, purpose) {
+  try {
+    let emailResult = null;
+    if (purpose === 'login') emailResult = await emailService.sendLoginOTP(user.email, user.fullName, otp);
+    else if (purpose === 'verify_email') emailResult = await emailService.sendEmailVerification(user.email, user.fullName, otp);
+    else if (purpose === 'reset_password') emailResult = await emailService.sendPasswordReset(user.email, user.fullName, otp);
+    const delivered = wasEmailDelivered(emailResult);
+    if (!delivered) console.warn(`[Auth] OTP email delivery unconfirmed for ${user.email} (${purpose})`);
+    return { delivered };
+  } catch (err) {
+    console.error(`[Auth] OTP email send failed for ${user.email} (${purpose}):`, err.message);
+    return { delivered: false, error: err.message };
+  }
+}
+
+function shouldBlockOnEmailFailure(delivered) {
+  return !delivered && !ALLOW_DEV_OTP && !emailService.isConfigured();
+}
+
 // ── Validation schemas ────────────────────────────────────────────────────────
 
 const schemas = {
@@ -151,17 +177,9 @@ const register = async (req, res) => {
       isActive:      !requiresAdminApproval,
     });
 
-    // Send verification email — non-fatal
-    let emailSent = false;
-    try {
-      const emailResult = await emailService.sendEmailVerification(user.email, user.fullName, otp);
-      emailSent = !!emailResult.configured;
-    } catch (e) {
-      console.warn('Email send failed:', e.message);
-      console.log(`📧 DEV MODE — Verify OTP for ${user.email}: ${otp}`);
-    }
+    const { delivered } = await dispatchOTP(user, otp, 'verify_email');
 
-    if (!emailSent && !ALLOW_DEV_OTP) {
+    if (shouldBlockOnEmailFailure(delivered)) {
       return res.status(502).json({ error: 'Could not send verification email. Check SMTP settings and try again.' });
     }
 
@@ -178,13 +196,14 @@ const register = async (req, res) => {
     }
 
     res.status(201).json({
-      message:        emailSent
+      message:        delivered
         ? (requiresAdminApproval ? 'Registration submitted. Verify your email, then wait for administrator approval.' : 'Registration successful. Check your email for the verification code.')
-        : (requiresAdminApproval ? 'Registration submitted. Email not configured — check backend console for OTP, then wait for administrator approval.' : 'Registration successful. Email not configured — check backend console for OTP.'),
+        : (requiresAdminApproval ? 'Registration submitted. Email could not be delivered — use Resend code, then wait for administrator approval.' : 'Registration successful. Email could not be delivered — use Resend code.'),
       userId:         user.id,
       requiresVerify: true,
       requiresAdminApproval,
-      ...(ALLOW_DEV_OTP && !emailSent ? { devOTP: otp } : {}),
+      ...(!delivered ? { emailWarning: true } : {}),
+      ...(ALLOW_DEV_OTP && !delivered ? { devOTP: otp } : {}),
     });
   } catch (err) {
     console.error('Register error:', err);
@@ -283,28 +302,20 @@ const login = async (req, res) => {
       otpPurpose: 'login',
     });
 
-    // Send OTP — non-fatal if email fails (dev mode logs to console)
-    let emailSent = false;
-    try {
-      const emailResult = await emailService.sendLoginOTP(user.email, user.fullName, otp);
-      emailSent = !!emailResult.configured;
-    } catch (emailErr) {
-      console.warn('Email send failed (check SMTP config):', emailErr.message);
-      console.log(`📧 DEV MODE — Login OTP for ${user.email}: ${otp}`);
-    }
+    const { delivered } = await dispatchOTP(user, otp, 'login');
 
-    if (!emailSent && !ALLOW_DEV_OTP) {
+    if (shouldBlockOnEmailFailure(delivered)) {
       return res.status(502).json({ error: 'Could not send OTP email. Check SMTP settings and try again.' });
     }
 
     res.json({
-      message:      emailSent
+      message:      delivered
         ? 'OTP sent to your email'
-        : 'OTP generated (email not configured — check backend console)',
+        : 'Your sign-in code is ready. If you did not receive an email, use Resend code.',
       requiresOTP:  true,
       userId:       user.id,
-      // In dev mode (no SMTP), return OTP in response so user isn't blocked
-      ...(ALLOW_DEV_OTP && !emailSent ? { devOTP: otp } : {}),
+      ...(!delivered ? { emailWarning: true } : {}),
+      ...(ALLOW_DEV_OTP && !delivered ? { devOTP: otp } : {}),
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -521,23 +532,17 @@ const requestPasswordReset = async (req, res) => {
       otpExpiry:  new Date(Date.now() + 15 * 60 * 1000), // 15 min
       otpPurpose: 'reset_password',
     });
-    let emailSent = false;
-    try {
-      const emailResult = await emailService.sendPasswordReset(user.email, user.fullName, otp);
-      emailSent = !!emailResult.configured;
-    } catch (e) {
-      console.warn('Email send failed:', e.message);
-      console.log(`📧 DEV MODE — Reset OTP for ${user.email}: ${otp}`);
-    }
+    const { delivered } = await dispatchOTP(user, otp, 'reset_password');
 
-    if (!emailSent && !ALLOW_DEV_OTP) {
+    if (shouldBlockOnEmailFailure(delivered)) {
       return res.status(502).json({ error: 'Could not send password reset email. Check SMTP settings and try again.' });
     }
 
     res.json({
       message: 'If that email exists, a reset code has been sent.',
       userId: user.id,
-      ...(ALLOW_DEV_OTP && !emailSent ? { devOTP: otp } : {}),
+      ...(!delivered ? { emailWarning: true } : {}),
+      ...(ALLOW_DEV_OTP && !delivered ? { devOTP: otp } : {}),
     });
   } catch (err) {
     res.status(500).json({ error: 'Request failed' });
@@ -614,25 +619,16 @@ const resendOTP = async (req, res) => {
 
     await user.update({ otpCode: otp, otpExpiry: expiry, otpPurpose: purpose });
 
-    let emailSent = false;
-    try {
-      let emailResult = null;
-      if (purpose === 'login')          emailResult = await emailService.sendLoginOTP(user.email, user.fullName, otp);
-      if (purpose === 'verify_email')   emailResult = await emailService.sendEmailVerification(user.email, user.fullName, otp);
-      if (purpose === 'reset_password') emailResult = await emailService.sendPasswordReset(user.email, user.fullName, otp);
-      emailSent = !!emailResult?.configured;
-    } catch (e) {
-      console.warn('Email send failed:', e.message);
-      console.log(`📧 DEV MODE — OTP for ${user.email}: ${otp}`);
-    }
+    const { delivered } = await dispatchOTP(user, otp, purpose);
 
-    if (!emailSent && !ALLOW_DEV_OTP) {
+    if (shouldBlockOnEmailFailure(delivered)) {
       return res.status(502).json({ error: 'Could not send OTP email. Check SMTP settings and try again.' });
     }
 
     res.json({
-      message: 'OTP resent',
-      ...(ALLOW_DEV_OTP && !emailSent ? { devOTP: otp } : {}),
+      message: delivered ? 'OTP resent' : 'Code updated. If email did not arrive, try again in a moment.',
+      ...(!delivered ? { emailWarning: true } : {}),
+      ...(ALLOW_DEV_OTP && !delivered ? { devOTP: otp } : {}),
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to resend OTP' });

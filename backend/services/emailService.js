@@ -26,17 +26,21 @@ function isConfigured() {
 
 // ── Create transporter ────────────────────────────────────────────────────────
 
+function smtpPassword() {
+  return String(process.env.SMTP_PASSWORD || '').replace(/\s+/g, '');
+}
+
 function createTransporter() {
   return nodemailer.createTransport({
     host:   process.env.SMTP_HOST || 'smtp.gmail.com',
     port:   parseInt(process.env.SMTP_PORT || '587'),
     secure: false,
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 10000,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD,
+      pass: smtpPassword(),
     },
     tls: { rejectUnauthorized: false },
   });
@@ -97,7 +101,7 @@ async function sendEmail({ to, subject, html, text }) {
   const t = createTransporter();
   const sendPromise = t.sendMail({ from, to, subject, html, text });
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error('SMTP send timed out after 15 seconds')), 15000);
+    setTimeout(() => reject(new Error('SMTP send timed out after 25 seconds')), 25000);
   });
   const info = await Promise.race([sendPromise, timeoutPromise]);
   console.log(`📧 Email sent → ${to} (${info.messageId})`);
@@ -194,21 +198,19 @@ async function send2FAEnabled(email, fullName) {
 }
 
 async function sendAuditComplete(email, fullName, docTitle, auditorName, status, summary, portalUrl) {
+  const url = portalUrl || 'http://localhost:3000/documents';
   return sendEmail({
     to:      email,
-    subject: `Portal update: "${docTitle}"`,
+    subject: `Audit complete: "${docTitle}"`,
     html:    tpl(`
       <p>Hi <strong>${fullName}</strong>,</p>
-      <p>Changes have been made in your portal for <strong>"${docTitle}"</strong> by <strong>${auditorName}</strong>.</p>
-      <div style="background:#f8fafc;border-radius:12px;padding:18px;margin:16px 0;border-left:4px solid #4f46e5">
-        <p style="margin:0;font-size:13px;color:#374151">Log in to your portal to view the updated document status, auditor notes, and any required actions.</p>
-      </div>
-      <p>For privacy, audit results are available only inside the portal.</p>
+      <p>The audit for <strong>"${docTitle}"</strong> has been completed by <strong>${auditorName}</strong>.</p>
+      <p>Log in to the portal to view the status and full analysis.</p>
       <div style="text-align:center;margin:20px 0">
-        <a href="${portalUrl || 'http://localhost:3000/documents'}" style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">Log in to Portal</a>
+        <a href="${url}" style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">Log in to Portal</a>
       </div>
     `),
-    text: `Hi ${fullName},\n\nChanges have been made in your portal for "${docTitle}" by ${auditorName}.\n\nFor privacy, audit results are available only inside the portal. Log in to view the updated document status, auditor notes, and any required actions:\n${portalUrl || 'http://localhost:3000/documents'}`,
+    text: `Hi ${fullName},\n\nThe audit for "${docTitle}" has been completed by ${auditorName}.\n\nLog in to the portal to view the status and full analysis:\n${url}`,
   });
 }
 

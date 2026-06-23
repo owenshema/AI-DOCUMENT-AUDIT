@@ -8,7 +8,7 @@ var path = require('path');
 var fs = require('fs');
 var { execFile } = require('child_process');
 var { promisify } = require('util');
-var { resolveExistingPath } = require('./pdfTextService');
+var { resolveExistingPath, sniffFileType } = require('./pdfTextService');
 
 var execFileAsync = promisify(execFile);
 
@@ -107,6 +107,20 @@ function runColabAnalysis(filePath, documentText) {
 
 function isVisualDocument(filePath) {
   if (!filePath) return false;
+  // Detect by real content first so a wrong/renamed extension (e.g. a PDF
+  // saved as .docx) still gets the visual forgery/stamp/signature analysis.
+  var resolved = resolveExistingPath(filePath);
+  if (resolved) {
+    try {
+      var fd = fs.openSync(resolved, 'r');
+      var head = Buffer.alloc(16);
+      fs.readSync(fd, head, 0, 16, 0);
+      fs.closeSync(fd);
+      var realType = sniffFileType(head);
+      if (realType === 'pdf' || realType === 'image') return true;
+      if (realType === 'zip' || realType === 'ole') return false; // real docx/xlsx/doc — text only
+    } catch (e) { /* fall through to extension check */ }
+  }
   var ext = path.extname(String(filePath)).toLowerCase();
   return ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff'].indexOf(ext) >= 0;
 }

@@ -9,6 +9,13 @@ var notebookTraining = require('./notebookTrainingService');
 
 var LABELS_PATH = path.join(__dirname, '..', 'data', 'training', 'labels', 'notebook_training.json');
 
+// Minimum keyword-overlap confidence (%) before a document is classified as a
+// SIFCO paper type. The old value (20%) let unrelated documents (e.g. a thesis
+// that merely contains words like "invoice"/"total"/"date") be mislabelled as a
+// freight invoice. Genuine SIFCO papers score 80%+, while unrelated documents
+// score ~33% — so 55% cleanly separates the two.
+var MIN_CLASSIFY_CONFIDENCE = 55;
+
 var DEFAULT_KNOWN = {
   bl_numbers: ['DXB1022332', 'DXB1020247'],
   containers: ['TEMU6439085', 'ECMU5567458'],
@@ -92,7 +99,7 @@ function classifyDocument(text) {
   });
 
   var confidence = Math.round(bestScore * 1000) / 10;
-  if (confidence < 20) return { docType: 'UNKNOWN', specId: null, confidence: 0, scores: scores };
+  if (confidence < MIN_CLASSIFY_CONFIDENCE) return { docType: 'UNKNOWN', specId: null, confidence: confidence, scores: scores };
 
   var specId = cfg.templates[bestKey] && cfg.templates[bestKey].spec_id;
   return {

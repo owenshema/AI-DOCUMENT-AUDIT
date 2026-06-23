@@ -51,6 +51,7 @@ export default function LoginPage() {
   const [userId, setUserId]     = useState('');
   const [otp, setOtp]           = useState('');
   const [error, setError]       = useState('');
+  const [emailWarning, setEmailWarning] = useState(false);
   const [loading, setLoading]   = useState(false);
   const [resending, setResending] = useState(false);
   const navigate = useNavigate();
@@ -67,12 +68,13 @@ export default function LoginPage() {
 
   const handleCredentials = async (e) => {
     e.preventDefault();
-    setError(''); setLoading(true);
+    setError(''); setEmailWarning(false); setLoading(true);
     try {
       const res = await authAPI.login(email, password);
       if (res.requiresOTP) {
         setUserId(res.userId);
         if (res.devOTP) setOtp(res.devOTP);
+        if (res.emailWarning) setEmailWarning(true);
         setStep('otp');
       } else if (res.requiresTOTP) {
         setUserId(res.userId);
@@ -124,7 +126,10 @@ export default function LoginPage() {
     try {
       const res = await authAPI.resendOTP(userId, 'login');
       if (res.devOTP) setOtp(res.devOTP);
-    } catch {}
+      setEmailWarning(!!res.emailWarning);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not resend code. Try again.');
+    }
     setResending(false);
   };
 
@@ -232,10 +237,17 @@ export default function LoginPage() {
                       </div>
                       <h2 className="text-base font-semibold text-white">Check your email</h2>
                       <p className="text-xs text-white/50 mt-1">
-                        We sent a 6-digit code to <span className="text-white/80">{email}</span>
+                        {emailWarning
+                          ? <>We could not deliver the email. Use <span className="text-white/80">Resend code</span> below or check spam.</>
+                          : <>We sent a 6-digit code to <span className="text-white/80">{email}</span></>}
                       </p>
-                      <p className="text-[10px] text-amber-300/70 mt-1">No email? Check the backend console for the OTP code.</p>
                     </div>
+                    {emailWarning && (
+                      <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100">
+                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <span>Email delivery failed. Your code is still valid — tap Resend code to try again.</span>
+                      </div>
+                    )}
                     <ErrorBanner />
                     <OTPInput value={otp} onChange={setOtp} />
                     <button onClick={handleOTP} disabled={loading || otp.length !== 6}

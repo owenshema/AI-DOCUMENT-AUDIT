@@ -534,7 +534,18 @@ function runTrainedAudit(documentText, context) {
   var paperPurpose = null;
   var referencePdf = null;
 
-  if (notebookResult.ok && notebookResult.specId) {
+  // The notebook engine classifies by keyword overlap and can still latch onto an
+  // unrelated document. Before trusting it, require real structural/brand support
+  // from the ML scorer for the SAME paper type (genuine SIFCO papers score 80-100
+  // on required markers / branding; unrelated documents score ~10-15).
+  var nbMlScore = (notebookResult.ok && notebookResult.specId)
+    ? (mlResult.allScores || []).find(function (s) { return s.id === notebookResult.specId; })
+    : null;
+  var notebookStructuralOk = nbMlScore
+    ? (nbMlScore.markerRequired >= 50 || nbMlScore.markerBrand >= 50)
+    : false;
+
+  if (notebookResult.ok && notebookResult.specId && notebookStructuralOk) {
     accepted = true;
     compliance_score = notebookResult.complianceScore;
     documentType = notebookResult.specId;
@@ -544,7 +555,7 @@ function runTrainedAudit(documentText, context) {
     var nbSpec = specForId(notebookResult.specId);
     paperPurpose = nbSpec ? nbSpec.purpose : null;
     referencePdf = nbSpec ? nbSpec.referencePdf : null;
-    best = (mlResult.allScores || []).find(function (s) { return s.id === notebookResult.specId; }) || best;
+    best = nbMlScore || best;
   } else if (mlResult.accepted && mlResult.bestMatch) {
     accepted = true;
     auditEngine = 'sifco-ml-trained';

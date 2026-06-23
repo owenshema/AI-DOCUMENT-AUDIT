@@ -217,25 +217,52 @@ def pdf_first_page_to_image(pdf_path, out_path):
     return out_path
 
 
+def sniff_file_type(input_path):
+    """Detect the real file type from leading bytes so a wrong/renamed
+    extension (e.g. a PDF saved as .docx) can't break the pipeline."""
+    try:
+        with open(input_path, "rb") as fh:
+            head = fh.read(16)
+    except OSError:
+        return None
+    if head[:4] == b"%PDF":
+        return "pdf"
+    if head[:4] == b"\x89PNG" or head[:3] == b"\xff\xd8\xff" or head[:4] == b"GIF8" \
+            or head[:2] == b"BM" or head[:4] in (b"II*\x00", b"MM\x00*") \
+            or (head[:4] == b"RIFF" and head[8:12] == b"WEBP"):
+        return "image"
+    if head[:4] == b"PK\x03\x04":
+        return "zip"  # real docx/xlsx/pptx
+    if head[:4] == b"\xd0\xcf\x11\xe0":
+        return "ole"  # legacy doc/xls
+    return None
+
+
 def prepare_image_path(input_path, temp_dir=None):
     input_path = os.path.abspath(input_path)
     ext = os.path.splitext(input_path)[1].lower()
 
-    if ext in (".png", ".jpg", ".jpeg"):
+    # Trust the actual content over the extension.
+    real_type = sniff_file_type(input_path)
+    is_image = real_type == "image" or (real_type is None and ext in (".png", ".jpg", ".jpeg"))
+    is_pdf = real_type == "pdf" or (real_type is None and ext == ".pdf")
+
+    base = os.path.basename(input_path).rsplit(".", 1)[0]
+    temp_dir = temp_dir or os.path.join(ROOT, "..", "data", "audit_temp")
+
+    if is_image:
         img = Image.open(input_path).convert("RGB").resize((1024, 1024), Image.LANCZOS)
-        temp_dir = temp_dir or os.path.join(ROOT, "..", "data", "audit_temp")
         os.makedirs(temp_dir, exist_ok=True)
-        out_path = os.path.join(temp_dir, os.path.basename(input_path).rsplit(".", 1)[0] + "_1024.jpg")
+        out_path = os.path.join(temp_dir, base + "_1024.jpg")
         img.save(out_path, "JPEG", quality=95)
         return out_path
 
-    if ext == ".pdf":
-        temp_dir = temp_dir or os.path.join(ROOT, "..", "data", "audit_temp")
+    if is_pdf:
         os.makedirs(temp_dir, exist_ok=True)
-        out_path = os.path.join(temp_dir, os.path.basename(input_path).rsplit(".", 1)[0] + "_page1.jpg")
+        out_path = os.path.join(temp_dir, base + "_page1.jpg")
         return pdf_first_page_to_image(input_path, out_path)
 
-    raise ValueError(f"Unsupported file type: {ext}")
+    raise ValueError(f"Unsupported file type: {ext or real_type}")
 
 
 def preprocess_for_onnx(image_path):

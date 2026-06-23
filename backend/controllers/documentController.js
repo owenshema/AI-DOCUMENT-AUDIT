@@ -70,6 +70,86 @@ const userCanAccessDocument = (document, userId, role) => userOwnsDocument(docum
 
 const DOCUMENT_STATUSES = ['uploaded', 'in_review', 'in_progress', 'submitted', 'reviewed', 'changes_requested', 'approved', 'rejected'];
 
+// Audit lifecycle: documents waiting for an auditor vs. documents already audited.
+const AUDIT_PENDING_STATUSES = ['uploaded', 'in_review', 'in_progress', 'submitted'];
+const AUDIT_DONE_STATUSES = ['reviewed', 'changes_requested', 'approved', 'rejected'];
+
+/**
+ * Notify every active auditor that a freshly uploaded/re-uploaded document needs an audit.
+ * Each auditor gets an in-app notification (and email) tagged so it can be cleared once audited.
+ */
+const notifyAuditorsNeedAudit = async (models, document, actorId) => {
+  const { Notification, User } = models;
+  try {
+    const [auditors, uploader] = await Promise.all([
+      User.findAll({
+        where: { role: 'auditor', isActive: true, approvalStatus: 'approved' },
+        attributes: ['id', 'email', 'fullName'],
+      }),
+      actorId ? User.findByPk(actorId, { attributes: ['id', 'fullName', 'email'] }) : null,
+    ]);
+    if (!auditors.length) return;
+
+    const uploaderName = uploader?.fullName || uploader?.email || 'A user';
+    const message = `Document "${document.title}" uploaded by ${uploaderName} needs audit.`;
+
+    await Promise.all(auditors.map(auditor => Notification.create({
+      recipientId: auditor.id,
+      notificationType: 'document_needs_audit',
+      priority: 'high',
+      subject: 'Document needs audit',
+      message,
+      details: {
+        documentId: document.id,
+        documentTitle: document.title,
+        uploadedBy: actorId || null,
+        uploaderName,
+      },
+      relatedEntityType: 'document',
+      relatedEntityId: document.id,
+      actionUrl: `/documents?documentId=${document.id}`,
+      status: 'unread',
+      sentAt: new Date(),
+      deliveryStatus: 'sent',
+    })));
+
+    try {
+      const emailService = require('../services/emailService');
+      const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000/documents';
+      await Promise.all(auditors.filter(a => a.email).map(auditor => emailService.sendEmail({
+        to: auditor.email,
+        subject: `Document needs audit: "${document.title}"`,
+        html: `<p>Hi <strong>${auditor.fullName || auditor.email}</strong>,</p><p>A new document <strong>"${document.title}"</strong> uploaded by ${uploaderName} needs audit.</p><p><a href="${portalUrl}">Open the audit portal</a></p>`,
+        text: `Hi ${auditor.fullName || auditor.email},\n\nA new document "${document.title}" uploaded by ${uploaderName} needs audit.\nOpen the audit portal: ${portalUrl}`,
+      }).catch(() => {})));
+    } catch (e) { console.warn('Auditor email notification failed:', e.message); }
+  } catch (e) {
+    console.warn('Notify auditors (needs audit) failed:', e.message);
+  }
+};
+
+/**
+ * Clear the "needs audit" notifications for a document once it has been audited,
+ * so it disappears from every auditor's needs-audit queue.
+ */
+const resolveNeedsAuditNotifications = async (models, documentId) => {
+  const { Notification } = models;
+  try {
+    await Notification.update(
+      { status: 'archived', archivedAt: new Date() },
+      {
+        where: {
+          notificationType: 'document_needs_audit',
+          relatedEntityId: documentId,
+          status: ['unread', 'read'],
+        },
+      }
+    );
+  } catch (e) {
+    console.warn('Resolve needs-audit notifications failed:', e.message);
+  }
+};
+
 const notifyDocumentOwner = async (models, document, status, reason, actorId) => {
   const { Notification, User } = models;
   const [owner, auditor] = await Promise.all([
@@ -80,9 +160,8 @@ const notifyDocumentOwner = async (models, document, status, reason, actorId) =>
     .filter(Boolean)
     .filter((user, index, all) => all.findIndex(u => u.id === user.id) === index);
 
-  const message = reason
-    ? `Document "${document.title}" is now ${status.replace(/_/g, ' ')}. Reason: ${reason}`
-    : `Document "${document.title}" is now ${status.replace(/_/g, ' ')}.`;
+  const message =
+    `Document "${document.title}" has been updated. Log in to the portal to view the status and full analysis.`;
 
   // In-app notification
   try {
@@ -90,7 +169,7 @@ const notifyDocumentOwner = async (models, document, status, reason, actorId) =>
       recipientId: user.id,
       notificationType: 'document_status_update',
       priority: status === 'rejected' || status === 'changes_requested' ? 'high' : 'medium',
-      subject: `Document ${status.replace(/_/g, ' ')}`,
+      subject: `Document updated: ${document.title}`,
       message,
       details: {
         status,
@@ -124,14 +203,13 @@ const notifyDocumentOwner = async (models, document, status, reason, actorId) =>
     if (auditor?.email && auditor.id !== owner?.id) {
       await emailService.sendEmail({
         to: auditor.email,
-        subject: `Audit status sent: "${document.title}" - ${status.replace(/_/g, ' ')}`,
+        subject: `Document updated: "${document.title}"`,
         html: `
           <p>Hi <strong>${auditor.fullName || auditor.email}</strong>,</p>
-          <p>Your workflow update for <strong>"${document.title}"</strong> has been sent to the document owner.</p>
-          <p>Status: <strong>${status.replace(/_/g, ' ')}</strong></p>
-          ${reason ? `<p>Reason: ${reason}</p>` : ''}
+          <p>Your update for <strong>"${document.title}"</strong> has been sent to the document owner.</p>
+          <p>Log in to the portal to view the status and full analysis.</p>
         `,
-        text: `Hi ${auditor.fullName || auditor.email},\n\nYour workflow update for "${document.title}" has been sent to the document owner.\nStatus: ${status.replace(/_/g, ' ')}\n${reason ? `Reason: ${reason}` : ''}`,
+        text: `Hi ${auditor.fullName || auditor.email},\n\nYour update for "${document.title}" has been sent to the document owner.\n\nLog in to the portal to view the status and full analysis.`,
       });
     }
   } catch(e) { console.warn('Audit email notification failed:', e.message); }
@@ -165,7 +243,7 @@ const extractPreviewText = async (filePath, mimeType) => {
 
 const getAllDocuments = async (req, res) => {
   try {
-    const { category, status, department, page = 1, limit = 10 } = req.query;
+    const { category, status, department, auditState, page = 1, limit = 10 } = req.query;
     const { Document, User } = req.app.locals.models;
     const userId = req.user?.id;
     const role = req.user?.role || 'viewer';
@@ -176,6 +254,12 @@ const getAllDocuments = async (req, res) => {
     if (category) where.category = category;
     if (status) where.status = status;
     if (department) where.department = department;
+
+    // Auditors/admins can split their queue into "needs audit" vs. "already audited".
+    if (auditState && ['auditor', 'administrator'].includes(role)) {
+      if (auditState === 'needs_audit') where.status = AUDIT_PENDING_STATUSES;
+      else if (auditState === 'audited') where.status = AUDIT_DONE_STATUSES;
+    }
 
     Object.assign(where, documentWhereForUser({ id: userId, role }));
 
@@ -304,6 +388,9 @@ const uploadDocument = async (req, res) => {
         });
     }
 
+    // Alert every auditor that this new document needs an audit.
+    notifyAuditorsNeedAudit(req.app.locals.models, document, req.user?.id).catch(() => {});
+
     res.status(201).json({
       message: 'Document uploaded successfully',
       document
@@ -350,6 +437,11 @@ const updateDocument = async (req, res) => {
     updates.lastModifiedBy = req.user?.id || 'system';
 
     await document.update(updates);
+
+    // Clear the needs-audit queue when an auditor finalizes the audit via this route.
+    if (updates.status && AUDIT_DONE_STATUSES.includes(updates.status)) {
+      await resolveNeedsAuditNotifications(req.app.locals.models, document.id);
+    }
 
     res.json({
       message: 'Document updated successfully',
@@ -461,6 +553,9 @@ const reuploadDocument = async (req, res) => {
       userAgent: req.get('user-agent'),
     });
 
+    // Re-uploaded document is back in the queue — alert auditors again.
+    notifyAuditorsNeedAudit(req.app.locals.models, document, userId).catch(() => {});
+
     res.json({ message: 'Document re-uploaded and sent back for review', document });
   } catch (error) {
     console.error('Re-upload document error:', error);
@@ -557,6 +652,11 @@ const updateDocumentStatus = async (req, res) => {
     });
 
     await notifyDocumentOwner(req.app.locals.models, document, status, reason, req.user.id);
+
+    // Once audited, clear it from every auditor's "needs audit" queue.
+    if (AUDIT_DONE_STATUSES.includes(status)) {
+      await resolveNeedsAuditNotifications(req.app.locals.models, document.id);
+    }
 
     await AuditLog.create({
       userId: req.user.id,
@@ -732,6 +832,11 @@ const bulkUpload = async (req, res) => {
         failedUploads.push({ file: file.filename, error: err.message });
       }
     }
+
+    // Alert auditors that each newly uploaded document needs an audit.
+    Promise.all(uploadedDocs.map(doc =>
+      notifyAuditorsNeedAudit(req.app.locals.models, doc, req.user?.id)
+    )).catch(() => {});
 
     res.json({
       message: `${uploadedDocs.length} of ${files.length} documents uploaded successfully`,

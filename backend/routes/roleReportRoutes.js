@@ -7,6 +7,7 @@ const roleReportController = require('../controllers/roleReportController');
 
 router.use(verifyToken);
 router.get('/catalog', roleReportController.listCatalog);
+router.get('/:reportId/export', roleReportController.exportRoleReport);
 router.get('/:reportId', roleReportController.getRoleReport);
 
 module.exports = router;

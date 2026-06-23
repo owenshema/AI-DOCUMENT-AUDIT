@@ -335,6 +335,14 @@ export const roleReportsAPI = {
     const response = await apiClient.get(`/role-reports/${reportId}`, { params });
     return response.data;
   },
+
+  exportReport: async (reportId, format = 'pdf', params = {}) => {
+    return apiClient.get(`/role-reports/${reportId}/export`, {
+      params: { ...params, format },
+      responseType: 'blob',
+      timeout: 120000,
+    });
+  },
 };
 
 export const workflowAPI = {

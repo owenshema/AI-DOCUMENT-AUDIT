@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Upload, FileText, X, Zap, AlertTriangle, CheckCircle2, Eye, Download } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Bot, Upload, FileText, X, Zap, AlertTriangle, CheckCircle2, Eye, Download, RefreshCw } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { documentAPI, analysisAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
@@ -32,42 +32,116 @@ function flattenExtractedFields(fields) {
 }
 
 // ── Inline Document Viewer Modal ──────────────────────────────────────────────
-function DocumentViewer({ doc, onClose }) {
+function DocumentViewer({ doc, localFile, onClose }) {
   const [blobUrl, setBlobUrl] = useState(null);
+  const [previewText, setPreviewText] = useState('');
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
-  const ext = (doc.fileFormat || doc.fileName?.split('.').pop() || '').toLowerCase();
-  const isImage = ['png','jpg','jpeg','gif','webp','bmp'].includes(ext);
-  const isPDF   = ext === 'pdf';
+
+  const fileName = localFile?.name || doc?.fileName || doc?.title || 'document';
+  const ext = (doc?.fileFormat || fileName.split('.').pop() || '').toLowerCase().replace(/^\./, '');
+  const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tif', 'tiff'].includes(ext);
+  const isPDF = ext === 'pdf';
   const canEmbed = isPDF || isImage;
 
   useEffect(() => {
-    if (!canEmbed) { setLoading(false); return; }
-    documentAPI.download(doc.id)
-      .then(res => { setBlobUrl(URL.createObjectURL(res.data)); setLoading(false); })
-      .catch(() => { setErr('Could not load preview.'); setLoading(false); });
-    return () => { if (blobUrl) URL.revokeObjectURL(blobUrl); };
-  }, [doc.id]); // eslint-disable-line
+    let active = true;
+    let url;
+
+    setLoading(true);
+    setErr('');
+    setBlobUrl(null);
+    setPreviewText('');
+
+    const loadPreview = async () => {
+      try {
+        if (localFile) {
+          url = URL.createObjectURL(localFile);
+          if (canEmbed) {
+            if (active) setBlobUrl(url);
+          } else {
+            setErr('Text preview for this file type is available after upload. Run the audit first, then review the stored document.');
+          }
+          return;
+        }
+
+        if (!doc?.id) {
+          setErr('Document not available for preview.');
+          return;
+        }
+
+        if (canEmbed) {
+          const res = await documentAPI.download(doc.id);
+          if (!active) return;
+          url = URL.createObjectURL(res.data);
+          setBlobUrl(url);
+          return;
+        }
+
+        try {
+          const res = await documentAPI.previewText(doc.id);
+          if (!active) return;
+          if (res?.text?.trim()) {
+            setPreviewText(res.text);
+            return;
+          }
+        } catch (previewErr) {
+          // Fall through to download-only message.
+        }
+
+        if (doc.extractedText?.trim()) {
+          setPreviewText(doc.extractedText);
+          return;
+        }
+
+        setErr('Preview not available for this file type. Download the file to view it locally.');
+      } catch (e) {
+        if (active) setErr(e?.response?.data?.error || 'Could not load preview.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      active = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [doc?.id, localFile, canEmbed, doc?.extractedText]);
 
   const handleDownload = async () => {
     try {
+      if (localFile) {
+        const url = URL.createObjectURL(localFile);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = localFile.name;
+        a.click();
+        URL.revokeObjectURL(url);
+        return;
+      }
       const res = await documentAPI.download(doc.id);
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
-      a.href = url; a.download = doc.fileName || doc.title || 'document';
-      a.click(); URL.revokeObjectURL(url);
-    } catch { alert('Download failed.'); }
+      a.href = url;
+      a.download = doc.fileName || doc.title || 'document';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Download failed.');
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-[#111318] shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '90vh' }}>
+      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#111318] shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <FileText className="h-5 w-5 text-indigo-400 flex-shrink-0" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white truncate">{doc.title || doc.fileName}</p>
-              <p className="text-xs text-slate-500">{ext?.toUpperCase()} document</p>
+              <p className="text-sm font-semibold text-white truncate">{doc?.title || fileName}</p>
+              <p className="text-xs text-slate-500">{ext ? ext.toUpperCase() : 'FILE'} document</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -80,29 +154,33 @@ function DocumentViewer({ doc, onClose }) {
             </button>
           </div>
         </div>
-        <div className="flex-1 overflow-hidden bg-[#0d0f14] flex items-center justify-center min-h-0">
+        <div className="flex min-h-[60vh] flex-1 items-stretch justify-center overflow-auto bg-[#0d0f14]">
           {loading && (
-            <div className="flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center justify-center gap-3 m-auto">
               <div className="h-8 w-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
               <p className="text-sm text-slate-500">Loading preview...</p>
             </div>
           )}
-          {err && <p className="text-sm text-red-400">{err}</p>}
+          {err && !loading && (
+            <div className="flex flex-col items-center justify-center gap-4 p-10 text-center m-auto">
+              <FileText className="h-16 w-16 text-slate-700" />
+              <p className="text-sm text-red-400">{err}</p>
+              {!localFile && (
+                <button onClick={handleDownload}
+                  className="flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">
+                  <Download className="h-4 w-4" /> Download to View
+                </button>
+              )}
+            </div>
+          )}
           {!loading && !err && blobUrl && isPDF && (
-            <iframe src={blobUrl} title={doc.title} className="w-full h-full border-0" style={{ minHeight: '60vh' }} />
+            <iframe src={blobUrl} title={fileName} className="h-[75vh] min-h-[60vh] w-full border-0" />
           )}
           {!loading && !err && blobUrl && isImage && (
-            <img src={blobUrl} alt={doc.title} className="max-w-full max-h-full object-contain p-4" />
+            <img src={blobUrl} alt={fileName} className="m-auto max-w-full object-contain p-4" />
           )}
-          {!loading && !err && !canEmbed && (
-            <div className="flex flex-col items-center gap-4 p-10 text-center">
-              <FileText className="h-16 w-16 text-slate-700" />
-              <p className="text-sm text-slate-400">Preview not available for <span className="font-semibold text-white">.{ext}</span> files.</p>
-              <button onClick={handleDownload}
-                className="flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">
-                <Download className="h-4 w-4" /> Download to View
-              </button>
-            </div>
+          {!loading && !err && previewText && (
+            <pre className="min-h-full w-full whitespace-pre-wrap break-words p-5 text-left text-sm leading-6 text-slate-200">{previewText}</pre>
           )}
         </div>
       </div>
@@ -110,17 +188,19 @@ function DocumentViewer({ doc, onClose }) {
   );
 }
 
-const ScoreArc = ({ score, dark }) => {
+const ScoreArc = ({ score, dark, label }) => {
   const r = 38, circ = 2 * Math.PI * r;
-  const color = score >= 80 ? '#34d399' : score >= 60 ? '#fbbf24' : '#f87171';
+  const isNA = score == null || isNaN(score);
+  const color = isNA ? (dark ? '#64748b' : '#94a3b8') : (score >= 80 ? '#34d399' : score >= 60 ? '#fbbf24' : '#f87171');
   const trackColor = dark ? '#ffffff0a' : '#e5e7eb';
+  const dash = isNA ? 0 : circ * score / 100;
   return (
     <svg width="100" height="100" viewBox="0 0 100 100">
       <circle cx="50" cy="50" r={r} fill="none" stroke={trackColor} strokeWidth="8" />
       <circle cx="50" cy="50" r={r} fill="none" stroke={color} strokeWidth="8"
-        strokeDasharray={`${circ * score / 100} ${circ}`}
+        strokeDasharray={`${dash} ${circ}`}
         strokeLinecap="round" transform="rotate(-90 50 50)" />
-      <text x="50" y="56" textAnchor="middle" fill={dark ? 'white' : '#111827'} fontSize="18" fontWeight="700">{score}</text>
+      <text x="50" y="56" textAnchor="middle" fill={dark ? 'white' : '#111827'} fontSize={isNA ? 14 : 18} fontWeight="700">{isNA ? (label || 'N/A') : score}</text>
     </svg>
   );
 };
@@ -206,8 +286,21 @@ function normalizeDocumentInspection(raw, result) {
   };
 }
 
+const STATUS_PILL = {
+  approved: 'bg-emerald-500/15 text-emerald-400',
+  in_review: 'bg-blue-500/15 text-blue-400',
+  in_progress: 'bg-amber-500/15 text-amber-400',
+  submitted: 'bg-indigo-500/15 text-indigo-400',
+  changes_requested: 'bg-purple-500/15 text-purple-400',
+  rejected: 'bg-red-500/15 text-red-400',
+  uploaded: 'bg-blue-500/15 text-blue-400',
+  reviewed: 'bg-purple-500/15 text-purple-400',
+};
+
+const AUDIT_STATUSES = ['in_review', 'in_progress', 'reviewed', 'changes_requested', 'approved', 'rejected'];
+
 export default function AIAnalysisPage() {
-  const { isDarkMode } = useAuthStore();
+  const { isDarkMode, user } = useAuthStore();
   const fileRef = useRef(null);
   const [dragging, setDragging]   = useState(false);
   const [file, setFile]           = useState(null);
@@ -218,8 +311,18 @@ export default function AIAnalysisPage() {
   const [error, setError]         = useState('');
   const [existingDocs, setExistingDocs] = useState([]);
   const [showPicker, setShowPicker]     = useState(false);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [auditFilter, setAuditFilter]   = useState('needs_audit');
   const [viewerDoc, setViewerDoc]       = useState(null);
+  const [viewerLocalFile, setViewerLocalFile] = useState(null);
   const [auditedDocId, setAuditedDocId] = useState(null);
+  const [auditedDoc, setAuditedDoc] = useState(null);
+  const [statusDraft, setStatusDraft] = useState({ status: 'in_review', reason: '' });
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
+
+  const isAuditorView = user?.role === 'auditor' || user?.role === 'administrator';
+  const canUpdateStatus = user?.role === 'auditor';
 
   const card    = isDarkMode ? 'bg-[#111318] border-white/8'  : 'bg-white border-gray-200 shadow-sm';
   const text    = isDarkMode ? 'text-white'    : 'text-gray-900';
@@ -228,14 +331,85 @@ export default function AIAnalysisPage() {
     ? 'border-white/10 bg-[#0d0f14] text-white placeholder-slate-700 focus:border-indigo-500/50'
     : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:border-indigo-400';
 
-  useEffect(() => {
-    documentAPI.getAll({ limit: 30 }).then(res => {
+  const loadExistingDocs = useCallback(async (filter) => {
+    setPickerLoading(true);
+    try {
+      const params = { limit: 50 };
+      const activeFilter = filter ?? auditFilter;
+      if (isAuditorView && activeFilter !== 'all') {
+        params.auditState = activeFilter;
+      }
+      const res = await documentAPI.getAll(params);
       const d = res?.documents || res?.data || res || [];
       setExistingDocs(Array.isArray(d) ? d : []);
-    }).catch(() => {});
-  }, []);
+    } catch {
+      setExistingDocs([]);
+    } finally {
+      setPickerLoading(false);
+    }
+  }, [auditFilter, isAuditorView]);
 
-  const reset = () => { setFile(null); setDocTitle(''); setResult(null); setStep('idle'); setError(''); setAuditedDocId(null); };
+  const openExistingPicker = () => {
+    setShowPicker(true);
+  };
+
+  useEffect(() => {
+    if (showPicker) loadExistingDocs(auditFilter);
+  }, [showPicker, auditFilter, loadExistingDocs]);
+
+  const reset = () => {
+    setFile(null);
+    setDocTitle('');
+    setResult(null);
+    setStep('idle');
+    setError('');
+    setAuditedDocId(null);
+    setAuditedDoc(null);
+    setViewerDoc(null);
+    setViewerLocalFile(null);
+    setStatusDraft({ status: 'in_review', reason: '' });
+    setStatusMsg('');
+  };
+
+  const openDocumentReview = async (opts = {}) => {
+    const { doc, localFile } = opts;
+    if (localFile) {
+      setViewerDoc(null);
+      setViewerLocalFile(localFile);
+      return;
+    }
+    if (doc?.id) {
+      setViewerLocalFile(null);
+      if (doc.fileFormat || doc.fileName) {
+        setViewerDoc(doc);
+        return;
+      }
+      try {
+        const res = await documentAPI.getById(doc.id);
+        setViewerDoc(res?.document || res || doc);
+      } catch {
+        setViewerDoc(doc);
+      }
+      return;
+    }
+    if (auditedDocId) {
+      openDocumentReview({ doc: auditedDoc || { id: auditedDocId, title: docTitle, fileName: docTitle } });
+    }
+  };
+
+  const closeDocumentReview = () => {
+    setViewerDoc(null);
+    setViewerLocalFile(null);
+  };
+
+  useEffect(() => {
+    if (!result) return;
+    const suggested = result.decision?.status || result.documentStatus || 'in_review';
+    setStatusDraft(prev => ({
+      status: AUDIT_STATUSES.includes(suggested) ? suggested : 'in_review',
+      reason: prev.reason || result.decision?.reason || '',
+    }));
+  }, [result]);
 
   const handleDrop = (e) => {
     e.preventDefault(); setDragging(false);
@@ -255,7 +429,9 @@ export default function AIAnalysisPage() {
       form.append('department', 'General');
       const upRes = await documentAPI.create(form);
       uploadedId = upRes?.document?.id || upRes?.id;
+      const uploadedDoc = upRes?.document || upRes;
       setAuditedDocId(uploadedId);
+      setAuditedDoc(uploadedDoc?.id ? uploadedDoc : { id: uploadedId, title: file.name, fileName: file.name, fileFormat: file.name.split('.').pop() });
     } catch (e) {
       setError(e?.response?.data?.error || 'Upload failed.');
       setStep('error'); setBusy(false); return;
@@ -276,6 +452,7 @@ export default function AIAnalysisPage() {
     setShowPicker(false);
     setDocTitle(doc.title || doc.fileName);
     setAuditedDocId(doc.id);
+    setAuditedDoc(doc);
     setFile(null); setBusy(true); setError(''); setResult(null); setStep('analyzing');
     try {
       const res = await analysisAPI.analyzeDocument(doc.id);
@@ -286,6 +463,23 @@ export default function AIAnalysisPage() {
       setStep('error');
     }
     setBusy(false);
+  };
+
+  const handleStatusUpdate = async () => {
+    if (!auditedDocId || !canUpdateStatus) return;
+    setStatusSaving(true);
+    setStatusMsg('');
+    try {
+      await documentAPI.updateStatus(auditedDocId, {
+        status: statusDraft.status,
+        reason: statusDraft.reason || '',
+      });
+      setStatusMsg(`Status updated to "${statusDraft.status.replace(/_/g, ' ')}" — owner notified.`);
+      if (showPicker) loadExistingDocs(auditFilter);
+    } catch (e) {
+      setStatusMsg(e?.response?.data?.error || 'Status update failed.');
+    }
+    setStatusSaving(false);
   };
 
   const score = result?.compliance_score ?? result?.complianceScore ?? 0;
@@ -328,6 +522,12 @@ export default function AIAnalysisPage() {
                 <FileText className="h-8 w-8 text-indigo-400" />
                 <p className={`text-sm font-medium ${text}`}>{file.name}</p>
                 <p className={`text-xs ${sub}`}>{(file.size / 1024).toFixed(1)} KB</p>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); openDocumentReview({ localFile: file }); }}
+                  className={`mt-1 flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium ${isDarkMode ? 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                  <Eye className="h-3.5 w-3.5" /> Review before audit
+                </button>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-2">
@@ -337,7 +537,7 @@ export default function AIAnalysisPage() {
               </div>
             )}
           </div>
-          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.txt" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); setDocTitle(f.name); setResult(null); setStep('idle'); setError(''); }}} />
+          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.rtf,.odt,.txt,.csv,.tsv,.md,.json,.log,.html,.htm,.xml,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); setDocTitle(f.name); setResult(null); setStep('idle'); setError(''); }}} />
 
           {/* Actions */}
           <div className="flex flex-col gap-2">
@@ -351,7 +551,7 @@ export default function AIAnalysisPage() {
               <span className={`text-[10px] ${sub}`}>or</span>
               <div className={`flex-1 h-px ${isDarkMode ? 'bg-white/8' : 'bg-gray-200'}`} />
             </div>
-            <button onClick={() => setShowPicker(true)}
+            <button onClick={openExistingPicker}
               className={`flex items-center justify-center gap-2 rounded-xl border py-2.5 text-sm transition-colors ${isDarkMode ? 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/8 hover:text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'}`}>
               <FileText className="h-4 w-4" /> Audit an existing document
             </button>
@@ -390,11 +590,20 @@ export default function AIAnalysisPage() {
         <div className={`rounded-2xl border p-5 ${card}`}>
           <div className="flex items-center justify-between mb-4">
             <h2 className={`text-sm font-semibold ${text}`}>Audit Result</h2>
-            {result && (
-              <span className={`text-[10px] rounded-full px-2 py-0.5 border ${isDarkMode ? 'border-indigo-500/20 bg-indigo-500/10 text-indigo-400' : 'border-indigo-200 bg-indigo-50 text-indigo-600'}`}>
-                {result.engine === 'openai' ? '🤖 OpenAI' : '⚙️ Rule-based'}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {(auditedDocId || file) && (
+                <button
+                  onClick={() => openDocumentReview(file ? { localFile: file } : { doc: auditedDoc || { id: auditedDocId, title: docTitle, fileName: docTitle } })}
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-medium ${isDarkMode ? 'border-indigo-500/25 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20' : 'border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+                  <Eye className="h-3 w-3" /> Review Document
+                </button>
+              )}
+              {result && (
+                <span className={`text-[10px] rounded-full px-2 py-0.5 border ${isDarkMode ? 'border-indigo-500/20 bg-indigo-500/10 text-indigo-400' : 'border-indigo-200 bg-indigo-50 text-indigo-600'}`}>
+                  {result.engine === 'openai' ? '🤖 OpenAI' : '⚙️ Rule-based'}
+                </span>
+              )}
+            </div>
           </div>
 
           {!result && !busy && (
@@ -418,14 +627,11 @@ export default function AIAnalysisPage() {
                 <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
                   <FileText className="h-4 w-4 text-indigo-400 flex-shrink-0" />
                   <p className={`text-xs truncate flex-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>{docTitle}</p>
-                  {auditedDocId && (
+                  {(auditedDocId || file) && (
                     <button
-                      onClick={() => {
-                        const doc = existingDocs.find(d => d.id === auditedDocId) || { id: auditedDocId, title: docTitle, fileName: docTitle };
-                        setViewerDoc(doc);
-                      }}
+                      onClick={() => openDocumentReview(file ? { localFile: file } : { doc: auditedDoc || { id: auditedDocId, title: docTitle, fileName: docTitle } })}
                       className="flex items-center gap-1 rounded-lg bg-indigo-500/15 border border-indigo-500/20 px-2 py-1 text-[10px] font-medium text-indigo-400 hover:bg-indigo-500/25 flex-shrink-0">
-                      <Eye className="h-3 w-3" /> View
+                      <Eye className="h-3 w-3" /> Review
                     </button>
                   )}
                 </div>
@@ -433,7 +639,17 @@ export default function AIAnalysisPage() {
 
               {/* Overall + component scores */}
               {(() => {
+                const aiDetection = result?.ai_detection;
+                const aiAssessed = aiDetection
+                  ? aiDetection.assessed !== false
+                  : (result?.ai_generated_percentage != null);
                 const aiGenerated = Math.round(result?.ai_generated_percentage ?? 0);
+                const authenticity = aiAssessed ? 100 - aiGenerated : null;
+                const aiSourceLabel = aiDetection
+                  ? (aiDetection.assessed === false
+                      ? 'Not assessed'
+                      : (aiDetection.source === 'sapling' ? 'Sapling AI' : 'Heuristic'))
+                  : null;
                 const overallLabel = result?.overall_audit_status || (overallScore >= 85 ? 'Excellent' : overallScore >= 70 ? 'Good' : overallScore >= 50 ? 'Review Required' : 'Failed');
                 return (
                   <div className="space-y-3">
@@ -463,9 +679,12 @@ export default function AIAnalysisPage() {
                         <p className={`text-xs font-bold ${integrityScore >= 70 ? 'text-emerald-400' : integrityScore >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{integrityScore}%</p>
                       </div>
                       <div className="text-center">
-                        <ScoreArc score={100 - aiGenerated} dark={isDarkMode} />
+                        <ScoreArc score={authenticity} dark={isDarkMode} />
                         <p className={`text-[10px] uppercase tracking-wider mt-2 ${sub}`}>Authenticity</p>
-                        <p className={`text-xs font-bold ${aiGenerated > 25 ? 'text-red-400' : 'text-emerald-400'}`}>{100 - aiGenerated}%</p>
+                        <p className={`text-xs font-bold ${!aiAssessed ? sub : (aiGenerated > 25 ? 'text-red-400' : 'text-emerald-400')}`}>{aiAssessed ? `${authenticity}%` : 'N/A'}</p>
+                        {aiSourceLabel && (
+                          <p className={`text-[9px] mt-0.5 ${sub}`} title={aiDetection?.detail || ''}>{aiSourceLabel}</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -489,6 +708,46 @@ export default function AIAnalysisPage() {
                     <ul className={`mt-2 list-disc pl-4 space-y-0.5 ${isDarkMode ? 'text-slate-400' : 'text-gray-600'}`}>
                       {result.decision.nextSteps.map((step, i) => <li key={i}>{step}</li>)}
                     </ul>
+                  )}
+                </div>
+              )}
+
+              {/* Auditor status update — after AI audit completes */}
+              {auditedDocId && canUpdateStatus && step === 'done' && (
+                <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-indigo-500/25 bg-indigo-500/5' : 'border-indigo-200 bg-indigo-50'}`}>
+                  <p className={`text-xs font-semibold mb-3 ${text}`}>Update document status</p>
+                  <p className={`text-[11px] mb-3 ${sub}`}>
+                    AI suggested: <span className={`font-medium ${result.decision?.status === 'approved' ? 'text-emerald-400' : result.decision?.status === 'rejected' ? 'text-red-400' : text}`}>
+                      {(result.decision?.status || 'in_review').replace(/_/g, ' ')}
+                    </span>
+                    {' '}— confirm or change below, then notify the document owner.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-[180px_1fr_auto]">
+                    <select
+                      value={statusDraft.status}
+                      onChange={e => setStatusDraft(prev => ({ ...prev, status: e.target.value }))}
+                      className={`rounded-lg border px-2 py-2 text-xs outline-none ${inputCls}`}>
+                      {AUDIT_STATUSES.map(s => (
+                        <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={statusDraft.reason}
+                      onChange={e => setStatusDraft(prev => ({ ...prev, reason: e.target.value }))}
+                      placeholder="Reason or note for document owner"
+                      className={`rounded-lg border px-2 py-2 text-xs outline-none ${inputCls}`}
+                    />
+                    <button
+                      onClick={handleStatusUpdate}
+                      disabled={statusSaving}
+                      className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-600 disabled:opacity-40">
+                      {statusSaving ? 'Saving...' : 'Update & Notify'}
+                    </button>
+                  </div>
+                  {statusMsg && (
+                    <p className={`mt-2 text-[11px] ${statusMsg.includes('failed') || statusMsg.includes('error') ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {statusMsg}
+                    </p>
                   )}
                 </div>
               )}
@@ -575,12 +834,6 @@ export default function AIAnalysisPage() {
                     <p className={`text-xs font-semibold mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                       🔍 Document Inspection
                     </p>
-
-                    {di.not_our_document && (
-                      <p className={`text-[11px] mb-3 rounded-lg border px-3 py-2 ${isDarkMode ? 'border-amber-500/25 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-                        Unrecognized document — not a trained SIFCO paper. Signature, stamp, and logo checks were not applied.
-                      </p>
-                    )}
 
                     {/* Signature */}
                     <div className={rowCls}>
@@ -722,26 +975,93 @@ export default function AIAnalysisPage() {
       {/* Existing doc picker */}
       {showPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className={`w-full max-w-md rounded-2xl border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#1a1d24] border-white/10' : 'bg-white border-gray-200'}`}>
+          <div className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#1a1d24] border-white/10' : 'bg-white border-gray-200'}`}>
             <div className={`flex items-center justify-between px-5 py-4 border-b ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
-              <h3 className={`text-sm font-semibold ${text}`}>Select Document to Audit</h3>
-              <button onClick={() => setShowPicker(false)}><X className={`h-5 w-5 ${sub}`} /></button>
+              <div>
+                <h3 className={`text-sm font-semibold ${text}`}>Select Document to Audit</h3>
+                <p className={`text-[11px] mt-0.5 ${sub}`}>
+                  {isAuditorView && auditFilter === 'needs_audit'
+                    ? 'Uploaded documents waiting for your audit'
+                    : isAuditorView && auditFilter === 'audited'
+                    ? 'Documents you have already audited'
+                    : 'Choose a document from the library'}
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => loadExistingDocs(auditFilter)} disabled={pickerLoading}
+                  className={`rounded-lg p-1.5 ${sub} hover:text-white hover:bg-white/10 disabled:opacity-40`} title="Refresh list">
+                  <RefreshCw className={`h-4 w-4 ${pickerLoading ? 'animate-spin' : ''}`} />
+                </button>
+                <button onClick={() => setShowPicker(false)}><X className={`h-5 w-5 ${sub}`} /></button>
+              </div>
             </div>
-            <div className="max-h-80 overflow-y-auto">
-              {existingDocs.length === 0 ? (
-                <p className={`p-6 text-center text-sm ${sub}`}>No documents uploaded yet.</p>
+
+            {isAuditorView && (
+              <div className={`flex gap-2 px-5 py-3 border-b ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
+                {[
+                  { key: 'needs_audit', label: 'Needs Audit' },
+                  { key: 'audited', label: 'Audited' },
+                  { key: 'all', label: 'All' },
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setAuditFilter(tab.key)}
+                    className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                      auditFilter === tab.key
+                        ? 'bg-indigo-500 text-white'
+                        : isDarkMode
+                        ? 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                        : 'border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    }`}>
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="max-h-96 overflow-y-auto">
+              {pickerLoading ? (
+                <div className="flex flex-col items-center gap-3 py-12">
+                  <div className="h-7 w-7 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+                  <p className={`text-xs ${sub}`}>Loading documents...</p>
+                </div>
+              ) : existingDocs.length === 0 ? (
+                <div className="p-8 text-center">
+                  <FileText className={`mx-auto mb-3 h-10 w-10 ${isDarkMode ? 'text-slate-700' : 'text-gray-300'}`} />
+                  <p className={`text-sm ${sub}`}>
+                    {isAuditorView && auditFilter === 'needs_audit'
+                      ? 'No documents need audit right now.'
+                      : isAuditorView && auditFilter === 'audited'
+                      ? 'No audited documents yet.'
+                      : 'No documents uploaded yet.'}
+                  </p>
+                </div>
               ) : existingDocs.map(doc => (
-                <button key={doc.id} onClick={() => handleAuditExisting(doc)}
-                  className={`flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors ${isDarkMode ? 'hover:bg-white/5 border-b border-white/5' : 'hover:bg-gray-50 border-b border-gray-100'}`}>
-                  <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-indigo-500/15 border border-indigo-500/20' : 'bg-indigo-50 border border-indigo-100'}`}>
-                    <FileText className="h-3.5 w-3.5 text-indigo-400" />
+                <div key={doc.id}
+                  className={`flex items-center gap-3 px-5 py-3.5 ${isDarkMode ? 'border-b border-white/5 hover:bg-white/5' : 'border-b border-gray-100 hover:bg-gray-50'}`}>
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-indigo-500/15 border border-indigo-500/20' : 'bg-indigo-50 border border-indigo-100'}`}>
+                    <FileText className="h-4 w-4 text-indigo-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium truncate ${text}`}>{doc.title || doc.fileName}</p>
-                    <p className={`text-xs ${sub}`}>{doc.category} · {doc.department}</p>
+                    <p className={`text-xs truncate ${sub}`}>
+                      {doc.category} · {doc.department}
+                      {doc.uploader?.fullName ? ` · ${doc.uploader.fullName}` : ''}
+                      {doc.createdAt ? ` · ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
+                    </p>
                   </div>
-                  <Zap className="h-4 w-4 text-indigo-400 flex-shrink-0" />
-                </button>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium flex-shrink-0 ${STATUS_PILL[doc.status] || STATUS_PILL.uploaded}`}>
+                    {(doc.status || 'uploaded').replace(/_/g, ' ')}
+                  </span>
+                  <button onClick={() => openDocumentReview({ doc })} title="Review document"
+                    className={`rounded-lg p-1.5 flex-shrink-0 ${isDarkMode ? 'text-slate-500 hover:text-white hover:bg-white/10' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-100'}`}>
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                  <button onClick={() => handleAuditExisting(doc)} title="Run audit"
+                    className={`rounded-lg p-1.5 flex-shrink-0 ${isDarkMode ? 'text-indigo-400 hover:bg-indigo-500/15' : 'text-indigo-600 hover:bg-indigo-50'}`}>
+                    <Zap className="h-4 w-4" />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -749,7 +1069,13 @@ export default function AIAnalysisPage() {
       )}
 
       {/* Document Viewer */}
-      {viewerDoc && <DocumentViewer doc={viewerDoc} onClose={() => setViewerDoc(null)} />}
+      {(viewerDoc || viewerLocalFile) && (
+        <DocumentViewer
+          doc={viewerDoc}
+          localFile={viewerLocalFile}
+          onClose={closeDocumentReview}
+        />
+      )}
     </AppShell>
   );
 }

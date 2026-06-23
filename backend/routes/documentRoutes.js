@@ -25,10 +25,13 @@ const upload = multer({
   storage,
   limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 52428800 },
   fileFilter: (req, file, cb) => {
-    const allowed = /pdf|doc|docx|xls|xlsx|ppt|pptx|jpg|jpeg|png|txt/i;
+    // Accept any document type. Only executable/installer files are blocked for safety.
+    const blocked = /^(exe|bat|cmd|com|scr|msi|dll|sys|sh|bash|ps1|jar|app|deb|rpm|apk|bin|run)$/i;
     const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
-    if (allowed.test(ext)) return cb(null, true);
-    cb(new Error('Unsupported file type'));
+    if (ext && blocked.test(ext)) {
+      return cb(new Error('For security, executable files (.' + ext + ') cannot be uploaded.'));
+    }
+    return cb(null, true);
   }
 });
 
