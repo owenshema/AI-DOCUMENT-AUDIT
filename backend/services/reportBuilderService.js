@@ -7,19 +7,19 @@ const ROLE_LABELS = {
   administrator: 'System Administrator',
   auditor: 'Compliance Auditor',
   document_manager: 'Document Manager',
-  viewer: 'Portal Viewer',
+  client: 'Client',
 };
 
 const REPORT_TYPE_META = {
   daily_report: {
     title: 'Daily Activity Report',
     icon: 'calendar',
-    audience: ['auditor', 'document_manager', 'viewer'],
+    audience: ['auditor', 'document_manager'],
   },
   policy_report: {
     title: 'Policy Compliance Report',
     icon: 'shield',
-    audience: ['auditor', 'document_manager', 'viewer'],
+    audience: ['auditor', 'document_manager'],
   },
   compliance_audit: {
     title: 'Compliance Audit Report',
@@ -99,7 +99,7 @@ function buildRoleSections(data, role, reportType) {
     id: 'executive',
     title: 'Executive Summary',
     priority: 1,
-    visibleTo: ['administrator', 'auditor', 'document_manager', 'viewer'],
+    visibleTo: ['administrator', 'auditor', 'document_manager'],
     paragraphs: [
       data.summary || 'No summary available for this period.',
     ],
@@ -116,7 +116,7 @@ function buildRoleSections(data, role, reportType) {
     id: 'kpis',
     title: 'Key Performance Indicators',
     priority: 2,
-    visibleTo: ['administrator', 'auditor', 'document_manager', 'viewer'],
+    visibleTo: ['administrator', 'auditor', 'document_manager'],
     metrics: [
       { key: 'documents', label: 'Documents Uploaded', value: data.total_documents ?? 0, icon: 'upload' },
       { key: 'analyses', label: 'AI Audits Completed', value: data.total_analyses ?? 0, icon: 'cpu' },
@@ -206,7 +206,7 @@ function buildRoleSections(data, role, reportType) {
     id: 'documents',
     title: 'Document Register',
     priority: 7,
-    visibleTo: ['administrator', 'auditor', 'document_manager', 'viewer'],
+    visibleTo: ['administrator', 'auditor', 'document_manager'],
     table: {
       columns: ['Title', 'Category', 'Status', 'Compliance', 'Overall Health', 'Risk'],
       rows: (data.document_list || []).slice(0, 20).map(function(d) {
@@ -242,7 +242,7 @@ function buildRoleSections(data, role, reportType) {
       id: 'activity',
       title: 'Your Activity Summary',
       priority: 8,
-      visibleTo: ['document_manager', 'viewer'],
+      visibleTo: ['document_manager'],
       timeline: (data.activity_log || []).slice(0, 15).map(function(a) {
         return { date: a.time, user: a.user, action: a.action, type: a.type };
       }),
@@ -254,7 +254,7 @@ function buildRoleSections(data, role, reportType) {
     id: 'recommendations',
     title: 'Recommendations & Next Steps',
     priority: 9,
-    visibleTo: ['administrator', 'auditor', 'document_manager', 'viewer'],
+    visibleTo: ['administrator', 'auditor', 'document_manager'],
     numbered: (data.recommendations || []).length
       ? data.recommendations
       : ['Maintain current document submission standards.', 'Schedule follow-up review for any rejected documents.'],
@@ -264,7 +264,7 @@ function buildRoleSections(data, role, reportType) {
     id: 'conclusion',
     title: 'Conclusion',
     priority: 10,
-    visibleTo: ['administrator', 'auditor', 'document_manager', 'viewer'],
+    visibleTo: ['administrator', 'auditor', 'document_manager'],
     paragraphs: [buildConclusion(data, status)],
   });
 

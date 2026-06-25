@@ -124,16 +124,16 @@ console.log('\n4. Route Modules');
 console.log('\n5. Report Access Control Logic');
 const REPORT_ACCESS = {
   financial_report: ['administrator','auditor'],
-  daily_report:     ['administrator','auditor','document_manager','viewer'],
-  policy_report:    ['administrator','auditor','document_manager','viewer'],
+  daily_report:     ['administrator','auditor','document_manager'],
+  policy_report:    ['administrator','auditor','document_manager'],
   compliance_audit: ['administrator','auditor','document_manager'],
   security_audit:   ['administrator','auditor'],
 };
-test('viewer can generate daily_report', () => {
-  if (!REPORT_ACCESS.daily_report.includes('viewer')) throw new Error('viewer blocked from daily_report');
+test('client cannot generate daily_report', () => {
+  if (REPORT_ACCESS.daily_report.includes('client')) throw new Error('client allowed daily_report');
 });
-test('viewer cannot generate financial_report', () => {
-  if (REPORT_ACCESS.financial_report.includes('viewer')) throw new Error('viewer allowed financial_report');
+test('client cannot generate financial_report', () => {
+  if (REPORT_ACCESS.financial_report.includes('client')) throw new Error('client allowed financial_report');
 });
 test('auditor can generate financial_report', () => {
   if (!REPORT_ACCESS.financial_report.includes('auditor')) throw new Error('auditor blocked from financial_report');

@@ -10,8 +10,8 @@ export const ROLE_PERMISSIONS = {
     label: 'Document Manager',
     allowed: ['documents', 'ai-analysis', 'compliance', 'audit-reports'],
   },
-  viewer: {
-    label: 'Viewer',
+  client: {
+    label: 'Client',
     allowed: ['documents'],
   },
   auditor: {

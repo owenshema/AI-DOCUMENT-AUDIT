@@ -1,23 +1,28 @@
 import { create } from 'zustand';
 import apiClient from '../api/client';
+import { authStorage } from '../utils/authStorage';
+import { normalizeRole } from '../config/roles';
 
+const normalizeUser = (user) => (user ? { ...user, role: normalizeRole(user.role) } : user);
 const useAuthStore = create((set, get) => ({
   user:            null,
   token:           null,
   isAuthenticated: false,
   isDarkMode:      localStorage.getItem('theme') !== 'light',
 
-  setUser:  (user)  => set({ user }),
+  setUser: (user) => {
+    const normalized = normalizeUser(user);
+    authStorage.setUser(normalized);
+    set({ user: normalized });
+  },
 
   setToken: (token) => {
-    if (token) localStorage.setItem('token', token);
-    else       localStorage.removeItem('token');
+    authStorage.setToken(token);
     set({ token, isAuthenticated: !!token });
   },
 
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    authStorage.clear();
     set({ user: null, token: null, isAuthenticated: false });
   },
 
@@ -30,29 +35,35 @@ const useAuthStore = create((set, get) => ({
   },
 
   hydrateAuth: async () => {
-    const token = localStorage.getItem('token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+
     const theme = localStorage.getItem('theme');
     const dark  = theme !== 'light';
-
     if (dark) document.documentElement.classList.add('dark');
     else      document.documentElement.classList.remove('dark');
 
-    // No token stored — not authenticated
+    const publicPaths = ['/', '/login', '/register', '/forgot-password'];
+    if (publicPaths.includes(window.location.pathname)) {
+      authStorage.clear();
+      set({ token: null, user: null, isAuthenticated: false, isDarkMode: dark });
+      return;
+    }
+
+    const token = authStorage.getToken();
+
     if (!token) {
       set({ token: null, user: null, isAuthenticated: false, isDarkMode: dark });
       return;
     }
 
-    // Validate token with server
     try {
       const res = await apiClient.get('/auth/me');
-      const user = res.data?.user || res.data;
-      localStorage.setItem('user', JSON.stringify(user));
+      const user = normalizeUser(res.data?.user || res.data);
+      authStorage.setUser(user);
       set({ token, user, isAuthenticated: true, isDarkMode: dark });
     } catch {
-      // Token invalid or expired — clear everything and force re-login
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      authStorage.clear();
       set({ token: null, user: null, isAuthenticated: false, isDarkMode: dark });
     }
   },

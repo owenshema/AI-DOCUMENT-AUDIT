@@ -1,7 +1,7 @@
 'use strict';
 /**
  * SIFCO critical findings — encodes the six-document audit rules from operations review.
- * Detects arithmetic errors, blank TIN, title typos, vessel typos, cargo mismatches, etc.
+ * Arithmetic/calculation checks are handled by documentCalculationService.
  */
 var notebookAudit = require('./sifcoNotebookAuditService');
 
@@ -149,17 +149,6 @@ function runCriticalChecks(text, docType, fields, fieldChecks) {
   fieldChecks = fieldChecks || {};
 
   if (docType === 'SHIPPING_AGREEMENT') {
-    var charges = extractAgreementCharges(text);
-    if (charges.length >= 4 && fields.total != null) {
-      var sum = charges.reduce(function (a, c) { return a + c.amount; }, 0);
-      if (Math.abs(sum - fields.total) > 0.01) {
-        issues.push({
-          severity: 'HIGH',
-          check: 'Financial Totals',
-          message: 'Agreement charges sum to USD ' + sum + ' but TOTAL shows USD ' + fields.total,
-        });
-      }
-    }
     if (/CLIENT['\u2019]?S\s+SIGNATURE/i.test(text)) {
       issues.push({
         severity: 'MEDIUM',
@@ -246,33 +235,6 @@ function runCriticalChecks(text, docType, fields, fieldChecks) {
     if (lineSum > 0) fields.invoice_line_sum = lineSum;
     if (writtenAmt != null) fields.written_amount = writtenAmt;
     if (footerNum != null) fields.footer_amount = footerNum;
-
-    if (lineSum > 0 && writtenAmt != null && Math.abs(writtenAmt - lineSum) > 1) {
-      var footerMatchesLines = footerNum != null && Math.abs(lineSum - footerNum) <= 1;
-      var severity = footerMatchesLines ? 'MEDIUM' : 'HIGH';
-      issues.push({
-        severity: severity,
-        check: 'Amount in Words',
-        message: footerMatchesLines
-          ? 'Written amount (USD ' + writtenAmt + ') does not match numeric total USD ' + lineSum + ' — likely a wording typo in the invoice'
-          : 'Line items total USD ' + lineSum + ' but written amount says USD ' + writtenAmt + ' — verify before payment',
-      });
-      if (!footerMatchesLines) {
-        issues.push({
-          severity: 'HIGH',
-          check: 'Invoice Arithmetic',
-          message: 'Either the written amount (USD ' + writtenAmt + ') or the line breakdown (USD ' +
-            lineSum + ') is wrong — resolve the discrepancy',
-        });
-      }
-    }
-    if (lineSum > 0 && footerNum != null && Math.abs(lineSum - footerNum) > 1 && writtenAmt == null) {
-      issues.push({
-        severity: 'HIGH',
-        check: 'Invoice Arithmetic',
-        message: 'Line items total USD ' + lineSum + ' but footer shows USD ' + footerNum,
-      });
-    }
   }
 
   if (docType === 'SHIPPING_AGREEMENT') {

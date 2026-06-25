@@ -109,6 +109,27 @@ function buildAuditAnalysisSummary(result) {
     });
   }
 
+  var calculationErrors = result.calculation_errors || [];
+  var hasCalcErrors = calculationErrors.length > 0 ||
+    (result.violations || []).some(function (v) { return v.title === 'Calculation Error'; });
+
+  if (hasCalcErrors && mlOk) {
+    return Object.assign({}, base, {
+      title: 'Calculation errors detected',
+      reason: result.organization_message || 'Document totals or line calculations do not match.',
+      detail: (calculationErrors.length
+        ? calculationErrors.slice(0, 6).join('; ')
+        : (result.violations || []).filter(function (v) { return v.title === 'Calculation Error'; }).map(function (v) { return v.summary; }).join('; ')) +
+        (typeof overall === 'number' ? (' Compliance score: ' + overall + '%.') : ''),
+      nextSteps: [
+        'Verify line items, subtotals, and TOTAL against the original document.',
+        'Set status to changes requested or rejected until calculations are corrected.',
+      ],
+      code: 'CALC-ERROR',
+      scoreBand: 'failed',
+    });
+  }
+
   if (mandatoryMissing || (hasCritical && mlOk)) {
     var scoreNote = typeof overall === 'number' ? (' Compliance score: ' + overall + '%.') : '';
     var isValidIncomplete = mlOk && !hasCritical;
@@ -143,14 +164,14 @@ function buildAuditAnalysisSummary(result) {
   }
 
   return Object.assign({}, base, {
-    title: 'Does not match trained SIFCO papers',
-    reason: result.organization_message,
+    title: 'Document not from our company',
+    reason: result.organization_message || 'This document does not match any SIFCO trained reference document.',
     detail: (result.inconsistencies && result.inconsistencies[0] && result.inconsistencies[0].detail) || '',
     nextSteps: [
-      'Confirm the document type (packing list, HBL, shipping agreement, freight invoice, trucking invoice, or sea freight invoice).',
-      'Set status to rejected or changes requested based on your review.',
+      'Confirm the document is an official SIFCO operations paper (packing list, HBL, shipping agreement, freight invoice, trucking invoice, or sea freight invoice).',
+      'Set status to rejected if the document is from outside the company.',
     ],
-    code: 'ML-NO-MATCH',
+    code: 'NOT-COMPANY-DOC',
     scoreBand: 'failed',
   });
 }
@@ -650,7 +671,7 @@ const getAnalysisTrend = async (req, res) => {
       where: { completedAt: { [Op.gte]: new Date(Date.now() - days * 86400000) } },
       order: [['completedAt', 'ASC']],
     };
-    if (['viewer', 'document_manager'].includes(req.user?.role)) {
+    if (['client', 'document_manager'].includes(req.user?.role)) {
       options.include = [{
         model: Document,
         attributes: [],
@@ -680,7 +701,7 @@ const getAnalysisStats = async (req, res) => {
     const { Document, DocumentAnalysis } = req.app.locals.models;
     const { averageOverallScore } = require('../services/auditScoreService');
     const options = {};
-    if (['viewer', 'document_manager'].includes(req.user?.role)) {
+    if (['client', 'document_manager'].includes(req.user?.role)) {
       options.include = [{
         model: Document,
         attributes: [],

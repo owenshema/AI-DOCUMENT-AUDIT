@@ -149,7 +149,7 @@ const getTaskQueue = async (req, res) => {
     const { Task, User, Workflow, Document, DocumentAnalysis } = req.app.locals.models;
     const { Op } = require('sequelize');
     const userId = req.user?.id;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
 
     const taskWhere = {};
     if (!['administrator', 'auditor'].includes(role)) taskWhere.assignedTo = userId;
@@ -168,7 +168,7 @@ const getTaskQueue = async (req, res) => {
 
     const docWhere = {};
     Object.assign(docWhere, documentWhereForUser({ id: userId, role }));
-    if (!['viewer', 'document_manager'].includes(role) && status && status !== 'all') {
+    if (!['client', 'document_manager'].includes(role) && status && status !== 'all') {
       docWhere.status = status;
     }
 

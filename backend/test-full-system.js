@@ -178,7 +178,7 @@ async function testAuthentication() {
       email: 'owenshema76@gmail.com',
       password: 'Test@123!',
       department: 'IT',
-      role: 'viewer'
+      role: 'client'
     });
     assert(r.status >= 400, `Expected 4xx for duplicate, got ${r.status}`);
   });
@@ -415,8 +415,8 @@ async function testRBACLogic() {
 
   const REPORT_ACCESS = {
     financial_report:  ['administrator', 'auditor'],
-    daily_report:      ['administrator', 'auditor', 'document_manager', 'viewer'],
-    policy_report:     ['administrator', 'auditor', 'document_manager', 'viewer'],
+    daily_report:      ['administrator', 'auditor', 'document_manager'],
+    policy_report:     ['administrator', 'auditor', 'document_manager'],
     compliance_audit:  ['administrator', 'auditor', 'document_manager'],
     document_review:   ['administrator', 'auditor', 'document_manager'],
     security_audit:    ['administrator', 'auditor'],
@@ -424,10 +424,10 @@ async function testRBACLogic() {
   };
 
   const cases = [
-    ['viewer', 'daily_report', true],
-    ['viewer', 'policy_report', true],
-    ['viewer', 'financial_report', false],
-    ['viewer', 'security_audit', false],
+    ['client', 'daily_report', false],
+    ['client', 'policy_report', false],
+    ['client', 'financial_report', false],
+    ['client', 'security_audit', false],
     ['document_manager', 'compliance_audit', true],
     ['document_manager', 'security_audit', false],
     ['auditor', 'financial_report', true],

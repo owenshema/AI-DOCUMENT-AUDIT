@@ -3,21 +3,22 @@ import { RefreshCw, CheckCircle2, XCircle, Edit2, Shield, Trash2 } from 'lucide-
 import AppShell from '../components/AppShell';
 import { authAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
+import { formatRoleLabel } from '../config/roles';
 
-const ROLES = ['administrator', 'auditor', 'document_manager', 'viewer'];
+const ROLES = ['administrator', 'auditor', 'document_manager', 'client'];
 
 const ROLE_COLORS = {
   administrator:    'bg-indigo-500/15 text-indigo-400',
   auditor:          'bg-blue-500/15 text-blue-400',
   document_manager: 'bg-emerald-500/15 text-emerald-400',
-  viewer:           'bg-slate-500/15 text-slate-400',
+  client: 'bg-slate-500/15 text-slate-400',
 };
 
 const PERMISSIONS = {
   administrator:    ['Full system access', 'Manage all users', 'Generate & export reports', 'Configure policies', 'View audit logs'],
   auditor:          ['Read & flag documents', 'Run AI analysis', 'Generate audit reports', 'View compliance data'],
   document_manager: ['Upload & manage documents', 'Run AI analysis', 'View audit reports', 'Manage workflows'],
-  viewer:           ['Read-only access to documents', 'View reports (no edit)'],
+  client: ['Upload logistics documents', 'Track audit status', 'View own reports'],
 };
 
 export default function UsersPage() {
@@ -99,7 +100,7 @@ export default function UsersPage() {
             {ROLES.map(role => (
               <div key={role} className={`rounded-xl border p-3 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
                 <span className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold mb-2 ${ROLE_COLORS[role]}`}>
-                  {role.replace('_', ' ')}
+                  {formatRoleLabel(role)}
                 </span>
                 <ul className="space-y-1">
                   {PERMISSIONS[role].map(p => (
@@ -156,8 +157,8 @@ export default function UsersPage() {
                     </td>
                     <td className={`px-5 py-3 text-xs ${sub}`}>{u.email}</td>
                     <td className="px-5 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${ROLE_COLORS[u.role] || ROLE_COLORS.viewer}`}>
-                        {u.role?.replace('_', ' ')}
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${ROLE_COLORS[u.role] || ROLE_COLORS.client}`}>
+                        {formatRoleLabel(u.role)}
                       </span>
                     </td>
                     <td className="px-5 py-3">
@@ -213,7 +214,7 @@ export default function UsersPage() {
             <p className={`text-xs mb-4 ${sub}`}>{editUser.fullName} · {editUser.email}</p>
             <select value={editRole} onChange={e => setEditRole(e.target.value)}
               className={`w-full rounded-xl border px-3 py-2.5 text-sm mb-4 ${inputCls}`}>
-              {ROLES.map(r => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+              {ROLES.map(r => <option key={r} value={r}>{formatRoleLabel(r)}</option>)}
             </select>
             <div className="flex gap-2">
               <button onClick={handleUpdateRole} className="flex-1 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">Update</button>

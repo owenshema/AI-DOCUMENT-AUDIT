@@ -4,6 +4,7 @@
  */
 
 const jwt = require('jsonwebtoken');
+const { normalizeRole } = require('../utils/roles');
 
 const verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -46,7 +47,7 @@ const verifyToken = async (req, res, next) => {
     req.user = {
       id: user.id,
       email: user.email,
-      role: user.role,
+      role: normalizeRole(user.role),
     };
 
     next();
@@ -64,9 +65,11 @@ const verifyRole = (allowedRoles) => {
       return res.status(401).json({ error: 'User not authenticated' });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRole = normalizeRole(req.user.role);
+    const normalizedAllowed = allowedRoles.map(normalizeRole);
+    if (!normalizedAllowed.includes(userRole)) {
       return res.status(403).json({ 
-        error: `Access denied. Required roles: ${allowedRoles.join(', ')}` 
+        error: `Access denied. Required roles: ${normalizedAllowed.join(', ')}` 
       });
     }
 
@@ -105,7 +108,7 @@ const optionalAuth = (req, res, next) => {
     req.user = {
       id: decoded.id,
       email: decoded.email,
-      role: decoded.role
+      role: normalizeRole(decoded.role),
     };
   } catch (error) {
     req.user = null;

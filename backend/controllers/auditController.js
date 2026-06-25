@@ -11,6 +11,7 @@ const aiService = require('../services/aiService');
 const emailService = require('../services/emailService');
 const reportBuilder = require('../services/reportBuilderService');
 const layout = require('../services/reportLayout');
+const { normalizeRole, isExportFormatAllowed, allowedExportFormats } = require('../utils/roles');
 
 const SIFCO_LOGO_PATH = path.join(__dirname, '..', 'assets', 'sifco-logo.png');
 const SIFCO_LOGO_EXISTS = fs.existsSync(SIFCO_LOGO_PATH);
@@ -23,7 +24,7 @@ const canAccessReport = (report, user) => {
 
 const formatReportForClient = (report, user) => {
   const plain = report.toJSON ? report.toJSON() : report;
-  const role = user?.role || 'viewer';
+  const role = user?.role || 'client';
   const structured = plain.metrics?.structuredReport || plain.statistics?.structuredReport;
   return {
     ...plain,
@@ -46,7 +47,7 @@ const generateAuditReport = async (req, res) => {
     const { AuditReport, ComplianceCheck, Document, DocumentAnalysis } = req.app.locals.models;
     const { Op } = require('sequelize');
     const currentUser = req.user || {};
-    const ownerScoped = ['viewer', 'document_manager'].includes(currentUser.role);
+    const ownerScoped = ['client', 'document_manager'].includes(currentUser.role);
 
     if (!title || !periodStart || !periodEnd) {
       return res.status(400).json({ error: 'title, periodStart, and periodEnd are required' });
@@ -462,7 +463,7 @@ const listAuditReports = async (req, res) => {
 
     const where = {};
     if (status) where.status = status;
-    if (['viewer', 'document_manager'].includes(req.user?.role)) {
+    if (['client', 'document_manager'].includes(req.user?.role)) {
       where[Op.or] = [
         { createdBy: req.user.id },
         { scope: { [Op.contains]: { userId: req.user.id } } },
@@ -506,7 +507,20 @@ const exportAuditReport = async (req, res) => {
       return res.status(403).json({ error: 'Access denied to this report' });
     }
 
-    const ownerScoped = ['viewer', 'document_manager'].includes(req.user?.role);
+    const role = normalizeRole(req.user?.role);
+    const fmtUpper = String(format).toUpperCase();
+    const formatKey = fmtUpper === 'PDF' ? 'pdf'
+      : fmtUpper === 'EXCEL' || fmtUpper === 'XLSX' ? 'excel'
+      : fmtUpper === 'WORD' ? 'word'
+      : fmtUpper === 'CSV' ? 'csv'
+      : fmtUpper.toLowerCase();
+    if (!isExportFormatAllowed(role, formatKey)) {
+      return res.status(403).json({
+        error: `Your role can only export reports as: ${allowedExportFormats(role).join(', ')}`,
+      });
+    }
+
+    const ownerScoped = ['client', 'document_manager'].includes(role);
     let reportDocIds = [];
     if (ownerScoped) {
       const ownerIds = [

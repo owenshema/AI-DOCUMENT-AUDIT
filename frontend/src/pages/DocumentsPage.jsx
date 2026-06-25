@@ -3,6 +3,7 @@ import { Upload, RefreshCw, Download, Trash2, Eye, Bot, X, FileText, Edit2 } fro
 import AppShell from '../components/AppShell';
 import { documentAPI, analysisAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
+import { normalizeRole, isOwnerRole } from '../config/roles';
 
 const CATS = ['policy', 'contract', 'invoice', 'compliance', 'report', 'memo', 'other'];
 const DEPARTMENTS = ['General', 'Finance', 'HR', 'IT', 'Compliance', 'Operations', 'Procurement', 'Logistics', 'Legal'];
@@ -319,8 +320,8 @@ export default function DocumentsPage() {
     }
   };
 
-  const role = user?.role || 'viewer';
-  const isOwnerPortal = role === 'viewer' || role === 'document_manager';
+  const role = normalizeRole(user?.role);
+  const isOwnerPortal = isOwnerRole(role);
   const pageTitle = isOwnerPortal ? 'My Documents' : 'Document Hub';
 
   return (

@@ -37,8 +37,8 @@ if (!tampered.organization_match) {
   console.error('FAIL: tampered document should be recognized as valid SIFCO type');
   process.exit(1);
 }
-if (tampered.compliance_score > 78 || tampered.compliance_score < 70) {
-  console.error('FAIL: expected compliance 70–78%, got ' + tampered.compliance_score);
+if (tampered.compliance_score > 60 || tampered.compliance_score < 45) {
+  console.error('FAIL: expected compliance ~45–60% for 5 missing fields, got ' + tampered.compliance_score);
   process.exit(1);
 }
 if (tampered.risk_level !== 'medium' && tampered.risk_level !== 'high') {
@@ -50,5 +50,5 @@ if (!tampered.missing_fields || !tampered.missing_fields.length) {
   process.exit(1);
 }
 
-console.log('\nOK — valid SIFCO type with 70–78% score and missing fields shown');
+console.log('\nOK — valid SIFCO type with proportional score from missing fields');
 process.exit(0);

@@ -79,7 +79,6 @@ export default function TwoFactorPage() {
       await apiClient.post('/auth/confirm-totp', { token });
       setSuccess('2FA enabled successfully! Your account is now protected.');
       setUser({ ...user, mfaEnabled: true });
-      localStorage.setItem('user', JSON.stringify({ ...user, mfaEnabled: true }));
       setStep('idle');
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid code.');
@@ -94,7 +93,6 @@ export default function TwoFactorPage() {
       await apiClient.post('/auth/disable-totp', { token: disableToken });
       setSuccess('2FA disabled.');
       setUser({ ...user, mfaEnabled: false });
-      localStorage.setItem('user', JSON.stringify({ ...user, mfaEnabled: false }));
       setStep('idle');
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid code.');

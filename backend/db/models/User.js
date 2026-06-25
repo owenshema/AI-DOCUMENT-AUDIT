@@ -33,10 +33,10 @@ module.exports = (sequelize) => {
     },
     role: {
       type: DataTypes.STRING(50),
-      defaultValue: 'viewer',
+      defaultValue: 'client',
       allowNull: false,
       validate: {
-        isIn: [['auditor', 'document_manager', 'administrator', 'viewer']]
+        isIn: [['auditor', 'document_manager', 'administrator', 'client']]
       }
     },
     approvalStatus: {

@@ -766,6 +766,38 @@ export default function AIAnalysisPage() {
                 </div>
               )}
 
+              {(result.missing_fields?.length > 0 || result.calculation_errors?.length > 0) && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {result.missing_fields?.length > 0 && (
+                    <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-amber-500/25 bg-amber-500/5' : 'border-amber-200 bg-amber-50'}`}>
+                      <p className="text-[10px] font-semibold text-amber-400 mb-2">Missing areas ({result.missing_fields.length})</p>
+                      <ul className="space-y-1">
+                        {result.missing_fields.slice(0, 10).map(function (f, i) {
+                          return (
+                            <li key={i} className={`text-[11px] ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{f}</li>
+                          );
+                        })}
+                        {result.missing_fields.length > 10 && (
+                          <li className={`text-[10px] ${sub}`}>+{result.missing_fields.length - 10} more</li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                  {result.calculation_errors?.length > 0 && (
+                    <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-red-500/25 bg-red-500/5' : 'border-red-200 bg-red-50'}`}>
+                      <p className="text-[10px] font-semibold text-red-400 mb-2">Calculation errors ({result.calculation_errors.length})</p>
+                      <ul className="space-y-1">
+                        {result.calculation_errors.map(function (err, i) {
+                          return (
+                            <li key={i} className={`text-[11px] ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{err}</li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {(result.inconsistencies?.length > 0 && !result.organization_match) && (
                 <div className="grid grid-cols-1 gap-3">
                   <FindingCard label="Why not accepted" items={result.inconsistencies || []} color="text-orange-400" dot="bg-orange-400" dark={isDarkMode} />

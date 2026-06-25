@@ -57,7 +57,7 @@ export default function RegisterPage() {
   const [userId, setUserId] = useState('');
   const [otp, setOtp]       = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [form, setForm]     = useState({ fullName: '', email: '', password: '', confirmPassword: '', department: '', role: 'viewer', phone: '' });
+  const [form, setForm]     = useState({ fullName: '', email: '', password: '', confirmPassword: '', department: '', role: 'client', phone: '' });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -93,14 +93,12 @@ export default function RegisterPage() {
         if (res.token || res.accessToken) {
           setToken(res.token || res.accessToken);
           setUser(res.user);
-          localStorage.setItem('user', JSON.stringify(res.user));
         }
         navigate('/pending-approval', { replace: true });
         return;
       }
       setToken(res.token || res.accessToken);
       setUser(res.user);
-      localStorage.setItem('user', JSON.stringify(res.user));
       navigate('/dashboard', { replace: true });
     } catch (err) { setError(err.response?.data?.error || 'Invalid or expired code.'); }
     setLoading(false);
@@ -177,11 +175,11 @@ export default function RegisterPage() {
                   <label className="block text-xs text-white/60 mb-1.5">Role</label>
                   <select name="role" value={form.role} onChange={handleChange}
                     className="w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-400 transition-colors">
-                    <option value="viewer" className="bg-[#0d2044]">Viewer</option>
+                    <option value="client" className="bg-[#0d2044]">Client</option>
                     <option value="document_manager" className="bg-[#0d2044]">Document Manager</option>
                     <option value="auditor" className="bg-[#0d2044]">Auditor</option>
                   </select>
-                  {form.role !== 'viewer' && (
+                  {form.role !== 'client' && (
                     <p className="mt-1 text-[10px] text-amber-200/80">This role requires administrator approval before sign-in.</p>
                   )}
                 </div>

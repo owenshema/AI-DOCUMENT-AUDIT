@@ -3,8 +3,9 @@ import { Search, RefreshCw, CheckCircle, XCircle, Edit } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import AppShell from '../components/AppShell';
 import { authAPI } from '../api/auth';
+import { formatRoleLabel } from '../config/roles';
 
-const ROLES = ['administrator', 'auditor', 'document_manager', 'viewer'];
+const ROLES = ['administrator', 'auditor', 'document_manager', 'client'];
 
 const UserAccessPage = () => {
   const { user } = useAuthStore();
@@ -87,7 +88,7 @@ const UserAccessPage = () => {
                     <td className="px-4 py-3 text-xs text-slate-400">{u.email}</td>
                     <td className="px-4 py-3 text-xs text-slate-400">{u.department}</td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-[#0ea5e9]/15 px-2 py-0.5 text-[10px] font-semibold text-[#38bdf8] capitalize">{u.role?.replace('_', ' ')}</span>
+                      <span className="rounded-full bg-[#0ea5e9]/15 px-2 py-0.5 text-[10px] font-semibold text-[#38bdf8]">{formatRoleLabel(u.role)}</span>
                     </td>
                     <td className="px-4 py-3">
                       {u.isActive ? (
@@ -126,7 +127,7 @@ const UserAccessPage = () => {
               <label className="mb-1 block text-xs font-medium text-slate-400">New Role</label>
               <select value={editRole} onChange={e => setEditRole(e.target.value)}
                 className="w-full rounded-lg border border-white/10 bg-[#0a0f1e] px-3 py-2 text-sm text-white outline-none">
-                {ROLES.map(r => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+                {ROLES.map(r => <option key={r} value={r}>{formatRoleLabel(r)}</option>)}
               </select>
             </div>
             <div className="flex gap-2">

@@ -8,7 +8,7 @@ const searchDocuments = async (req, res) => {
     const { query, filters = {}, limit = 20, page = 1 } = req.body;
     const { Document, AuditLog } = req.app.locals.models;
     const Op = require('sequelize').Op;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
     const userId = req.user?.id;
 
     const term = (query || '').trim();
@@ -42,7 +42,7 @@ const searchDocuments = async (req, res) => {
       }
     }
 
-    if (['viewer', 'document_manager'].includes(role) && userId) {
+    if (['client', 'document_manager'].includes(role) && userId) {
       where.uploadedBy = userId;
     }
 
@@ -186,7 +186,7 @@ const advancedSearch = async (req, res) => {
     const { criteria = {}, limit = 20, page = 1 } = req.body;
     const { Document, AuditReport } = req.app.locals.models;
     const Op = require('sequelize').Op;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
     const userId = req.user?.id;
     const searchReports = criteria.searchReports === true;
 
@@ -201,7 +201,7 @@ const advancedSearch = async (req, res) => {
           [Op.lte]: new Date(criteria.uploadedByRange.to),
         };
       }
-      if (['viewer', 'document_manager'].includes(role) && userId) {
+      if (['client', 'document_manager'].includes(role) && userId) {
         reportWhere.generatedBy = userId;
       }
 
@@ -255,7 +255,7 @@ const advancedSearch = async (req, res) => {
         ? { [Op.in]: criteria.fileFormat.map(function (f) { return f.toLowerCase(); }) }
         : criteria.fileFormat.toLowerCase();
     }
-    if (['viewer', 'document_manager'].includes(role) && userId) {
+    if (['client', 'document_manager'].includes(role) && userId) {
       where.uploadedBy = userId;
     }
 

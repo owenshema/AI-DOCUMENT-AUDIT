@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import { FEATURE_LOGIC, PROCESS_STAGES, ROLE_PERMISSIONS } from '../config/auditLogic';
+import { formatRoleLabel } from '../config/roles';
 import {
   Bell,
   Bot,
@@ -21,7 +22,7 @@ const FeaturePage = ({ featureKey }) => {
   const [query, setQuery] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const feature = FEATURE_LOGIC[featureKey];
-  const roleConfig = ROLE_PERMISSIONS[user?.role] || ROLE_PERMISSIONS.viewer;
+  const roleConfig = ROLE_PERMISSIONS[user?.role] || ROLE_PERMISSIONS.client;
   const hasAccess = roleConfig.allowed.includes(featureKey);
   const initials = (user?.fullName || 'U')
     .split(' ')
@@ -132,7 +133,7 @@ const FeaturePage = ({ featureKey }) => {
               </button>
               <div className="text-right">
                 <p className="text-sm font-semibold text-slate-900">{user?.fullName || 'User'}</p>
-                <p className="text-xs capitalize text-slate-500">{user?.role?.replace('_', ' ') || 'viewer'}</p>
+                <p className="text-xs text-slate-500">{formatRoleLabel(user?.role)}</p>
               </div>
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">{initials}</div>
             </div>

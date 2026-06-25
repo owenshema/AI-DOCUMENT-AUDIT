@@ -25,8 +25,8 @@ const REPORT_ACCESS = {
   security_audit:    ['auditor'],
   exception_report:  ['auditor'],
   document_review:   ['auditor', 'document_manager'],
-  daily_report:      ['auditor', 'document_manager', 'viewer'],
-  policy_report:     ['auditor', 'document_manager', 'viewer'],
+  daily_report:      ['auditor', 'document_manager'],
+  policy_report:     ['auditor', 'document_manager'],
 };
 
 // Dynamic access check based on reportType in body

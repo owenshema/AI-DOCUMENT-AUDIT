@@ -1,9 +1,10 @@
 'use strict';
 
 const { Op } = require('sequelize');
+const { normalizeRole } = require('../utils/roles');
 
 const REPORT_META = {
-  my_documents_status: { title: 'My documents status', description: 'List of uploaded docs with current audit stage and status' },
+  my_documents_status: { title: 'My uploads & status', description: 'All documents you uploaded and their current audit status' },
   upload_history: { title: 'Upload history', description: 'Timeline of all uploads made, including file size and date' },
   audit_findings_received: { title: 'Audit findings received', description: 'Summary of findings returned on their documents' },
   pending_review: { title: 'Pending review', description: 'Documents awaiting auditor assignment or action' },
@@ -27,17 +28,19 @@ const REPORT_META = {
   system_health: { title: 'System health', description: 'Storage usage, AI model performance, and error rate monitoring' },
   inactive_users: { title: 'Inactive users', description: 'Accounts with no recent activity — for access review and cleanup' },
   ai_confidence_scores: { title: 'AI confidence scores', description: 'Distribution of AI-generated audit confidence vs human review outcomes' },
+  all_users: { title: 'All users', description: 'Every registered user with role, account status, and last login' },
 };
 
 function docScope(user) {
-  if (user.role === 'viewer') return { uploadedBy: user.id };
+  var role = normalizeRole(user.role);
+  if (role === 'client' || role === 'document_manager') return { uploadedBy: user.id };
   return {};
 }
 
 function scopeLabelForRole(role) {
-  if (role === 'viewer') return 'Personal — your uploads only';
-  if (role === 'document_manager') return 'Organization — all documents';
-  if (role === 'auditor') return 'Auditor workload + quality metrics';
+  role = normalizeRole(role);
+  if (role === 'client' || role === 'document_manager') return 'Personal — your uploads only';
+  if (role === 'auditor') return 'Your audit queue and completion metrics';
   if (role === 'administrator') return 'System-wide';
   return 'Scoped';
 }
@@ -60,7 +63,7 @@ async function analysisWhere(models, user, ctx) {
 
 function logWhere(user, ctx) {
   var where = { createdAt: { [Op.gte]: ctx.since } };
-  if (user.role === 'viewer' || user.role === 'document_manager') {
+  if (user.role === 'client' || user.role === 'document_manager') {
     where.userId = user.id;
   }
   return where;
@@ -158,6 +161,7 @@ async function buildReport(reportId, models, user, query) {
     system_health: buildSystemHealth,
     inactive_users: buildInactiveUsers,
     ai_confidence_scores: buildAiConfidence,
+    all_users: buildAllUsers,
   };
 
   var handler = handlers[reportId];
@@ -169,7 +173,7 @@ async function buildReport(reportId, models, user, query) {
     description: meta.description,
     generatedAt: new Date().toISOString(),
     periodDays: days,
-    scope: user.role === 'viewer' ? 'personal' : user.role === 'administrator' ? 'system' : 'organization',
+    scope: ['client', 'document_manager'].includes(normalizeRole(user.role)) ? 'personal' : normalizeRole(user.role) === 'administrator' ? 'system' : 'organization',
     scopeLabel: scopeLabelForRole(user.role),
   }, payload);
 }
@@ -474,7 +478,24 @@ async function buildAuditQueue(models, user, ctx) {
 }
 
 async function buildCompletionRate(models, user, ctx) {
-  var analyses = await loadAnalyses(models, user, ctx, 500);
+  var analyses;
+  if (normalizeRole(user.role) === 'auditor') {
+    var tasks = await models.Task.findAll({
+      where: { assignedTo: user.id, status: 'completed', completedAt: { [Op.gte]: ctx.since } },
+      attributes: ['documentId'],
+    });
+    var docIds = tasks.map(function (t) { return t.documentId; }).filter(Boolean);
+    analyses = docIds.length
+      ? await models.DocumentAnalysis.findAll({
+        where: { documentId: { [Op.in]: docIds }, createdAt: { [Op.gte]: ctx.since } },
+        include: [{ model: models.Document, attributes: ['id', 'title', 'status', 'category', 'uploadedBy'], required: false }],
+        order: [['createdAt', 'DESC']],
+        limit: 500,
+      })
+      : [];
+  } else {
+    analyses = await loadAnalyses(models, user, ctx, 500);
+  }
   var counts = { approved: 0, flagged: 0, rejected: 0, pending: 0 };
   analyses.forEach(function (a) {
     var res = a.results || {};
@@ -594,6 +615,33 @@ async function buildWorkloadHistory(models, user, ctx) {
     columns: [{ key: 'period', label: 'Period' }, { key: 'completed', label: 'Audits completed' }],
     rows: Object.keys(buckets).sort().map(function (p) {
       return { period: p, completed: buckets[p] };
+    }),
+  };
+}
+
+async function buildAllUsers(models, user, ctx) {
+  var users = await models.User.findAll({
+    attributes: ['fullName', 'email', 'role', 'isActive', 'lastLogin', 'createdAt'],
+    order: [['fullName', 'ASC']],
+    limit: 200,
+  });
+  return {
+    summary: { totalUsers: users.length },
+    columns: [
+      { key: 'name', label: 'User' },
+      { key: 'email', label: 'Email' },
+      { key: 'role', label: 'Role' },
+      { key: 'status', label: 'Account status' },
+      { key: 'lastLogin', label: 'Last login' },
+    ],
+    rows: users.map(function (u) {
+      return {
+        name: u.fullName || '—',
+        email: u.email,
+        role: u.role,
+        status: u.isActive !== false ? 'Active' : 'Inactive',
+        lastLogin: fmtDate(u.lastLogin) || 'Never',
+      };
     }),
   };
 }
@@ -801,15 +849,16 @@ async function buildAiConfidence(models, user, ctx) {
 }
 
 const ACCESS_MAP = {
-  viewer: ['my_documents_status', 'upload_history', 'audit_findings_received', 'pending_review'],
-  document_manager: ['document_inventory', 'pipeline_status', 'overdue_documents', 'rejection_revision_log', 'version_history', 'submission_volume_trend'],
-  auditor: ['my_audit_queue', 'audit_completion_rate', 'time_to_audit', 'common_findings', 'audit_trail_log', 'workload_history'],
-  administrator: Object.keys(REPORT_META),
+  client: ['my_documents_status'],
+  document_manager: ['my_documents_status'],
+  auditor: ['my_audit_queue', 'audit_completion_rate'],
+  administrator: ['user_activity', 'all_users', 'document_inventory'],
 };
 
 function canAccessReport(reportId, role) {
-  if (role === 'administrator') return !!REPORT_META[reportId];
-  var allowed = ACCESS_MAP[role] || [];
+  var normalized = normalizeRole(role);
+  if (normalized === 'administrator') return !!REPORT_META[reportId];
+  var allowed = ACCESS_MAP[normalized] || [];
   return allowed.indexOf(reportId) >= 0;
 }
 

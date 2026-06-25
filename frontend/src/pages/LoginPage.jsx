@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, Loader, ShieldCheck, RefreshCw, LogOut, ArrowRight } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Loader, ShieldCheck, RefreshCw } from 'lucide-react';
 import { authAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
 
@@ -19,6 +19,11 @@ const OTPInput = ({ value, onChange }) => {
   const ref4 = useRef(null); const ref5 = useRef(null);
   const refs = [ref0, ref1, ref2, ref3, ref4, ref5];
   const digits = value.split('').concat(Array(6).fill('')).slice(0, 6);
+
+  useEffect(() => {
+    refs[0].current?.focus();
+  }, []);
+
   const handleKey = (i, e) => {
     if (e.key === 'Backspace') {
       onChange(digits.map((d, idx) => idx === i ? '' : d).join(''));
@@ -34,15 +39,27 @@ const OTPInput = ({ value, onChange }) => {
     refs[Math.min(p.length, 5)].current?.focus();
   };
   return (
-    <div className="flex gap-2 justify-center my-4">
+    <div className="flex gap-2 justify-center my-4" role="group" aria-label="6-digit verification code">
       {digits.map((d, i) => (
         <input key={i} ref={refs[i]} type="text" inputMode="numeric" maxLength={1}
+          aria-label={`Digit ${i + 1}`}
           value={d} onChange={() => {}} onKeyDown={e => handleKey(i, e)} onPaste={handlePaste}
-          className="h-12 w-10 rounded-xl border border-white/20 bg-white/10 text-center text-lg font-bold text-white outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors" />
+          className="h-14 w-11 rounded-xl border-2 border-indigo-400/40 bg-white/15 text-center text-xl font-bold text-white outline-none focus:border-indigo-400 focus:bg-white/20 focus:ring-2 focus:ring-indigo-400/30 transition-colors" />
       ))}
     </div>
   );
 };
+
+function StepBadge({ step, total, label }) {
+  return (
+    <div className="mb-5 rounded-xl border border-indigo-400/25 bg-indigo-500/10 px-4 py-2.5 text-center">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300">
+        Step {step} of {total}
+      </p>
+      <p className="text-xs text-white/80 mt-0.5">{label}</p>
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const [step, setStep]         = useState('credentials');
@@ -55,16 +72,8 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false);
   const [resending, setResending] = useState(false);
   const navigate = useNavigate();
-  const { user, isAuthenticated, setUser, setToken, logout } = useAuthStore();
+  const { user, isAuthenticated, setUser, setToken } = useAuthStore();
   const isPending = isAuthenticated && (user?.approvalStatus === 'pending' || user?.isActive === false);
-
-  const handleSignOut = async () => {
-    try { await authAPI.logout(); } catch { /* ignore */ }
-    logout();
-    setStep('credentials');
-    setOtp('');
-    setError('');
-  };
 
   const handleCredentials = async (e) => {
     e.preventDefault();
@@ -76,13 +85,17 @@ export default function LoginPage() {
         if (res.devOTP) setOtp(res.devOTP);
         if (res.emailWarning) setEmailWarning(true);
         setStep('otp');
+        setLoading(false);
+        return;
       } else if (res.requiresTOTP) {
         setUserId(res.userId);
+        setOtp('');
         setStep('totp');
+        setLoading(false);
+        return;
       } else if (res.token && res.user) {
         setToken(res.token || res.accessToken);
         setUser(res.user);
-        localStorage.setItem('user', JSON.stringify(res.user));
         navigate('/dashboard', { replace: true });
       }
     } catch (err) {
@@ -98,7 +111,6 @@ export default function LoginPage() {
       const res = await authAPI.verifyOTP(userId, otp, 'login');
       setToken(res.token || res.accessToken);
       setUser(res.user);
-      localStorage.setItem('user', JSON.stringify(res.user));
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid or expired code.');
@@ -113,7 +125,6 @@ export default function LoginPage() {
       const res = await authAPI.verifyTOTP(userId, otp);
       setToken(res.token || res.accessToken);
       setUser(res.user);
-      localStorage.setItem('user', JSON.stringify(res.user));
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid authenticator code.');
@@ -167,24 +178,6 @@ export default function LoginPage() {
           <div className="flex-1 flex items-center justify-center px-8 sm:px-12 py-10">
             <div className="w-full max-w-sm">
               <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md p-7 shadow-2xl">
-                {isAuthenticated && !isPending && step === 'credentials' && (
-                  <div className="mb-5 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3">
-                    <p className="text-xs text-amber-100 mb-2">
-                      You are already signed in as <span className="font-semibold">{user?.fullName || user?.email}</span>.
-                    </p>
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <button type="button" onClick={() => navigate('/dashboard', { replace: true })}
-                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-indigo-500 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-400">
-                        Continue to Dashboard <ArrowRight className="h-3.5 w-3.5" />
-                      </button>
-                      <button type="button" onClick={handleSignOut}
-                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white/80 hover:bg-white/10">
-                        <LogOut className="h-3.5 w-3.5" /> Sign in as someone else
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {isPending && (
                   <div className="mb-5 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100">
                     Your account is pending approval.{' '}
@@ -195,6 +188,7 @@ export default function LoginPage() {
                 {/* ── Credentials ── */}
                 {step === 'credentials' && (
                   <>
+                    <StepBadge step={1} total={2} label="Sign in with your email and password" />
                     <h2 className="text-base font-semibold text-white mb-5">Sign in to your account</h2>
                     <ErrorBanner />
                     <form onSubmit={handleCredentials} className="space-y-4" autoComplete="off">
@@ -219,7 +213,7 @@ export default function LoginPage() {
                         <Link to="/forgot-password" className={linkCls}>Forgot password?</Link>
                       </div>
                       <button type="submit" disabled={loading} className={btnPrimary}>
-                        {loading ? <><Loader className="h-4 w-4 animate-spin" /> Signing in...</> : 'Sign In'}
+                        {loading ? <><Loader className="h-4 w-4 animate-spin" /> Checking credentials...</> : 'Continue'}
                       </button>
                     </form>
                     <p className="mt-5 text-center text-xs text-white/40">
@@ -231,15 +225,16 @@ export default function LoginPage() {
                 {/* ── Email OTP ── */}
                 {step === 'otp' && (
                   <>
-                    <div className="text-center mb-5">
+                    <StepBadge step={2} total={2} label="Enter the verification code from your email" />
+                    <div className="text-center mb-4">
                       <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/30 border border-indigo-400/30 mb-3">
                         <ShieldCheck className="h-6 w-6 text-indigo-300" />
                       </div>
-                      <h2 className="text-base font-semibold text-white">Check your email</h2>
-                      <p className="text-xs text-white/50 mt-1">
+                      <h2 className="text-base font-semibold text-white">Enter verification code</h2>
+                      <p className="text-xs text-white/60 mt-1">
                         {emailWarning
-                          ? <>We could not deliver the email. Use <span className="text-white/80">Resend code</span> below or check spam.</>
-                          : <>We sent a 6-digit code to <span className="text-white/80">{email}</span></>}
+                          ? <>Email delivery may be delayed. Use <span className="text-white/90">Resend code</span> or check spam.</>
+                          : <>Code sent to <span className="text-white/90 font-medium">{email}</span></>}
                       </p>
                     </div>
                     {emailWarning && (
@@ -249,7 +244,7 @@ export default function LoginPage() {
                       </div>
                     )}
                     <ErrorBanner />
-                    <OTPInput value={otp} onChange={setOtp} />
+                    <OTPInput key="login-otp" value={otp} onChange={setOtp} />
                     <button onClick={handleOTP} disabled={loading || otp.length !== 6}
                       className={`${btnPrimary} mt-2`}>
                       {loading ? <><Loader className="h-4 w-4 animate-spin" /> Verifying...</> : 'Verify Code'}
@@ -269,7 +264,8 @@ export default function LoginPage() {
                 {/* ── TOTP ── */}
                 {step === 'totp' && (
                   <>
-                    <div className="text-center mb-5">
+                    <StepBadge step={2} total={2} label="Enter the code from your authenticator app" />
+                    <div className="text-center mb-4">
                       <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/30 border border-indigo-400/30 mb-3">
                         <ShieldCheck className="h-6 w-6 text-indigo-300" />
                       </div>
@@ -277,7 +273,7 @@ export default function LoginPage() {
                       <p className="text-xs text-white/50 mt-1">Enter the 6-digit code from your authenticator app</p>
                     </div>
                     <ErrorBanner />
-                    <OTPInput value={otp} onChange={setOtp} />
+                    <OTPInput key="login-totp" value={otp} onChange={setOtp} />
                     <button onClick={handleTOTP} disabled={loading || otp.length !== 6}
                       className={`${btnPrimary} mt-2`}>
                       {loading ? <><Loader className="h-4 w-4 animate-spin" /> Verifying...</> : 'Verify'}

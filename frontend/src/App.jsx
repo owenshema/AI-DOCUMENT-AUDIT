@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import useAuthStore from './store/authStore';
 import ProtectedRoute from './components/ProtectedRoute';
+import SessionGuard from './components/SessionGuard';
 
 import HomePage            from './pages/HomePage';
 import LoginPage           from './pages/LoginPage';
@@ -36,6 +37,7 @@ export default function App() {
 
   return (
     <Router>
+      <SessionGuard />
       <Routes>
         <Route path="/"                element={<HomePage />} />
         <Route path="/login"           element={<LoginPage />} />

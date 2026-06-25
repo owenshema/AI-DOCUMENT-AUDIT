@@ -251,7 +251,7 @@ async function sendAdminApprovalRequest(email, adminName, applicant) {
     subject: `Account approval needed: ${applicant.fullName || applicant.email}`,
     html:    tpl(`
       <p>Hi <strong>${adminName || 'Administrator'}</strong>,</p>
-      <p>A new <strong>${String(applicant.role || 'viewer').replace(/_/g, ' ')}</strong> account needs your approval.</p>
+      <p>A new <strong>${String(applicant.role || 'client').replace(/_/g, ' ')}</strong> account needs your approval.</p>
       <div style="background:#f8fafc;border-radius:12px;padding:14px;margin:16px 0">
         <p><strong>Name:</strong> ${applicant.fullName || 'Not provided'}</p>
         <p><strong>Email:</strong> ${applicant.email}</p>
@@ -262,7 +262,7 @@ async function sendAdminApprovalRequest(email, adminName, applicant) {
         <a href="${portalUrl}" style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600;font-size:14px">Review Account</a>
       </div>
     `),
-    text: `Hi ${adminName || 'Administrator'},\n\nA new ${String(applicant.role || 'viewer').replace(/_/g, ' ')} account needs approval.\nName: ${applicant.fullName || 'Not provided'}\nEmail: ${applicant.email}\nDepartment: ${applicant.department || 'General'}\n\nLog in to approve or reject it: ${portalUrl}`,
+    text: `Hi ${adminName || 'Administrator'},\n\nA new ${String(applicant.role || 'client').replace(/_/g, ' ')} account needs approval.\nName: ${applicant.fullName || 'Not provided'}\nEmail: ${applicant.email}\nDepartment: ${applicant.department || 'General'}\n\nLog in to approve or reject it: ${portalUrl}`,
   });
 }
 

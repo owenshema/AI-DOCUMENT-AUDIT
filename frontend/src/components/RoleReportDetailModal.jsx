@@ -1,6 +1,9 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { X, Download, RefreshCw, Calendar, Shield, ChevronDown, FileText, FileSpreadsheet, FileType, FileCode } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { X, Download, RefreshCw, Calendar, Shield, ChevronDown, FileText, FileSpreadsheet } from 'lucide-react';
 import { roleReportsAPI } from '../api/auth';
+import useAuthStore from '../store/authStore';
+import { exportFormatIdsForRole } from '../config/reportExports';
+import { normalizeRole } from '../config/roles';
 
 const SUMMARY_LABELS = {
   total: 'Total',
@@ -48,9 +51,6 @@ function formatCellValue(value) {
 const EXPORT_FORMATS = [
   { id: 'pdf', label: 'PDF document', ext: 'pdf', Icon: FileText },
   { id: 'excel', label: 'Excel spreadsheet', ext: 'xlsx', Icon: FileSpreadsheet },
-  { id: 'word', label: 'Word document', ext: 'doc', Icon: FileType },
-  { id: 'csv', label: 'CSV file', ext: 'csv', Icon: FileCode },
-  { id: 'txt', label: 'Plain text', ext: 'txt', Icon: FileCode },
 ];
 
 function saveBlob(blob, filename) {
@@ -65,6 +65,13 @@ function saveBlob(blob, filename) {
 }
 
 export default function RoleReportDetailModal({ reportMeta, isDarkMode, onClose }) {
+  const { user } = useAuthStore();
+  const role = normalizeRole(user?.role);
+  const allowedFormats = useMemo(function () {
+    const ids = exportFormatIdsForRole(role);
+    return EXPORT_FORMATS.filter(function (fmt) { return ids.includes(fmt.id); });
+  }, [role]);
+  const pdfOnly = allowedFormats.length === 1;
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -220,6 +227,19 @@ export default function RoleReportDetailModal({ reportMeta, isDarkMode, onClose 
 
         <div className={`flex justify-end gap-2 border-t px-6 py-4 ${isDarkMode ? 'border-white/10' : 'border-gray-200'}`}>
           {report?.rows?.length > 0 && (
+            pdfOnly ? (
+              <button
+                onClick={function () { handleExport(allowedFormats[0]); }}
+                disabled={!!exporting}
+                className={`flex items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-50`}
+              >
+                {exporting ? (
+                  <><RefreshCw className="h-4 w-4 animate-spin" /> Downloading PDF...</>
+                ) : (
+                  <><Download className="h-4 w-4" /> Download PDF</>
+                )}
+              </button>
+            ) : (
             <div className="relative" ref={exportRef}>
               <button
                 onClick={function () { setExportOpen(function (o) { return !o; }); }}
@@ -234,7 +254,7 @@ export default function RoleReportDetailModal({ reportMeta, isDarkMode, onClose 
               </button>
               {exportOpen && (
                 <div className={`absolute bottom-full right-0 mb-2 w-52 overflow-hidden rounded-xl border shadow-xl ${isDarkMode ? 'border-white/10 bg-[#1a1d24]' : 'border-gray-200 bg-white'}`}>
-                  {EXPORT_FORMATS.map(function (fmt) {
+                  {allowedFormats.map(function (fmt) {
                     const Icon = fmt.Icon;
                     return (
                       <button
@@ -251,6 +271,7 @@ export default function RoleReportDetailModal({ reportMeta, isDarkMode, onClose 
                 </div>
               )}
             </div>
+            )
           )}
           <button onClick={onClose} className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600">
             Close

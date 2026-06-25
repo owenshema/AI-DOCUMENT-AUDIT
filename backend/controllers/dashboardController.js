@@ -9,7 +9,7 @@ const getDashboard = async (req, res) => {
   try {
     const { Document, Task, ComplianceCheck, AuditLog } = req.app.locals.models;
     const userId = req.user?.id || 'system';
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
     const Op = require('sequelize').Op;
 
     // Define role-based isolation filters
@@ -103,15 +103,16 @@ const getDashboard = async (req, res) => {
 
 const getDashboardMetrics = async (req, res) => {
   try {
-    const { ComplianceCheck, Document, Task, AuditReport } = req.app.locals.models;
+    const { ComplianceCheck, Document, Task, DocumentAnalysis } = req.app.locals.models;
     const userId = req.user?.id || 'system';
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
     const Op = require('sequelize').Op;
 
     // Define role-based isolation filters
     const docWhere = {};
     const taskWhere = {};
     const checkWhere = {};
+    const analysisWhere = { status: 'completed' };
 
     Object.assign(docWhere, documentWhereForUser({ id: userId, role }));
 
@@ -126,13 +127,35 @@ const getDashboardMetrics = async (req, res) => {
       });
       const allowedDocIds = allowedDocs.map(d => d.id);
       checkWhere.documentId = allowedDocIds;
+      analysisWhere.documentId = allowedDocIds;
     }
 
-    // Audit metrics
+    // Audit metrics from compliance checks table
     const totalComplianceChecks = await ComplianceCheck.count({ where: checkWhere });
     const passedChecks = await ComplianceCheck.count({ where: { ...checkWhere, status: 'passed' } });
     const failedChecks = await ComplianceCheck.count({ where: { ...checkWhere, status: 'failed' } });
     const pendingChecks = await ComplianceCheck.count({ where: { ...checkWhere, status: 'pending' } });
+
+    // Pass rate — fall back to AI analysis scores when no formal compliance checks exist
+    let passRate = totalComplianceChecks > 0
+      ? Math.round((passedChecks / totalComplianceChecks) * 100)
+      : 0;
+
+    if (totalComplianceChecks === 0) {
+      const analyses = await DocumentAnalysis.findAll({
+        where: analysisWhere,
+        attributes: ['results', 'riskFactors'],
+      });
+      if (analyses.length > 0) {
+        const passedAnalyses = analyses.filter(a => {
+          const score = a.results?.compliance_score;
+          if (score != null) return score >= 70;
+          const risk = a.riskFactors?.level || a.results?.risk_level;
+          return risk === 'low';
+        }).length;
+        passRate = Math.round((passedAnalyses / analyses.length) * 100);
+      }
+    }
 
     // Document metrics
     const totalDocuments = await Document.count({ where: docWhere });
@@ -143,10 +166,39 @@ const getDashboardMetrics = async (req, res) => {
       }
     });
 
-    // Task metrics
+    const statusRows = await Document.findAll({
+      where: docWhere,
+      attributes: ['status', [require('sequelize').fn('COUNT', require('sequelize').col('id')), 'count']],
+      group: ['status'],
+      raw: true,
+    });
+    const statusBreakdown = {};
+    statusRows.forEach((row) => {
+      statusBreakdown[row.status] = parseInt(row.count, 10) || 0;
+    });
+
+    // Task metrics — fall back to completed audits / reviewed documents when no tasks exist
     const totalTasks = await Task.count({ where: taskWhere });
-    const completedTasks = await Task.count({ where: { ...taskWhere, status: 'completed' } });
+    let completedTasks = await Task.count({ where: { ...taskWhere, status: 'completed' } });
     const pendingTasks = await Task.count({ where: { ...taskWhere, status: 'pending' } });
+
+    if (completedTasks === 0) {
+      if (role === 'auditor') {
+        completedTasks = await DocumentAnalysis.count({
+          where: { status: 'completed', performedBy: userId },
+        });
+      }
+      if (completedTasks === 0) {
+        completedTasks = await Document.count({
+          where: {
+            ...docWhere,
+            status: { [Op.in]: ['approved', 'reviewed', 'rejected'] },
+          },
+        });
+      }
+    }
+
+    const effectiveTotalTasks = Math.max(totalTasks, completedTasks + pendingTasks);
 
     const metrics = {
       complianceMetrics: {
@@ -154,18 +206,21 @@ const getDashboardMetrics = async (req, res) => {
         passed: passedChecks,
         failed: failedChecks,
         pending: pendingChecks,
-        passRate: totalComplianceChecks > 0 ? Math.round((passedChecks / totalComplianceChecks) * 100) : 0
+        passRate,
       },
       documentMetrics: {
         total: totalDocuments,
-        uploadedToday
+        uploadedToday,
+        statusBreakdown,
       },
       taskMetrics: {
-        total: totalTasks,
+        total: effectiveTotalTasks,
         pending: pendingTasks,
         completed: completedTasks,
-        completionRate: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-      }
+        completionRate: effectiveTotalTasks > 0
+          ? Math.round((completedTasks / effectiveTotalTasks) * 100)
+          : 0,
+      },
     };
 
     res.json(metrics);

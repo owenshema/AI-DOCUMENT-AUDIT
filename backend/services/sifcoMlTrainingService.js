@@ -13,6 +13,7 @@ var CORPUS_PATH = path.join(TRAINING_DIR, 'corpus.json');
 var auditReportTraining = require('./auditReportTrainingService');
 var notebookTraining = require('./notebookTrainingService');
 var notebookAudit = require('./sifcoNotebookAuditService');
+var calcService = require('./documentCalculationService');
 
 /** Six SIFCO daily papers — fingerprints extracted from your reference PDFs */
 var REFERENCE_SPECS = [
@@ -244,7 +245,11 @@ var ACCEPT_MARKER_RATIO = 0.50;
 var ACCEPT_MIN_SIMILARITY = 0.22;
 var ACCEPT_AMBIGUITY_MARGIN = 0.08;
 var MIN_BODY_LENGTH = 80;
-var REJECTED_COMPLIANCE_SCORE = 10;
+var REJECTED_COMPLIANCE_SCORE = 0;
+
+var NOT_COMPANY_MESSAGE =
+  'Document not from our company. This file does not match any SIFCO trained reference document ' +
+  '(packing list, HBL, shipping agreement, freight invoice, trucking invoice, or sea freight invoice).';
 
 function specForId(id) {
   for (var i = 0; i < REFERENCE_SPECS.length; i++) {
@@ -320,6 +325,40 @@ function buildAcceptedInspection(documentText, best) {
     request: { has_request: false, approval_status: null },
     dates: { all_dates: [], issues: [] },
   };
+}
+
+function buildCompanyIncompleteInspection(documentText, best) {
+  var insp = buildAcceptedInspection(documentText, best);
+  insp.not_our_document = false;
+  return insp;
+}
+
+function resolveCompanyDocumentMatch(mlResult, notebookResult, notebookStructuralOk, normalizedText) {
+  if (mlResult.accepted && mlResult.bestMatch) {
+    return { isCompany: true, specId: mlResult.bestMatch.id, best: mlResult.bestMatch, via: 'ml' };
+  }
+  if (notebookResult.specId && notebookStructuralOk && notebookResult.confidence >= 50) {
+    var nbScore = (mlResult.allScores || []).find(function (s) { return s.id === notebookResult.specId; });
+    return {
+      isCompany: true,
+      specId: notebookResult.specId,
+      best: nbScore || mlResult.bestMatch,
+      via: 'notebook',
+    };
+  }
+  if (mlResult.bestMatch &&
+    mlResult.bestMatch.markerRequired >= 55 &&
+    mlResult.bestMatch.markerBrand >= 25 &&
+    mlResult.bestMatch.combinedScore >= 0.38 &&
+    passesCompanyCriteria(mlResult.bestMatch, normalizedText || '')) {
+    return {
+      isCompany: true,
+      specId: mlResult.bestMatch.id,
+      best: mlResult.bestMatch,
+      via: 'ml-strong-markers',
+    };
+  }
+  return { isCompany: false, specId: null, best: mlResult.bestMatch, via: null };
 }
 
 function passesCompanyCriteria(best, normalizedText) {
@@ -582,122 +621,128 @@ function runTrainedAudit(documentText, context) {
     notebookStructuralOk = true;
   }
 
-  var matchedSpecId = notebookResult.specId || (mlResult.accepted && mlResult.bestMatch ? mlResult.bestMatch.id : null);
-  var fieldValidation = matchedSpecId
-    ? runFullFieldValidation(documentText, matchedSpecId, notebookResult)
-    : { issues: notebookResult.issues || [], fields: notebookResult.fields || {}, missing_fields: [] };
+  var bodyText = extractBodyTextForAudit(documentText || '');
+  var normalizedBody = normalizeText(bodyText);
+  var company = resolveCompanyDocumentMatch(mlResult, notebookResult, notebookStructuralOk, normalizedBody);
 
+  if (!company.isCompany) {
+    var rejectMessage = NOT_COMPANY_MESSAGE;
+    if (mlResult.reason === 'unreadable' || notebookResult.reason === 'unreadable') {
+      rejectMessage = mlResult.message || notebookResult.message || rejectMessage;
+    } else if (company.best && company.best.label) {
+      rejectMessage += ' Closest trained type: ' + company.best.label +
+        ' (' + Math.round((company.best.combinedScore || 0) * 100) + '% similarity).';
+    }
+    violations = [{
+      code: 'NOT-COMPANY-DOC',
+      title: 'Document not from our company',
+      summary: rejectMessage,
+      severity: 'CRITICAL',
+      detail: company.best
+        ? 'Closest type: ' + company.best.label + ' (' + Math.round((company.best.combinedScore || 0) * 100) + '%).'
+        : 'Upload a document that matches one of the six SIFCO trained reference formats.',
+    }];
+    return {
+      document_type: 'unknown',
+      organization_match: false,
+      trained_reference_match: false,
+      organization_message: rejectMessage,
+      organization_category: null,
+      organization_training: {
+        paper_label: null,
+        paper_purpose: null,
+        training_profile: 'sifco-notebook-v2',
+        ml_training: {
+          model: 'sifco-ml-v1',
+          best_match: company.best ? {
+            type: company.best.id,
+            label: company.best.label,
+            reference_pdf: company.best.referencePdf,
+            similarity_percent: Math.round((company.best.similarity || 0) * 100),
+            confidence_percent: Math.round((company.best.combinedScore || 0) * 100),
+            marker_match_percent: company.best.markerRequired,
+            brand_match_percent: company.best.markerBrand,
+          } : null,
+        },
+        reference_pdf: company.best ? company.best.referencePdf : null,
+        similarity_percent: company.best ? Math.round((company.best.similarity || 0) * 100) : 0,
+        confidence_percent: REJECTED_COMPLIANCE_SCORE,
+        field_risk_percent: 100,
+        missing_field_count: 0,
+        valid_but_incomplete: false,
+      },
+      compliance_score: REJECTED_COMPLIANCE_SCORE,
+      ai_generated_percentage: 0,
+      ai_threshold_exceeded: false,
+      ai_validity_percentage: REJECTED_COMPLIANCE_SCORE,
+      risk_level: 'high',
+      sentiment: 'negative',
+      summary: rejectMessage,
+      missing_fields: [],
+      extracted_fields: {
+        paper_type: null,
+        matched_reference: null,
+        confidence: REJECTED_COMPLIANCE_SCORE + '%',
+        notebook_fields: {},
+      },
+      violations: violations,
+      inconsistencies: violations,
+      recommendations: [rejectMessage],
+      fraud_flags: violations,
+      policy_rules_checked: 0,
+      engine: 'sifco-ml-trained',
+      document_inspection: buildRejectedInspection(),
+    };
+  }
+
+  var matchedSpecId = company.specId;
+  best = company.best || nbMlScore || mlResult.bestMatch;
+  auditEngine = company.via === 'notebook' ? 'sifco-notebook-trained' : 'sifco-ml-trained';
+
+  var fieldValidation = runFullFieldValidation(documentText, matchedSpecId, notebookResult);
   var allIssues = fieldValidation.issues.length ? fieldValidation.issues : (notebookResult.issues || []);
   var missing_fields = notebookAudit.issuesToMissingFields(allIssues);
+  var calculation_errors = calcService.calculationErrorsFromIssues(allIssues);
   var fieldBlock = notebookAudit.hasBlockingIssues(allIssues);
   var criticalIssues = notebookAudit.hasCriticalIssues(allIssues);
   var mandatoryMissing = notebookAudit.hasMandatoryMissing(missing_fields, allIssues);
-  var validButIncomplete = !!(matchedSpecId && mandatoryMissing && !criticalIssues);
+  var validButIncomplete = !!(mandatoryMissing && !criticalIssues);
   violations = notebookAudit.issuesToViolations(allIssues);
 
-  var recognized = false;
-  if (notebookResult.specId && notebookResult.confidence >= 40) {
-    recognized = true;
-    matchedSpecId = matchedSpecId || notebookResult.specId;
-  }
-  if (notebookResult.specId && (notebookStructuralOk || notebookResult.confidence >= 55)) {
-    recognized = true;
-  } else if (mlResult.accepted && mlResult.bestMatch) {
-    recognized = true;
-    matchedSpecId = matchedSpecId || mlResult.bestMatch.id;
-  } else if (matchedSpecId && mlResult.bestMatch && mlResult.bestMatch.combinedScore >= 0.32) {
-    recognized = true;
-  } else if (mlResult.bestMatch && mlResult.bestMatch.markerRequired >= 30) {
-    recognized = true;
-    matchedSpecId = matchedSpecId || mlResult.bestMatch.id;
+  if (!fieldBlock && !mandatoryMissing) {
+    accepted = true;
+  } else {
+    accepted = false;
   }
 
-  if (recognized && !fieldBlock && !mandatoryMissing) {
-    accepted = true;
-    auditEngine = notebookResult.specId && notebookStructuralOk ? 'sifco-notebook-trained' : 'sifco-ml-trained';
-    compliance_score = notebookAudit.complianceScoreFromFieldGaps(allIssues, missing_fields, { recognizedAsSifco: true });
-    documentType = matchedSpecId || notebookResult.specId || mlResult.bestMatch.id;
-    paperLabel = notebookResult.docTypeName || (mlResult.bestMatch && mlResult.bestMatch.label) || documentType;
-    var passSpec = specForId(documentType);
-    paperPurpose = passSpec ? passSpec.purpose : null;
-    referencePdf = passSpec ? passSpec.referencePdf : null;
-    best = nbMlScore || mlResult.bestMatch || best;
-    if (notebookResult.specId && notebookResult.message && !fieldBlock) {
-      message = notebookResult.message;
-    } else {
-      message = 'Validated as SIFCO ' + paperLabel + ' — compliance ' + compliance_score + '%.';
-    }
+  compliance_score = notebookAudit.complianceScoreFromFieldGaps(allIssues, missing_fields, {
+    recognizedAsSifco: true,
+    hasCritical: criticalIssues,
+  });
+  documentType = matchedSpecId;
+  paperLabel = notebookResult.docTypeName || (best && best.label) || documentType;
+  var passSpec = specForId(documentType);
+  paperPurpose = passSpec ? passSpec.purpose : null;
+  referencePdf = passSpec ? passSpec.referencePdf : null;
+
+  if (accepted) {
+    message = 'Validated as SIFCO ' + paperLabel + ' — compliance ' + compliance_score +
+      '% (' + missing_fields.length + ' missing field(s) checked against trained references).';
     if (missing_fields.length) {
       message += ' Notes: ' + missing_fields.slice(0, 3).join(', ') + '.';
     }
-  } else if (recognized && (fieldBlock || mandatoryMissing)) {
-    auditEngine = notebookResult.specId ? 'sifco-notebook-trained' : 'sifco-ml-trained';
-    accepted = false;
-    compliance_score = notebookAudit.complianceScoreFromFieldGaps(allIssues, missing_fields, {
-      recognizedAsSifco: true,
-      hasCritical: criticalIssues,
-    });
-    documentType = matchedSpecId;
-    paperLabel = notebookResult.docTypeName || (best ? best.label : matchedSpecId);
-    var blockSpec = specForId(matchedSpecId);
-    paperPurpose = blockSpec ? blockSpec.purpose : null;
-    referencePdf = blockSpec ? blockSpec.referencePdf : null;
-    if (criticalIssues) {
-      message = 'SIFCO document rejected — critical validation failed.';
-      var crit = allIssues.filter(function (i) { return i.severity === 'CRITICAL'; })[0];
-      if (crit) message += ' ' + crit.message;
-    } else {
-      message = 'Valid SIFCO ' + (paperLabel || documentType) + ' — compliance ' + compliance_score +
-        '% due to missing or incomplete fields.';
-      if (missing_fields.length) {
-        message += ' Missing: ' + missing_fields.slice(0, 6).join(', ') + '.';
-      } else {
-        var topIssue = allIssues.filter(function (i) { return i.severity === 'HIGH'; })[0];
-        if (topIssue) message += ' ' + topIssue.message;
-      }
-    }
+  } else if (criticalIssues) {
+    message = 'SIFCO document — critical validation failed. Compliance ' + compliance_score + '%.';
+    var crit = allIssues.filter(function (i) { return i.severity === 'CRITICAL'; })[0];
+    if (crit) message += ' ' + crit.message;
   } else {
-    auditEngine = 'sifco-ml-trained';
-    if (notebookResult.specId && notebookResult.confidence >= 40) {
-      recognized = true;
-      matchedSpecId = notebookResult.specId;
-      documentType = notebookResult.specId;
-      paperLabel = notebookResult.docTypeName || documentType;
-      var fallbackSpec = specForId(matchedSpecId);
-      paperPurpose = fallbackSpec ? fallbackSpec.purpose : null;
-      referencePdf = fallbackSpec ? fallbackSpec.referencePdf : null;
-      compliance_score = notebookAudit.complianceScoreFromFieldGaps(allIssues, missing_fields, { recognizedAsSifco: true });
-      message = 'SIFCO ' + (paperLabel || documentType) + ' recognized (' + notebookResult.confidence + '% match) — compliance ' + compliance_score + '%.';
-    } else if (mlResult.reason === 'unreadable' || notebookResult.reason === 'unreadable') {
-      message = mlResult.message || notebookResult.message;
-    } else if (notebookResult.reason === 'unknown_type') {
-      message = notebookResult.message;
-      if (mlResult.bestMatch && mlResult.bestMatch.markerRequired >= 30) {
-        message += ' Closest ML match: ' + mlResult.bestMatch.label + ' (' + Math.round(mlResult.bestMatch.combinedScore * 100) + '%).';
-      }
-    } else if (notebookResult.reason === 'fraud_or_critical') {
-      message = notebookResult.message;
-      violations = notebookAudit.issuesToViolations(notebookResult.issues);
-    } else if (mlResult.reason === 'company_criteria_failed') {
-      message =
-        'Document rejected: does not meet SIFCO company criteria — missing required partner branding, authorized signature, or official stamp/seal for the trained paper format.';
-    } else if (best && best.markerRequired >= 30) {
-      message =
-        'This document is closest to "' + best.label + '" (' + Math.round(best.combinedScore * 100) +
-        '% confidence) but does not sufficiently match the SIFCO reference "' + best.referencePdf + '".';
+    message = 'SIFCO ' + (paperLabel || documentType) + ' — compliance ' + compliance_score +
+      '% based on ' + missing_fields.length + ' missing/incomplete field(s) against trained references.';
+    if (missing_fields.length) {
+      message += ' Missing: ' + missing_fields.slice(0, 8).join(', ') + '.';
     } else {
-      message =
-        'This document does not match any of the six SIFCO daily papers used for training (packing list, HBL, shipping agreement, freight invoice, trucking invoice, sea freight invoice).';
-    }
-    if (!violations.length) {
-      violations = [{
-        code: 'ML-REJECT',
-        title: 'Not a trained SIFCO document',
-        summary: message,
-        detail: best
-          ? 'Closest type: ' + best.label + ' (' + Math.round(best.combinedScore * 100) + '%).'
-          : 'Upload one of the six reference document types used in daily SIFCO customer operations.',
-      }];
+      var topIssue = allIssues.filter(function (i) { return i.severity === 'HIGH'; })[0];
+      if (topIssue) message += ' ' + topIssue.message;
     }
   }
 
@@ -739,15 +784,14 @@ function runTrainedAudit(documentText, context) {
     }),
   };
 
-  var orgRecognized = accepted || validButIncomplete || recognized ||
-    !!(notebookResult.specId && notebookResult.confidence >= 40);
+  var orgRecognized = true;
   var highCount = allIssues.filter(function (i) { return i.severity === 'HIGH'; }).length;
   var fieldRiskPct = notebookAudit.fieldRiskPercent(compliance_score, missing_fields.length, highCount);
   var riskLevel = notebookAudit.riskLevelFromScore(compliance_score, orgRecognized);
 
   return {
-    document_type: documentType !== 'unknown' ? documentType : (matchedSpecId || 'unknown'),
-    organization_match: orgRecognized,
+    document_type: documentType,
+    organization_match: true,
     trained_reference_match: accepted,
     organization_message: message,
     organization_category: orgRecognized ? (documentType || matchedSpecId) : null,
@@ -773,15 +817,11 @@ function runTrainedAudit(documentText, context) {
     sentiment: accepted ? 'positive' : (validButIncomplete ? 'neutral' : 'negative'),
     summary: message,
     missing_fields: missing_fields,
-    extracted_fields: accepted ? {
+    calculation_errors: calculation_errors,
+    extracted_fields: {
       paper_type: paperLabel || (best ? best.label : null),
       matched_reference: referencePdf || (best ? best.referencePdf : null),
       confidence: compliance_score + '%',
-      notebook_fields: fieldValidation.fields || notebookResult.fields || {},
-    } : {
-      paper_type: paperLabel || null,
-      matched_reference: referencePdf || null,
-      confidence: REJECTED_COMPLIANCE_SCORE + '%',
       notebook_fields: fieldValidation.fields || notebookResult.fields || {},
     },
     violations: violations,
@@ -794,7 +834,7 @@ function runTrainedAudit(documentText, context) {
     engine: auditEngine,
     document_inspection: accepted
       ? buildAcceptedInspection(documentText, best || { id: documentType, label: paperLabel, purpose: paperPurpose })
-      : buildRejectedInspection(),
+      : buildCompanyIncompleteInspection(documentText, best || { id: documentType, label: paperLabel, purpose: paperPurpose }),
   };
 }
 

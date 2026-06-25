@@ -191,13 +191,13 @@ async function run() {
 
   // ── 12. Registration validation ───────────────────────────────────────────
   console.log('\n12. Registration Validation');
-  const regBadEmail = await req('POST', '/auth/register', { fullName: 'Test', email: 'notanemail', password: 'Test@123', department: 'IT', role: 'viewer' });
+  const regBadEmail = await req('POST', '/auth/register', { fullName: 'Test', email: 'notanemail', password: 'Test@123', department: 'IT', role: 'client' });
   check('Register with invalid email → 400', regBadEmail.status === 400, `error="${regBadEmail.body?.error}"`);
 
-  const regWeakPass = await req('POST', '/auth/register', { fullName: 'Test', email: 'test@test.com', password: 'weak', department: 'IT', role: 'viewer' });
+  const regWeakPass = await req('POST', '/auth/register', { fullName: 'Test', email: 'test@test.com', password: 'weak', department: 'IT', role: 'client' });
   check('Register with weak password → 400', regWeakPass.status === 400, `error="${regWeakPass.body?.error}"`);
 
-  const regDupEmail = await req('POST', '/auth/register', { fullName: 'Test', email: 'owenshema76@gmail.com', password: 'Test@123!', department: 'IT', role: 'viewer' });
+  const regDupEmail = await req('POST', '/auth/register', { fullName: 'Test', email: 'owenshema76@gmail.com', password: 'Test@123!', department: 'IT', role: 'client' });
   check('Register with duplicate email → 409', regDupEmail.status === 409, `error="${regDupEmail.body?.error}"`);
 
   // ── 13. Audit Rules Engine ────────────────────────────────────────────────

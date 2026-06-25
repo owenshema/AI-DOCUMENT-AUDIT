@@ -4,7 +4,7 @@
  */
 
 class RegisterRequestDTO {
-  constructor(email, password, fullName, department, role = 'viewer') {
+  constructor(email, password, fullName, department, role = 'client') {
     this.email = email;
     this.password = password;
     this.fullName = fullName;
@@ -27,7 +27,7 @@ class RegisterRequestDTO {
     if (!this.department || this.department.trim() === '') {
       errors.push('Department required');
     }
-    if (!['viewer', 'document_manager', 'auditor', 'administrator'].includes(this.role)) {
+    if (!['client', 'viewer', 'document_manager', 'auditor', 'administrator'].includes(this.role)) {
       errors.push('Invalid role');
     }
     

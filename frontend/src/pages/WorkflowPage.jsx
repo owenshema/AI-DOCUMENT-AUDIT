@@ -87,7 +87,7 @@ function documentToWorkflowItem(doc) {
 
 export default function WorkflowPage() {
   const { user, isDarkMode } = useAuthStore();
-  const role = user?.role || 'viewer';
+  const role = user?.role || 'client';
   const canUpdate = role === 'auditor' || role === 'administrator';
   const card = isDarkMode ? 'bg-[#111318] border-white/8' : 'bg-white border-gray-200 shadow-sm';
   const text = isDarkMode ? 'text-white' : 'text-gray-900';

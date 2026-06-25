@@ -106,6 +106,67 @@ Do not guess. Return null for missing fields.`;
 
 // ── Module 3: Core Audit Engine ───────────────────────────────────────────────
 
+var BRAND_TEXT_PATTERN = /sifco|super\s+international|al\s+shamali|agape\s+house|top\s+sifco|ganador|superfreightservice/i;
+
+function hadVisualForgeryAnalysis(forgeryResult, context) {
+  return !!(forgeryResult && (forgeryResult.logo || forgeryResult.stamp || forgeryResult.signature) &&
+    (context.filePath || context.imagePath));
+}
+
+function collectCompanyIntegrityGaps(documentText, forgeryResult, context) {
+  var gaps = [];
+  if (!hadVisualForgeryAnalysis(forgeryResult, context)) {
+    return gaps;
+  }
+
+  if (forgeryResult.logo && !forgeryResult.logo.detected) {
+    gaps.push('Company logo not detected on document');
+  }
+  if (forgeryResult.stamp && !forgeryResult.stamp.detected) {
+    gaps.push('Official stamp/seal not detected on document');
+  }
+  if (forgeryResult.signature && !forgeryResult.signature.detected) {
+    gaps.push('Signature not detected on document image');
+  }
+
+  return gaps;
+}
+
+function applyIntegrityGapsToScore(ruleResult, documentText, forgeryResult, context) {
+  if (!ruleResult.organization_match) return;
+  var notebookAudit = require('./sifcoNotebookAuditService');
+  var gaps = collectCompanyIntegrityGaps(documentText, forgeryResult, context);
+  if (!gaps.length) return;
+
+  ruleResult.missing_fields = (ruleResult.missing_fields || []).slice();
+  gaps.forEach(function (g) {
+    if (ruleResult.missing_fields.indexOf(g) < 0) ruleResult.missing_fields.push(g);
+  });
+
+  var gapIssues = (ruleResult.violations || []).map(function (v) {
+    return { severity: v.severity, message: v.summary, check: v.title };
+  });
+  ruleResult.compliance_score = notebookAudit.complianceScoreFromFieldGaps(
+    gapIssues,
+    ruleResult.missing_fields,
+    { recognizedAsSifco: true }
+  );
+  ruleResult.ai_validity_percentage = ruleResult.compliance_score;
+
+  ruleResult.violations = ruleResult.violations || [];
+  gaps.forEach(function (g) {
+    var code = /logo|branding/i.test(g) ? 'MISSING-LOGO' : /stamp|seal/i.test(g) ? 'MISSING-STAMP' : 'MISSING-SIGNATURE';
+    if (!ruleResult.violations.some(function (v) { return v.summary === g; })) {
+      ruleResult.violations.push({
+        code: code,
+        title: g.split(' not ')[0] || 'Integrity check',
+        summary: g,
+        severity: /logo|branding/i.test(g) ? 'HIGH' : 'MEDIUM',
+      });
+    }
+  });
+}
+
 async function auditDocument(documentText, policyRules = [], context = {}) {
   const ruleResult = runAudit(documentText, context);
 
@@ -117,8 +178,7 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
   ruleResult.document_inspection = ruleResult.document_inspection || {};
   ruleResult.document_inspection.forgery_analysis = forgeryResult;
 
-  var sifcoType = ruleResult.document_type && ruleResult.document_type !== 'unknown';
-  var isOurs = !!ruleResult.organization_match || sifcoType;
+  var isOurs = !!ruleResult.organization_match;
   var savedCompliance = ruleResult.compliance_score;
   var savedMessage = ruleResult.organization_message;
 
@@ -159,14 +219,21 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
     };
     di.request = di.request || { has_request: false };
     di.dates = di.dates || { all_dates: [], issues: [] };
-    if (sifcoType && !ruleResult.organization_match) {
-      ruleResult.organization_match = true;
-      ruleResult.compliance_score = savedCompliance > 10 ? savedCompliance : 60;
-      ruleResult.ai_validity_percentage = ruleResult.compliance_score;
+
+    applyIntegrityGapsToScore(ruleResult, documentText, forgeryResult, context);
+
+    if (ruleResult.document_inspection.organization) {
+      var brandInText = BRAND_TEXT_PATTERN.test(documentText || '');
+      var logoVisual = forgeryResult.logo && forgeryResult.logo.detected;
+      ruleResult.document_inspection.organization.present = !!(logoVisual || brandInText);
+      ruleResult.document_inspection.organization.logo_detected = !!logoVisual;
+      ruleResult.document_inspection.organization.brand_text_detected = brandInText;
     }
-  } else if (!sifcoType) {
-    ruleResult.compliance_score = 10;
-    ruleResult.ai_validity_percentage = 10;
+  } else {
+    ruleResult.compliance_score = 0;
+    ruleResult.ai_validity_percentage = 0;
+    ruleResult.organization_match = false;
+    ruleResult.organization_message = savedMessage || 'Document not from our company.';
     ruleResult.document_inspection = {
       assessed: false,
       not_our_document: true,
@@ -182,19 +249,19 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
   }
 
   // Per-type notebook validation only — never use generic forgery field lists on SIFCO papers.
-  if (!isOurs && !sifcoType &&
+  if (!isOurs &&
     (!ruleResult.missing_fields || !ruleResult.missing_fields.length) &&
     forgeryResult.missing_fields && !forgeryResult.sifco_document) {
     ruleResult.missing_fields = forgeryResult.missing_fields;
   }
 
   var forgeryScore = Number(forgeryResult.forgery_score) || 0;
-  if (forgeryResult.is_suspicious && forgeryScore >= 45 && !isOurs && !sifcoType) {
+  if (forgeryResult.is_suspicious && forgeryScore >= 45 && !isOurs) {
     ruleResult.organization_match = false;
     ruleResult.trained_reference_match = false;
     ruleResult.risk_level = 'high';
-    ruleResult.compliance_score = 10;
-    ruleResult.ai_validity_percentage = 10;
+    ruleResult.compliance_score = 0;
+    ruleResult.ai_validity_percentage = 0;
     ruleResult.document_inspection = {
       assessed: false,
       not_our_document: true,
@@ -219,7 +286,7 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
     ruleResult.organization_message =
       'Document rejected: integrity check failed (forgery risk ' + forgeryScore + '/100). ' +
       (savedMessage || '');
-  } else if (forgeryResult.is_suspicious && forgeryScore >= 45 && (isOurs || sifcoType)) {
+  } else if (forgeryResult.is_suspicious && forgeryScore >= 45 && isOurs) {
     ruleResult.inconsistencies = ruleResult.inconsistencies || [];
     if (!ruleResult.inconsistencies.some(function (i) { return i.code === 'FORGERY-FLAG'; })) {
       ruleResult.inconsistencies.push({
@@ -255,21 +322,12 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
   const overall = require('./auditScoreService').computeOverallAuditScore(ruleResult);
   Object.assign(ruleResult, overall);
 
-  var notebookAudit = require('./sifcoNotebookAuditService');
-  var gapIssues = (ruleResult.violations || []).map(function (v) {
-    return { severity: v.severity, message: v.summary, check: v.title };
-  });
-  var requiredGapScore = notebookAudit.scoreForFieldIncomplete(gapIssues);
-  if (requiredGapScore != null) {
-    ruleResult.compliance_score = requiredGapScore;
-    ruleResult.ai_validity_percentage = requiredGapScore;
-    if (ruleResult.risk_level === 'low') {
-      ruleResult.risk_level = 'medium';
-    }
-    var gapOverall = require('./auditScoreService').computeOverallAuditScore(
-      Object.assign({}, ruleResult, { compliance_score: requiredGapScore })
-    );
-    Object.assign(ruleResult, gapOverall);
+  if (isOurs && ruleResult.missing_fields && ruleResult.missing_fields.length) {
+    ruleResult.field_score_summary = {
+      method: '100 minus penalties per missing/failed trained field check',
+      missing_field_count: ruleResult.missing_fields.length,
+      penalty_per_missing_field: require('./sifcoNotebookAuditService').MISSING_FIELD_PENALTY || 8,
+    };
   }
 
   return ruleResult;
@@ -381,7 +439,7 @@ function getPermittedActions(role) {
       audit:      ['view'],
       workflow:   ['create', 'assign', 'view'],
     },
-    viewer: {
+    client: {
       documents:  ['read'],
       analysis:   ['view'],
       compliance: ['read'],
@@ -389,7 +447,7 @@ function getPermittedActions(role) {
       workflow:   ['view'],
     },
   };
-  return permissions[role] || permissions.viewer;
+  return permissions[role] || permissions.client;
 }
 
 module.exports = {

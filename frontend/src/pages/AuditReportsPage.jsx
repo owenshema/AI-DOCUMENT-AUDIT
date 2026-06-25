@@ -4,18 +4,11 @@ import AppShell from '../components/AppShell';
 import RoleReportDetailModal from '../components/RoleReportDetailModal';
 import useAuthStore from '../store/authStore';
 import {
-  ROLE_SECTIONS,
-  ROLE_REPORTS,
   sectionsForUserRole,
   reportsForSection,
 } from '../config/roleReports';
-
-const ROLE_LABELS = {
-  administrator: 'Administrator',
-  auditor: 'Auditor',
-  document_manager: 'Document Manager',
-  viewer: 'Viewer',
-};
+import { ROLE_LABELS, normalizeRole, isOwnerRole } from '../config/roles';
+import { exportHintForRole } from '../config/reportExports';
 
 function ReportCard({ report, isDarkMode, onClick }) {
   const card = isDarkMode
@@ -40,7 +33,7 @@ function ReportCard({ report, isDarkMode, onClick }) {
 function RoleSection({ section, isDarkMode, onSelectReport }) {
   const reports = reportsForSection(section.id);
   const headerBg = isDarkMode ? section.headerClass : section.headerLight;
-  const headerText = isDarkMode ? 'text-white' : section.id === 'viewer' ? 'text-blue-800' : section.id === 'document_manager' ? 'text-emerald-800' : section.id === 'auditor' ? 'text-orange-800' : 'text-violet-800';
+  const headerText = isDarkMode ? 'text-white' : section.id === 'client' ? 'text-blue-800' : section.id === 'document_manager' ? 'text-emerald-800' : section.id === 'auditor' ? 'text-orange-800' : 'text-violet-800';
   const tagBg = isDarkMode ? 'bg-white/15 text-white/90' : 'bg-black/5 text-gray-700';
 
   return (
@@ -74,7 +67,7 @@ function RoleSection({ section, isDarkMode, onSelectReport }) {
 
 export default function AuditReportsPage() {
   const { user, isDarkMode } = useAuthStore();
-  const role = user?.role || 'viewer';
+  const role = normalizeRole(user?.role);
   const [selectedReport, setSelectedReport] = useState(null);
 
   const sections = sectionsForUserRole(role);
@@ -82,16 +75,16 @@ export default function AuditReportsPage() {
   const text = isDarkMode ? 'text-white' : 'text-gray-900';
   const sub = isDarkMode ? 'text-slate-500' : 'text-gray-500';
 
-  const scopeLabel = role === 'viewer'
-    ? 'Personal activity only — you only see reports about your own uploads and findings.'
-    : role === 'document_manager'
-      ? 'Operational view — pipeline health and inventory across all documents.'
-      : role === 'auditor'
-        ? 'Your workload and quality insights — queue, completion rates, and common findings.'
-        : 'Full system visibility — all role reports plus admin-only analytics.';
+  const isPersonalReportRole = isOwnerRole(role);
+  const exportHint = exportHintForRole(role);
+  const scopeLabel = isPersonalReportRole
+    ? 'View your uploaded documents and their audit status. You can download this report as PDF only.'
+    : role === 'auditor'
+      ? 'Your assigned audit queue and personal completion rate. Export as PDF or Excel.'
+      : 'User activity history, all registered users, and every document upload status. Export reports as PDF only.';
 
   return (
-    <AppShell title={role === 'viewer' || role === 'document_manager' ? 'My Reports' : 'Audit Reports'}>
+    <AppShell title={isOwnerRole(role) ? 'My Reports' : 'Audit Reports'}>
       <div className={`mb-6 rounded-2xl border px-5 py-4 ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/25' : 'bg-indigo-50 border-indigo-100'}`}>
         <div className="flex flex-wrap items-center gap-3">
           <Shield className="h-4 w-4 text-indigo-400" />
@@ -104,12 +97,23 @@ export default function AuditReportsPage() {
         <p className={`mt-2 text-sm ${sub}`}>{scopeLabel}</p>
       </div>
 
+      {!isPersonalReportRole && (
       <div className="mb-4">
-        <h1 className={`text-xl font-bold ${text}`}>Reports by role</h1>
+        <h1 className={`text-xl font-bold ${text}`}>{role === 'auditor' ? 'My audit reports' : 'Admin reports'}</h1>
         <p className={`mt-1 text-sm ${sub}`}>
-          Click any report card to view details, summary metrics, and export data.
+          Click any report card to view details, summary metrics, and export data ({exportHint}).
         </p>
       </div>
+      )}
+
+      {isPersonalReportRole && (
+      <div className="mb-4">
+        <h1 className={`text-xl font-bold ${text}`}>My document report</h1>
+        <p className={`mt-1 text-sm ${sub}`}>
+          Open the report below to see every document you uploaded and its current status, then download a PDF copy.
+        </p>
+      </div>
+      )}
 
       <div className="space-y-6">
         {sections.map(function (section) {
@@ -126,7 +130,7 @@ export default function AuditReportsPage() {
 
       {role === 'administrator' && (
         <p className={`mt-6 text-xs ${sub}`}>
-          As admin you can open all {ROLE_REPORTS.length} reports across {ROLE_SECTIONS.length} role sections.
+          Admin reports cover user activity history, all users, and document upload status across the system.
         </p>
       )}
 

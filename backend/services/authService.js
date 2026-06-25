@@ -32,7 +32,7 @@ class AuthService {
       password: registerDTO.password,
       fullName: registerDTO.fullName,
       department: registerDTO.department,
-      role: registerDTO.role || 'viewer'
+      role: registerDTO.role || 'client'
     });
 
     // Log registration

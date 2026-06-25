@@ -7,6 +7,7 @@ import {
 import AppShell from '../components/AppShell';
 import { analysisAPI, dashboardAPI, documentAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
+import { formatRoleLabel, normalizeRole, isOwnerRole } from '../config/roles';
 
 const STATUS_LABEL = {
   uploaded: 'Uploaded',
@@ -19,57 +20,113 @@ const STATUS_LABEL = {
   changes_requested: 'Changes Needed',
 };
 
-const STATUS_PILL = {
-  uploaded: 'bg-slate-500/15 text-slate-400',
-  in_review: 'bg-amber-500/15 text-amber-400',
-  in_progress: 'bg-blue-500/15 text-blue-400',
-  submitted: 'bg-indigo-500/15 text-indigo-400',
-  reviewed: 'bg-purple-500/15 text-purple-400',
-  approved: 'bg-emerald-500/15 text-emerald-400',
-  rejected: 'bg-red-500/15 text-red-400',
-  changes_requested: 'bg-orange-500/15 text-orange-400',
-};
+function useDashboardStyles() {
+  const { isDarkMode } = useAuthStore();
+  const card = isDarkMode
+    ? 'rounded-2xl border border-white/8 bg-[#111318]'
+    : 'rounded-2xl border border-gray-200 bg-white shadow-sm';
+  const section = isDarkMode
+    ? 'overflow-hidden rounded-2xl border border-white/8 bg-[#111318]'
+    : 'overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm';
+  return {
+    isDarkMode,
+    card,
+    section,
+    text: isDarkMode ? 'text-white' : 'text-gray-900',
+    sub: isDarkMode ? 'text-slate-500' : 'text-gray-500',
+    label: isDarkMode ? 'text-slate-400' : 'text-gray-600',
+    divider: isDarkMode ? 'divide-white/5' : 'divide-gray-100',
+    headerBorder: isDarkMode ? 'border-white/8' : 'border-gray-200',
+    barTrack: isDarkMode ? 'bg-white/10' : 'bg-gray-100',
+    riskTrack: isDarkMode ? 'bg-white/10' : 'bg-gray-100',
+    pill: isDarkMode
+      ? 'rounded-full border border-white/10 bg-white/10 px-2 py-0.5 text-[10px] font-semibold capitalize text-slate-300'
+      : 'rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold capitalize text-indigo-700',
+    iconWrap: isDarkMode ? 'bg-white/5' : 'bg-gray-100',
+    docIcon: isDarkMode ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-100 text-indigo-600',
+    quickAction: isDarkMode
+      ? 'rounded-xl border border-white/8 bg-white/5 hover:bg-white/8'
+      : 'rounded-xl border border-gray-200 bg-gray-50 hover:bg-white',
+    quickActionIcon: isDarkMode ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-100 text-indigo-600',
+    link: isDarkMode ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500',
+    aiColors: {
+      indigo: isDarkMode ? 'text-indigo-400' : 'text-indigo-600',
+      red: isDarkMode ? 'text-red-400' : 'text-red-600',
+      amber: isDarkMode ? 'text-amber-400' : 'text-amber-600',
+      emerald: isDarkMode ? 'text-emerald-400' : 'text-emerald-600',
+    },
+    statusPill: (status) => {
+      const dark = {
+        uploaded: 'bg-slate-500/15 text-slate-400',
+        in_review: 'bg-amber-500/15 text-amber-400',
+        in_progress: 'bg-blue-500/15 text-blue-400',
+        submitted: 'bg-indigo-500/15 text-indigo-400',
+        reviewed: 'bg-purple-500/15 text-purple-400',
+        approved: 'bg-emerald-500/15 text-emerald-400',
+        rejected: 'bg-red-500/15 text-red-400',
+        changes_requested: 'bg-orange-500/15 text-orange-400',
+      };
+      const light = {
+        uploaded: 'bg-slate-100 text-slate-600',
+        in_review: 'bg-amber-100 text-amber-700',
+        in_progress: 'bg-blue-100 text-blue-700',
+        submitted: 'bg-indigo-100 text-indigo-700',
+        reviewed: 'bg-purple-100 text-purple-700',
+        approved: 'bg-emerald-100 text-emerald-700',
+        rejected: 'bg-red-100 text-red-700',
+        changes_requested: 'bg-orange-100 text-orange-700',
+      };
+      const map = isDarkMode ? dark : light;
+      return map[status] || map.uploaded;
+    },
+  };
+}
 
 function roleLabel(role) {
-  return (role || 'viewer').replace(/_/g, ' ');
+  return formatRoleLabel(role);
 }
 
 function StatCard({ label, value, icon: Icon, tone = 'indigo', loading }) {
-  const tones = {
-    indigo: 'bg-indigo-500/10 text-indigo-400',
-    amber: 'bg-amber-500/10 text-amber-400',
-    emerald: 'bg-emerald-500/10 text-emerald-400',
-    red: 'bg-red-500/10 text-red-400',
-    blue: 'bg-blue-500/10 text-blue-400',
+  const s = useDashboardStyles();
+  const iconBg = {
+    indigo: 'bg-indigo-600',
+    amber: 'bg-amber-500',
+    emerald: 'bg-emerald-600',
+    red: 'bg-red-500',
+    blue: 'bg-blue-600',
   };
 
   return (
-    <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
-      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${tones[tone]}`}>
-        <Icon className="h-4 w-4" />
+    <div className={`${s.card} p-5`}>
+      <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl shadow-sm ${iconBg[tone]}`}>
+        <Icon className="h-5 w-5 text-white" />
       </div>
-      <p className="text-2xl font-bold text-white">{loading ? '-' : value}</p>
-      <p className="mt-0.5 text-xs font-medium text-slate-400">{label}</p>
+      <p className={`text-2xl font-bold ${s.text}`}>{loading ? '-' : value}</p>
+      <p className={`mt-0.5 text-xs font-medium ${s.sub}`}>{label}</p>
     </div>
   );
 }
 
-function StatusBarChart({ docs, title = 'Document Status Graph' }) {
+function StatusBarChart({ docs, statusCounts, title = 'Document Status Graph' }) {
+  const s = useDashboardStyles();
   const statuses = ['uploaded', 'in_review', 'in_progress', 'changes_requested', 'approved', 'rejected'];
-  const counts = statuses.map(status => ({ status, count: docs.filter(doc => doc.status === status).length }));
+  const counts = statuses.map(status => ({
+    status,
+    count: statusCounts?.[status] ?? docs.filter(doc => doc.status === status).length,
+  }));
   const max = Math.max(1, ...counts.map(item => item.count));
 
   return (
-    <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
-      <h2 className="mb-4 text-sm font-semibold text-white">{title}</h2>
+    <div className={`${s.card} p-5`}>
+      <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>{title}</h2>
       <div className="space-y-3">
         {counts.map(({ status, count }) => (
           <div key={status}>
             <div className="mb-1 flex items-center justify-between text-xs">
-              <span className="text-slate-500">{STATUS_LABEL[status]}</span>
-              <span className="font-semibold text-white">{count}</span>
+              <span className={s.label}>{STATUS_LABEL[status]}</span>
+              <span className={`font-semibold ${s.text}`}>{count}</span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/8">
+            <div className={`h-2 overflow-hidden rounded-full ${s.barTrack}`}>
               <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.max(5, (count / max) * 100)}%` }} />
             </div>
           </div>
@@ -80,6 +137,7 @@ function StatusBarChart({ docs, title = 'Document Status Graph' }) {
 }
 
 function RiskGraph({ aiStats }) {
+  const s = useDashboardStyles();
   const values = [
     ['High', aiStats?.riskDistribution?.high ?? 0, 'bg-red-400'],
     ['Medium', aiStats?.riskDistribution?.medium ?? 0, 'bg-amber-400'],
@@ -88,16 +146,16 @@ function RiskGraph({ aiStats }) {
   const total = Math.max(1, values.reduce((sum, [, value]) => sum + value, 0));
 
   return (
-    <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
-      <h2 className="mb-4 text-sm font-semibold text-white">Risk Graph</h2>
+    <div className={`${s.card} p-5`}>
+      <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>Risk Graph</h2>
       <div className="flex h-36 items-end gap-4">
         {values.map(([label, value, color]) => (
           <div key={label} className="flex flex-1 flex-col items-center gap-2">
-            <div className="flex h-24 w-full items-end rounded-xl bg-white/5 p-1">
+            <div className={`flex h-24 w-full items-end rounded-xl p-1 ${s.riskTrack}`}>
               <div className={`w-full rounded-lg ${color}`} style={{ height: `${Math.max(8, (value / total) * 100)}%` }} />
             </div>
-            <p className="text-xs font-semibold text-white">{value}</p>
-            <p className="text-[10px] text-slate-500">{label}</p>
+            <p className={`text-xs font-semibold ${s.text}`}>{value}</p>
+            <p className={`text-[10px] ${s.sub}`}>{label}</p>
           </div>
         ))}
       </div>
@@ -106,23 +164,26 @@ function RiskGraph({ aiStats }) {
 }
 
 function DocumentRow({ doc }) {
+  const s = useDashboardStyles();
   const status = doc.status || 'uploaded';
   return (
     <div className="flex items-center gap-3 px-5 py-3.5">
-      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/15">
-        <FileText className="h-4 w-4 text-indigo-400" />
+      <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${s.docIcon}`}>
+        <FileText className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white">{doc.title || doc.fileName}</p>
-        <p className="text-xs text-slate-500">
+        <p className={`truncate text-sm font-medium ${s.text}`}>{doc.title || doc.fileName}</p>
+        <p className={`text-xs ${s.sub}`}>
           {doc.category || 'document'} - {doc.department || 'General'}
           {doc.createdAt ? ` - ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
         </p>
         {doc.metadata?.statusReason && (
-          <p className="mt-0.5 truncate text-[11px] text-amber-300">Auditor note: {doc.metadata.statusReason}</p>
+          <p className={`mt-0.5 truncate text-[11px] ${s.isDarkMode ? 'text-amber-300' : 'text-amber-600'}`}>
+            Auditor note: {doc.metadata.statusReason}
+          </p>
         )}
       </div>
-      <span className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-medium ${STATUS_PILL[status] || STATUS_PILL.uploaded}`}>
+      <span className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-medium ${s.statusPill(status)}`}>
         {STATUS_LABEL[status] || status}
       </span>
     </div>
@@ -131,9 +192,11 @@ function DocumentRow({ doc }) {
 
 function OwnerDashboard({ user }) {
   const navigate = useNavigate();
+  const s = useDashboardStyles();
   const [docs, setDocs] = useState([]);
   const [activity, setActivity] = useState({ timeline: [], summary: {} });
   const [overview, setOverview] = useState(null);
+  const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -141,38 +204,42 @@ function OwnerDashboard({ user }) {
       documentAPI.getAll({ limit: 20 }),
       dashboardAPI.getOverview(),
       dashboardAPI.getActivity({ days: 14 }),
-    ]).then(([docsRes, overviewRes, activityRes]) => {
+      dashboardAPI.getMetrics(),
+    ]).then(([docsRes, overviewRes, activityRes, metricsRes]) => {
       if (docsRes.status === 'fulfilled') {
         const list = docsRes.value?.documents || docsRes.value?.data || docsRes.value || [];
         setDocs(Array.isArray(list) ? list : []);
       }
       if (overviewRes.status === 'fulfilled') setOverview(overviewRes.value);
       if (activityRes.status === 'fulfilled') setActivity(activityRes.value || { timeline: [], summary: {} });
+      if (metricsRes.status === 'fulfilled') setMetrics(metricsRes.value);
     }).finally(() => setLoading(false));
   }, []);
 
-  const pending = docs.filter((d) => ['uploaded', 'in_review', 'in_progress', 'submitted'].includes(d.status)).length;
-  const approved = docs.filter((d) => d.status === 'approved').length;
-  const rejected = docs.filter((d) => d.status === 'rejected').length;
+  const statusCounts = metrics?.documentMetrics?.statusBreakdown;
+  const totalDocs = metrics?.documentMetrics?.total ?? docs.length;
+  const pending = statusCounts
+    ? (statusCounts.uploaded || 0) + (statusCounts.in_review || 0) + (statusCounts.in_progress || 0) + (statusCounts.submitted || 0)
+    : docs.filter((d) => ['uploaded', 'in_review', 'in_progress', 'submitted'].includes(d.status)).length;
+  const approved = statusCounts?.approved ?? docs.filter((d) => d.status === 'approved').length;
+  const rejected = statusCounts?.rejected ?? docs.filter((d) => d.status === 'rejected').length;
   const complianceScore = overview?.summary?.complianceScore ?? overview?.metrics?.complianceScore ?? 0;
   const recentActivity = activity.timeline?.slice(0, 8) || [];
 
   return (
     <AppShell title="My Dashboard">
-      <div className="mb-6 rounded-2xl border border-white/8 bg-[#111318] p-5">
-        <h2 className="text-lg font-bold text-white">
+      <div className={`mb-6 ${s.card} p-5`}>
+        <h2 className={`text-lg font-bold ${s.text}`}>
           Welcome back, {user?.fullName?.split(' ')[0] || 'User'}
-          <span className="ml-2 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold capitalize text-slate-300">
-            {roleLabel(user?.role)}
-          </span>
+          <span className={`ml-2 ${s.pill}`}>{roleLabel(user?.role)}</span>
         </h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className={`mt-1 text-sm ${s.sub}`}>
           Your dashboard only shows documents, statuses, and reports that belong to your account.
         </p>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-5">
-        <StatCard label="My Documents" value={docs.length} icon={FileText} loading={loading} />
+        <StatCard label="My Documents" value={totalDocs} icon={FileText} loading={loading} />
         <StatCard label="Pending Audit" value={pending} icon={Clock} tone="amber" loading={loading} />
         <StatCard label="Approved" value={approved} icon={CheckCircle2} tone="emerald" loading={loading} />
         <StatCard label="Rejected" value={rejected} icon={AlertTriangle} tone="red" loading={loading} />
@@ -180,52 +247,52 @@ function OwnerDashboard({ user }) {
       </div>
 
       <div className="mb-6">
-        <StatusBarChart docs={docs} title="My Document Status Graph" />
+        <StatusBarChart docs={docs} statusCounts={statusCounts} title="My Document Status Graph" />
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <button onClick={() => navigate('/documents')} className="flex items-center gap-4 rounded-2xl border border-white/8 bg-[#111318] p-5 text-left transition-colors hover:bg-white/5">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-500/20">
-            <Upload className="h-5 w-5 text-indigo-400" />
+        <button onClick={() => navigate('/documents')} className={`flex items-center gap-4 ${s.card} p-5 text-left`}>
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 shadow-sm">
+            <Upload className="h-5 w-5 text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white">Upload Document</p>
-            <p className="text-xs text-slate-500">Submit a file for auditor review</p>
+            <p className={`text-sm font-semibold ${s.text}`}>Upload Document</p>
+            <p className={`text-xs ${s.sub}`}>Submit a file for auditor review</p>
           </div>
         </button>
-        <button onClick={() => navigate('/audit-reports')} className="flex items-center gap-4 rounded-2xl border border-white/8 bg-[#111318] p-5 text-left transition-colors hover:bg-white/5">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/20">
-            <BarChart2 className="h-5 w-5 text-emerald-400" />
+        <button onClick={() => navigate('/audit-reports')} className={`flex items-center gap-4 ${s.card} p-5 text-left`}>
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-600 shadow-sm">
+            <BarChart2 className="h-5 w-5 text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white">My Audit Reports</p>
-            <p className="text-xs text-slate-500">Download reports generated from your documents</p>
+            <p className={`text-sm font-semibold ${s.text}`}>My Audit Reports</p>
+            <p className={`text-xs ${s.sub}`}>Download reports generated from your documents</p>
           </div>
         </button>
       </div>
 
-      <div className="mb-6 overflow-hidden rounded-2xl border border-white/8 bg-[#111318]">
-        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
-          <h2 className="text-sm font-semibold text-white">My Recent Activity</h2>
-          <span className="text-[10px] text-slate-500">Last 14 days</span>
+      <div className={`mb-6 ${s.section}`}>
+        <div className="flex items-center justify-between px-5 py-4">
+          <h2 className={`text-sm font-semibold ${s.text}`}>My Recent Activity</h2>
+          <span className={`text-[10px] ${s.sub}`}>Last 14 days</span>
         </div>
         {loading ? (
-          <div className="p-8 text-center text-sm text-slate-500">Loading your activity...</div>
+          <div className={`p-8 text-center text-sm ${s.sub}`}>Loading your activity...</div>
         ) : recentActivity.length === 0 ? (
-          <div className="p-8 text-center text-sm text-slate-500">No activity yet. Upload a document to get started.</div>
+          <div className={`p-8 text-center text-sm ${s.sub}`}>No activity yet. Upload a document to get started.</div>
         ) : (
-          <div className="divide-y divide-white/5">
+          <div className={`divide-y ${s.divider}`}>
             {recentActivity.map((item, index) => (
               <div key={`${item.time}-${index}`} className="flex items-start gap-3 px-5 py-3.5">
-                <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-white/5">
+                <div className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg ${s.iconWrap}`}>
                   {item.type === 'upload' ? <Upload className="h-3.5 w-3.5 text-indigo-400" />
                     : item.type === 'analysis' ? <Bot className="h-3.5 w-3.5 text-emerald-400" />
                     : item.type === 'report' ? <BarChart2 className="h-3.5 w-3.5 text-amber-400" />
                     : <Activity className="h-3.5 w-3.5 text-slate-400" />}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm text-white">{item.detail || item.action}</p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
+                  <p className={`text-sm ${s.text}`}>{item.detail || item.action}</p>
+                  <p className={`mt-0.5 text-[11px] ${s.sub}`}>
                     {item.time ? new Date(item.time).toLocaleString() : ''}
                   </p>
                 </div>
@@ -235,34 +302,34 @@ function OwnerDashboard({ user }) {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#111318]">
-        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
-          <h2 className="text-sm font-semibold text-white">My Documents & Audit Status</h2>
-          <button onClick={() => navigate('/documents')} className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
+      <div className={s.section}>
+        <div className="flex items-center justify-between px-5 py-4">
+          <h2 className={`text-sm font-semibold ${s.text}`}>My Documents & Audit Status</h2>
+          <button onClick={() => navigate('/documents')} className={`flex items-center gap-1 text-xs ${s.link}`}>
             View all <ArrowUpRight className="h-3 w-3" />
           </button>
         </div>
         {loading ? (
-          <div className="p-8 text-center text-sm text-slate-500">Loading your documents...</div>
+          <div className={`p-8 text-center text-sm ${s.sub}`}>Loading your documents...</div>
         ) : docs.length === 0 ? (
           <div className="p-8 text-center">
-            <FileText className="mx-auto mb-3 h-10 w-10 text-slate-700" />
-            <p className="mb-3 text-sm text-slate-500">No documents uploaded yet.</p>
+            <FileText className={`mx-auto mb-3 h-10 w-10 ${s.isDarkMode ? 'text-slate-700' : 'text-gray-300'}`} />
+            <p className={`mb-3 text-sm ${s.sub}`}>No documents uploaded yet.</p>
             <button onClick={() => navigate('/documents')} className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600">
               Upload Your First Document
             </button>
           </div>
         ) : (
-          <div className="divide-y divide-white/5">
+          <div className={`divide-y ${s.divider}`}>
             {docs.slice(0, 8).map((doc) => <DocumentRow key={doc.id} doc={doc} />)}
           </div>
         )}
       </div>
 
-      <div className="mt-4 flex items-start gap-3 rounded-2xl border border-white/8 bg-[#111318] p-4">
+      <div className={`mt-4 flex items-start gap-3 ${s.card} p-4`}>
         <Bell className="mt-0.5 h-4 w-4 flex-shrink-0 text-indigo-400" />
-        <p className="text-xs text-slate-500">
-          Audit completion emails are sent to <span className="font-semibold text-slate-300">{user?.email}</span>. Log in after the email to view document status, auditor notes, and available reports.
+        <p className={`text-xs ${s.sub}`}>
+          Audit completion emails are sent to <span className={`font-semibold ${s.isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{user?.email}</span>. Log in after the email to view document status, auditor notes, and available reports.
         </p>
       </div>
     </AppShell>
@@ -271,6 +338,7 @@ function OwnerDashboard({ user }) {
 
 function StaffDashboard({ user }) {
   const navigate = useNavigate();
+  const s = useDashboardStyles();
   const [docs, setDocs] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [aiStats, setAiStats] = useState(null);
@@ -294,6 +362,7 @@ function StaffDashboard({ user }) {
 
   const totalDocuments = metrics?.documentMetrics?.total ?? docs.length;
   const uploadedToday = metrics?.documentMetrics?.uploadedToday ?? 0;
+  const statusCounts = metrics?.documentMetrics?.statusBreakdown;
   const passRate = metrics?.complianceMetrics?.passRate ?? 0;
   const completed = metrics?.taskMetrics?.completed ?? 0;
   const avgOverallAudit = aiStats?.averageOverallAuditScore ?? 0;
@@ -312,14 +381,12 @@ function StaffDashboard({ user }) {
 
   return (
     <AppShell title="Dashboard">
-      <div className="mb-6 rounded-2xl border border-white/8 bg-[#111318] p-5">
-        <h2 className="text-lg font-bold text-white">
+      <div className={`mb-6 ${s.card} p-5`}>
+        <h2 className={`text-lg font-bold ${s.text}`}>
           Welcome back, {user?.fullName?.split(' ')[0] || 'User'}
-          <span className="ml-2 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold capitalize text-slate-300">
-            {roleLabel(user?.role)}
-          </span>
+          <span className={`ml-2 ${s.pill}`}>{roleLabel(user?.role)}</span>
         </h2>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className={`mt-1 text-sm ${s.sub}`}>
           {isAdmin
             ? 'Manage users, approvals, documents, and reports. Audit execution is reserved for auditors.'
             : 'Audit uploaded documents, update their progress, and notify document owners when reviews are complete.'}
@@ -335,21 +402,21 @@ function StaffDashboard({ user }) {
       </div>
 
       <div className="mb-5 grid gap-5 lg:grid-cols-3">
-        <StatusBarChart docs={docs} />
+        <StatusBarChart docs={docs} statusCounts={statusCounts} />
         {!isAdmin && <RiskGraph aiStats={aiStats} />}
         {!isAdmin && (
-          <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
-            <h2 className="mb-4 text-sm font-semibold text-white">AI Analysis Engine</h2>
+          <div className={`${s.card} p-5`}>
+            <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>AI Analysis Engine</h2>
             <div className="space-y-3">
               {[
-                ['Analyzed', aiStats?.totalAnalyzed ?? 0, 'text-indigo-400'],
-                ['Avg Health', `${aiStats?.averageOverallAuditScore ?? 0}%`, 'text-indigo-300'],
-                ['High Risk', aiStats?.riskDistribution?.high ?? 0, 'text-red-400'],
-                ['Medium Risk', aiStats?.riskDistribution?.medium ?? 0, 'text-amber-400'],
-                ['Low Risk', aiStats?.riskDistribution?.low ?? 0, 'text-emerald-400'],
+                ['Analyzed', aiStats?.totalAnalyzed ?? 0, s.aiColors.indigo],
+                ['Avg Health', `${aiStats?.averageOverallAuditScore ?? 0}%`, s.aiColors.indigo],
+                ['High Risk', aiStats?.riskDistribution?.high ?? 0, s.aiColors.red],
+                ['Medium Risk', aiStats?.riskDistribution?.medium ?? 0, s.aiColors.amber],
+                ['Low Risk', aiStats?.riskDistribution?.low ?? 0, s.aiColors.emerald],
               ].map(([label, value, color]) => (
                 <div key={label} className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">{label}</span>
+                  <span className={`text-xs ${s.sub}`}>{label}</span>
                   <span className={`text-sm font-bold ${color}`}>{value}</span>
                 </div>
               ))}
@@ -357,50 +424,52 @@ function StaffDashboard({ user }) {
           </div>
         )}
 
-        <div className={`rounded-2xl border border-white/8 bg-[#111318] p-5 ${isAdmin ? 'lg:col-span-1' : ''}`}>
-          <h2 className="mb-4 text-sm font-semibold text-white">Quick Actions</h2>
+        <div className={`${s.card} p-5 ${isAdmin ? 'lg:col-span-1' : ''}`}>
+          <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>Quick Actions</h2>
           <div className="grid gap-2.5">
             {actions.map(({ label, detail, icon: Icon, path }) => (
-              <button key={label} onClick={() => navigate(path)} className="flex items-center gap-3 rounded-xl border border-white/8 bg-white/3 p-3 text-left transition-colors hover:bg-white/5">
-                <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-400">
+              <button key={label} onClick={() => navigate(path)} className={`flex items-center gap-3 p-3 text-left transition-colors ${s.quickAction}`}>
+                <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${s.quickActionIcon}`}>
                   <Icon className="h-4 w-4" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-white">{label}</p>
-                  <p className="text-[10px] text-slate-500">{detail}</p>
+                  <p className={`text-xs font-semibold ${s.text}`}>{label}</p>
+                  <p className={`text-[10px] ${s.sub}`}>{detail}</p>
                 </div>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
-          <h2 className="mb-4 text-sm font-semibold text-white">Document Status</h2>
+        <div className={`${s.card} p-5`}>
+          <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>Document Status</h2>
           <div className="space-y-2.5">
             {['in_review', 'in_progress', 'approved', 'rejected'].map((status) => (
               <div key={status} className="flex items-center gap-3">
                 <div className="h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500" />
-                <span className="flex-1 text-xs text-slate-500">{STATUS_LABEL[status]}</span>
-                <span className="text-sm font-bold text-white">{docs.filter((d) => d.status === status).length}</span>
+                <span className={`flex-1 text-xs ${s.sub}`}>{STATUS_LABEL[status]}</span>
+                <span className={`text-sm font-bold ${s.text}`}>
+                  {statusCounts?.[status] ?? docs.filter((d) => d.status === status).length}
+                </span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#111318]">
-        <div className="flex items-center justify-between border-b border-white/8 px-5 py-4">
-          <h2 className="text-sm font-semibold text-white">Recent Documents</h2>
-          <button onClick={() => navigate('/documents')} className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300">
+      <div className={s.section}>
+        <div className="flex items-center justify-between px-5 py-4">
+          <h2 className={`text-sm font-semibold ${s.text}`}>Recent Documents</h2>
+          <button onClick={() => navigate('/documents')} className={`flex items-center gap-1 text-xs ${s.link}`}>
             View all <ArrowUpRight className="h-3 w-3" />
           </button>
         </div>
         {loading ? (
-          <div className="p-8 text-center text-sm text-slate-500">Loading...</div>
+          <div className={`p-8 text-center text-sm ${s.sub}`}>Loading...</div>
         ) : docs.length === 0 ? (
-          <div className="p-8 text-center text-sm text-slate-500">No documents yet.</div>
+          <div className={`p-8 text-center text-sm ${s.sub}`}>No documents yet.</div>
         ) : (
-          <div className="divide-y divide-white/5">
+          <div className={`divide-y ${s.divider}`}>
             {docs.map((doc) => <DocumentRow key={doc.id} doc={doc} />)}
           </div>
         )}
@@ -411,9 +480,9 @@ function StaffDashboard({ user }) {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const role = user?.role || 'viewer';
+  const role = normalizeRole(user?.role);
 
-  if (role === 'viewer' || role === 'document_manager') {
+  if (isOwnerRole(role)) {
     return <OwnerDashboard user={user} />;
   }
 

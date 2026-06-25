@@ -235,7 +235,7 @@ const getAllDocuments = async (req, res) => {
     const { category, status, department, auditState, page = 1, limit = 10 } = req.query;
     const { Document, User } = req.app.locals.models;
     const userId = req.user?.id;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
     const Op = require('sequelize').Op;
 
     // Build where clause
@@ -279,7 +279,7 @@ const getDocumentById = async (req, res) => {
     const { id } = req.params;
     const { Document, User } = req.app.locals.models;
     const userId = req.user?.id;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
 
     const document = await Document.findByPk(id, {
       include: [{ model: User, as: 'uploader', attributes: ['id', 'fullName', 'email'] }]
@@ -395,7 +395,7 @@ const updateDocument = async (req, res) => {
     const { id } = req.params;
     const { title, description, category, status, tags, classificationLevel } = req.body;
     const { Document } = req.app.locals.models;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
     const userId = req.user?.id;
 
     const document = await Document.findByPk(id);
@@ -447,7 +447,7 @@ const deleteDocument = async (req, res) => {
     const { id } = req.params;
     const { Document } = req.app.locals.models;
     const permanent = req.query.permanent === 'true';
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
     const userId = req.user?.id;
 
     const document = await Document.findByPk(id);
@@ -478,7 +478,7 @@ const reuploadDocument = async (req, res) => {
   try {
     const { id } = req.params;
     const { Document, AuditLog } = req.app.locals.models;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
     const userId = req.user?.id;
 
     const document = await Document.findByPk(id);
@@ -557,7 +557,7 @@ const downloadDocument = async (req, res) => {
     const { id } = req.params;
     const { Document, AuditLog } = req.app.locals.models;
     const userId = req.user?.id;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
 
     const document = await Document.findByPk(id);
     if (!document) {
@@ -601,7 +601,7 @@ const updateDocumentStatus = async (req, res) => {
     const { id } = req.params;
     const { status, reason = '', reportId = null } = req.body;
     const { Document, AuditLog } = req.app.locals.models;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
 
     if (role !== 'auditor') {
       return res.status(403).json({ error: 'Only auditors can update document progress.' });
@@ -670,7 +670,7 @@ const previewDocumentText = async (req, res) => {
     const { id } = req.params;
     const { Document } = req.app.locals.models;
     const userId = req.user?.id;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
 
     const document = await Document.findByPk(id);
     if (!document) {
@@ -723,7 +723,7 @@ const shareDocument = async (req, res) => {
     if (!document) {
       return res.status(404).json({ error: 'Document not found' });
     }
-    if (!userCanAccessDocument(document, req.user?.id, req.user?.role || 'viewer')) {
+    if (!userCanAccessDocument(document, req.user?.id, req.user?.role || 'client')) {
       return res.status(403).json({ error: 'Access denied to this document' });
     }
 
@@ -759,7 +759,7 @@ const getAccessLogs = async (req, res) => {
     const { AuditLog, Document } = req.app.locals.models;
     const document = await Document.findByPk(id);
     if (!document) return res.status(404).json({ error: 'Document not found' });
-    if (!userCanAccessDocument(document, req.user?.id, req.user?.role || 'viewer')) {
+    if (!userCanAccessDocument(document, req.user?.id, req.user?.role || 'client')) {
       return res.status(403).json({ error: 'Access denied to this document' });
     }
 

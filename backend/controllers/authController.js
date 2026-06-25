@@ -18,6 +18,7 @@ const QRCode   = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const emailService = require('../services/emailService');
 const { logSecurityEvent } = require('../utils/securityAudit');
+const { VALID_ROLES, DEFAULT_ROLE, normalizeRole, formatRoleLabel } = require('../utils/roles');
 
 const JWT_SECRET  = process.env.JWT_SECRET  || 'change-this-secret';
 const JWT_EXPIRES = process.env.JWT_EXPIRES_IN || '24h';
@@ -50,6 +51,12 @@ async function dispatchOTP(user, otp, purpose) {
   }
 }
 
+function dispatchOTPInBackground(user, otp, purpose) {
+  dispatchOTP(user, otp, purpose).catch(err => {
+    console.error(`[Auth] Background OTP email failed for ${user.email} (${purpose}):`, err.message);
+  });
+}
+
 function shouldBlockOnEmailFailure(delivered) {
   return !delivered && !ALLOW_DEV_OTP && !emailService.isConfigured();
 }
@@ -68,7 +75,7 @@ const schemas = {
                     'string.pattern.name': 'Password must contain at least one uppercase letter and one number',
                   }),
     department: Joi.string().min(2).max(100).required(),
-    role:       Joi.string().valid('viewer', 'document_manager', 'auditor', 'administrator').default('viewer'),
+    role:       Joi.string().valid('client', 'viewer', 'document_manager', 'auditor', 'administrator').default('client'),
     phone:      Joi.string().max(20).optional().allow(''),
     employeeId: Joi.string().max(50).optional().allow(''),
   }),
@@ -119,8 +126,9 @@ function generateOTP() {
 }
 
 function issueJWT(user) {
+  const role = normalizeRole(user.role);
   return jwt.sign(
-    { id: user.id, email: user.email, role: user.role, purpose: 'access' },
+    { id: user.id, email: user.email, role, purpose: 'access' },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES, issuer: 'docaudit-ai', audience: 'docaudit-client' }
   );
@@ -131,7 +139,7 @@ function safeUser(user) {
     id:            user.id,
     fullName:      user.fullName,
     email:         user.email,
-    role:          user.role,
+    role:          normalizeRole(user.role),
     department:    user.department,
     emailVerified: user.emailVerified,
     mfaEnabled:    user.mfaEnabled,
@@ -156,7 +164,7 @@ const register = async (req, res) => {
     const existing = await User.findOne({ where: { email: value.email } });
     if (existing) return res.status(409).json({ error: 'Email already registered' });
 
-    const requestedRole = value.role || 'viewer';
+    const requestedRole = normalizeRole(value.role || DEFAULT_ROLE);
     if (requestedRole === 'administrator') {
       const adminExists = await User.findOne({ where: { role: 'administrator' } });
       if (adminExists) {
@@ -168,6 +176,7 @@ const register = async (req, res) => {
     const requiresAdminApproval = APPROVAL_REQUIRED_ROLES.includes(requestedRole);
     const user = await User.create({
       ...value,
+      role:          requestedRole,
       passwordHash:  value.password, // hashed by model hook
       otpCode:       otp,
       otpExpiry:     new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h for email verify
@@ -294,7 +303,7 @@ const login = async (req, res) => {
       });
     }
 
-    // Email OTP 2FA
+    // Email OTP 2FA — respond immediately, send email in background
     const otp = generateOTP();
     await user.update({
       otpCode:    otp,
@@ -302,21 +311,18 @@ const login = async (req, res) => {
       otpPurpose: 'login',
     });
 
-    const { delivered } = await dispatchOTP(user, otp, 'login');
-
-    if (shouldBlockOnEmailFailure(delivered)) {
+    if (!emailService.isConfigured() && !ALLOW_DEV_OTP) {
       return res.status(502).json({ error: 'Could not send OTP email. Check SMTP settings and try again.' });
     }
 
     res.json({
-      message:      delivered
-        ? 'OTP sent to your email'
-        : 'Your sign-in code is ready. If you did not receive an email, use Resend code.',
-      requiresOTP:  true,
-      userId:       user.id,
-      ...(!delivered ? { emailWarning: true } : {}),
-      ...(ALLOW_DEV_OTP && !delivered ? { devOTP: otp } : {}),
+      message:     'Enter the 6-digit code sent to your email.',
+      requiresOTP: true,
+      userId:      user.id,
+      ...(ALLOW_DEV_OTP ? { devOTP: otp } : {}),
     });
+
+    dispatchOTPInBackground(user, otp, 'login');
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Login failed' });
@@ -626,17 +632,16 @@ const resendOTP = async (req, res) => {
 
     await user.update({ otpCode: otp, otpExpiry: expiry, otpPurpose: purpose });
 
-    const { delivered } = await dispatchOTP(user, otp, purpose);
-
-    if (shouldBlockOnEmailFailure(delivered)) {
+    if (!emailService.isConfigured() && !ALLOW_DEV_OTP) {
       return res.status(502).json({ error: 'Could not send OTP email. Check SMTP settings and try again.' });
     }
 
     res.json({
-      message: delivered ? 'OTP resent' : 'Code updated. If email did not arrive, try again in a moment.',
-      ...(!delivered ? { emailWarning: true } : {}),
-      ...(ALLOW_DEV_OTP && !delivered ? { devOTP: otp } : {}),
+      message: 'A new code has been sent to your email.',
+      ...(ALLOW_DEV_OTP ? { devOTP: otp } : {}),
     });
+
+    dispatchOTPInBackground(user, otp, purpose);
   } catch (err) {
     res.status(500).json({ error: 'Failed to resend OTP' });
   }
@@ -709,8 +714,8 @@ const listUsers = async (req, res) => {
 const updateUserRole = async (req, res) => {
   const { userId } = req.params;
   const { role } = req.body;
-  const VALID_ROLES = ['administrator', 'auditor', 'document_manager', 'viewer'];
-  if (!VALID_ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  const newRole = normalizeRole(role);
+  if (!VALID_ROLES.includes(newRole)) return res.status(400).json({ error: 'Invalid role' });
 
   const { User } = req.app.locals.models;
   try {
@@ -718,14 +723,14 @@ const updateUserRole = async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
     // Prevent self-demotion
     if (user.id === req.user.id) return res.status(403).json({ error: 'Cannot change your own role' });
-    if (role === 'administrator') {
+    if (newRole === 'administrator') {
       const adminExists = await User.findOne({ where: { role: 'administrator' } });
       if (adminExists && adminExists.id !== user.id) {
         return res.status(403).json({ error: 'Only one administrator account is allowed.' });
       }
     }
-    await user.update({ role });
-    res.json({ message: 'Role updated', userId, role });
+    await user.update({ role: newRole });
+    res.json({ message: 'Role updated', userId, role: newRole });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

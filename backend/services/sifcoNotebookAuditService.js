@@ -257,92 +257,7 @@ function portLooksValid(name) {
   });
 }
 
-function validatePackingListMath(text, fields, issues) {
-  if (!fields.packing_lines || !fields.packing_lines.length) return;
-
-  var sumQty = 0;
-  var sumPackages = 0;
-  var lineIssues = [];
-
-  fields.packing_lines.forEach(function (line) {
-    sumQty += line.qty;
-    sumPackages += line.packages;
-    if (line.qty !== line.packages) {
-      lineIssues.push('Line ' + line.line + ' (' + line.description + '): QTY ' + line.qty + ' ≠ packages ' + line.packages);
-    }
-  });
-
-  var statedTotal = fields.total;
-  if (statedTotal == null) {
-    var totalLine = (text || '').toUpperCase().match(/TOTAL\s+(\d+)/);
-    if (totalLine) statedTotal = parseInt(totalLine[1], 10);
-  }
-
-  if (statedTotal != null && sumPackages !== statedTotal) {
-    issues.push({
-      severity: 'HIGH',
-      check: 'Packing List Math',
-      message: 'Package total mismatch: line items sum to ' + sumPackages + ' but document states TOTAL ' + statedTotal,
-    });
-  } else if (statedTotal != null && sumPackages === statedTotal) {
-    issues.push({
-      severity: 'INFO',
-      check: 'Packing List Math',
-      message: 'Package count verified: ' + sumPackages + ' items = TOTAL ' + statedTotal,
-    });
-  }
-
-  if (lineIssues.length) {
-    issues.push({
-      severity: 'MEDIUM',
-      check: 'Packing List Math',
-      message: 'QTY/packages mismatch on rows: ' + lineIssues.slice(0, 3).join('; '),
-    });
-  }
-}
-
-function validateInvoiceAmounts(text, fields, docType, issues) {
-  if (docType === 'SHIPPING_AGREEMENT' || docType === 'FREIGHT_INVOICE') {
-    var amounts = [];
-    var re = /(\d[\d,\.]*)\s+(\d[\d,\.]*)\s*$/gm;
-    var m;
-    var textLines = (text || '').split('\n');
-    textLines.forEach(function (line) {
-      var match = line.match(/(\d[\d,\.]*)\s+(\d[\d,\.]*)\s*$/);
-      if (match) {
-        var rate = parseFloat(match[1].replace(/,/g, ''));
-        var total = parseFloat(match[2].replace(/,/g, ''));
-        if (rate > 0 && total > 0 && Math.abs(rate - total) < 0.01) {
-          amounts.push(total);
-        } else if (rate > 0 && total > 0) {
-          amounts.push(total);
-        }
-      }
-    });
-
-    if (amounts.length && fields.total != null) {
-      var sum = amounts.reduce(function (a, b) { return a + b; }, 0);
-      if (Math.abs(sum - fields.total) > 1) {
-        issues.push({
-          severity: 'HIGH',
-          check: 'Amount Calculation',
-          message: 'Line items sum to ' + sum + ' but TOTAL shows ' + fields.total,
-        });
-      }
-    }
-  }
-
-  (fields.invoice_lines || []).forEach(function (line) {
-    var expected = line.qty * line.rate;
-    if (Math.abs(expected - line.total) > 0.01) {
-      issues.push({
-        severity: 'HIGH',
-        check: 'Amount Calculation',
-        message: 'Invoice line error: ' + line.qty + ' × ' + line.rate + ' = ' + expected + ', not ' + line.total,
-      });
-    }
-  });
-}
+var calcService = require('./documentCalculationService');
 
 function validateShippingFields(fields, issues) {
   if (fields.port_of_loading && !portLooksValid(fields.port_of_loading)) {
@@ -433,7 +348,7 @@ function checkDocument(text, docType, fields) {
   }
 
   if (docType === 'PACKING_LIST') {
-    validatePackingListMath(text, fields, issues);
+    /* packing calculations handled by documentCalculationService below */
   }
 
   var invoiceLevel = fieldCheckLevel(template, 'invoice_no');
@@ -445,7 +360,7 @@ function checkDocument(text, docType, fields) {
     }
   }
 
-  validateInvoiceAmounts(text, fields, docType, issues);
+  issues = issues.concat(calcService.validateDocumentCalculations(text, docType, fields));
 
   var containerLevel = fieldCheckLevel(template, 'container');
   if (containerLevel !== 'off') {
@@ -573,15 +488,12 @@ function complianceScoreFromStatus(status, issues, missingFields) {
   if (status === 'APPROVED') return 100;
   if (status === 'WARNING') return 82;
   if (status === 'FLAGGED') return 65;
-  return 10;
+  return 0;
 }
 
 function hasCriticalIssues(issues) {
   return (issues || []).some(function (i) { return i.severity === 'CRITICAL'; });
 }
-
-var MISSING_FIELD_SCORE_MIN = 70;
-var MISSING_FIELD_SCORE_MAX = 78;
 
 function isMissingFieldIssue(issue) {
   return /missing|blank|not found|not readable|not in document|appears empty/i.test((issue && issue.message) || '');
@@ -616,60 +528,84 @@ function hasRequiredFieldGaps(issues) {
   return countRequiredFieldGaps(issues) >= 1;
 }
 
-function scoreForRequiredFieldGaps(issues) {
-  var gapCount = countRequiredFieldGaps(issues);
-  if (!gapCount) return null;
-  var gapScore = MISSING_FIELD_SCORE_MAX - Math.max(0, gapCount - 1) * 2;
-  return Math.max(MISSING_FIELD_SCORE_MIN, Math.min(MISSING_FIELD_SCORE_MAX, Math.round(gapScore)));
+var MISSING_FIELD_PENALTY = 8;
+var SIGNATURE_GAP_PENALTY = 3;
+var CALCULATION_ERROR_PENALTY = 12;
+var LOGO_GAP_PENALTY = 8;
+var STAMP_GAP_PENALTY = 5;
+var HIGH_ISSUE_PENALTY = 10;
+var MEDIUM_ISSUE_PENALTY = 4;
+var LOW_ISSUE_PENALTY = 2;
+var CRITICAL_ISSUE_PENALTY = 25;
+
+function issuePenalty(issue, missingFields) {
+  if (!issue) return 0;
+  if (calcService.isCalculationErrorIssue(issue)) return 0;
+  if (isSubstantiveGapIssue(issue)) return 0;
+  if (issue.check === 'Required Fields') return 0;
+  var sev = issue.severity || 'MEDIUM';
+  if (sev === 'CRITICAL') return CRITICAL_ISSUE_PENALTY;
+  if (sev === 'HIGH') return HIGH_ISSUE_PENALTY;
+  if (sev === 'MEDIUM') return MEDIUM_ISSUE_PENALTY;
+  return LOW_ISSUE_PENALTY;
+}
+
+function isLogoOrBrandingGap(label) {
+  return /logo|branding|letterhead/i.test(String(label || ''));
+}
+
+function isStampGap(label) {
+  return /stamp|seal/i.test(String(label || ''));
+}
+
+function isCalculationGap(label) {
+  return /^Calculation error:/i.test(String(label || ''));
+}
+
+function penaltyForMissingLabel(label) {
+  if (isCalculationGap(label)) return CALCULATION_ERROR_PENALTY;
+  if (isSignatureOnlyGap(label)) return SIGNATURE_GAP_PENALTY;
+  if (isLogoOrBrandingGap(label)) return LOGO_GAP_PENALTY;
+  if (isStampGap(label)) return STAMP_GAP_PENALTY;
+  return MISSING_FIELD_PENALTY;
+}
+
+function missingFieldPenalty(missingFields) {
+  var penalty = 0;
+  (missingFields || []).forEach(function (label) {
+    penalty += penaltyForMissingLabel(label);
+  });
+  return penalty;
+}
+
+function scoreForRequiredFieldGaps(issues, missingFields) {
+  missingFields = missingFields || issuesToMissingFields(issues);
+  if (!substantiveMissingFields(missingFields).length && !hasRequiredFieldGaps(issues)) return null;
+  return complianceScoreFromFieldGaps(issues, missingFields, { recognizedAsSifco: true });
 }
 
 function scoreForFieldIncomplete(issues) {
-  var req = countRequiredFieldGaps(issues);
-  if (req >= 1) return scoreForRequiredFieldGaps(issues);
-  var warn = countWarnFieldGaps(issues);
-  if (warn >= 2) {
-    return Math.max(74, Math.min(78, 78 - Math.max(0, warn - 2) * 2));
-  }
-  return null;
+  var missingFields = issuesToMissingFields(issues);
+  if (!missingFields.length && !(issues && issues.length)) return null;
+  return complianceScoreFromFieldGaps(issues || [], missingFields, { recognizedAsSifco: true });
 }
 
 /**
- * Valid SIFCO document with missing fields — compliance stays in 70–78%.
- * Critical fraud/arithmetic errors score 10–35%.
+ * Company document score = 100 minus penalties for every failed/missing trained field check.
  */
 function complianceScoreFromFieldGaps(issues, missingFields, options) {
   options = options || {};
   issues = issues || [];
-  missingFields = missingFields || [];
+  missingFields = missingFields || issuesToMissingFields(issues);
 
-  if (!options.recognizedAsSifco) return 10;
+  if (!options.recognizedAsSifco) return 0;
 
-  if (hasCriticalIssues(issues)) {
-    var criticalCount = issues.filter(function (i) { return i.severity === 'CRITICAL'; }).length;
-    return Math.max(10, Math.min(35, 32 - criticalCount * 6));
-  }
+  var penalty = missingFieldPenalty(missingFields);
+  issues.forEach(function (i) {
+    penalty += issuePenalty(i, missingFields);
+  });
 
-  if (hasRequiredFieldGaps(issues)) {
-    return scoreForRequiredFieldGaps(issues);
-  }
-
-  var warnMissing = countWarnFieldGaps(issues);
-  if (warnMissing >= 2) {
-    return Math.max(74, Math.min(78, 78 - Math.max(0, warnMissing - 2) * 2));
-  }
-  var otherMedium = issues.filter(function (i) {
-    return i.severity === 'MEDIUM' && !isSubstantiveGapIssue(i);
-  }).length;
-  var highNonMissing = issues.filter(function (i) {
-    return i.severity === 'HIGH' && !isSubstantiveGapIssue(i);
-  }).length;
-
-  var score = 100;
-  score -= warnMissing * 4;
-  score -= otherMedium * 3;
-  score -= highNonMissing * 8;
-
-  return Math.max(88, Math.min(100, Math.round(score)));
+  return Math.max(0, Math.min(100, Math.round(100 - penalty)));
 }
 
 function riskLevelFromScore(score, recognizedValid) {
@@ -753,15 +689,21 @@ function issuesToMissingFields(issues) {
   var missing = [];
   (issues || []).forEach(function (i) {
     var sev = i.severity || 'MEDIUM';
+    if (calcService.isCalculationErrorIssue(i)) {
+      var calcLabel = 'Calculation error: ' + i.message;
+      if (missing.indexOf(calcLabel) < 0) missing.push(calcLabel);
+      return;
+    }
     if (i.check === 'Required Fields' && i.message && sev !== 'LOW') {
       var match = i.message.match(/Missing:\s*(.+)/i);
       if (match) {
         match[1].split(/,\s*/).forEach(function (f) {
-          if (f && missing.indexOf(f) < 0) missing.push(f.trim());
+          var areaLabel = 'Missing area: ' + f.trim();
+          if (f && missing.indexOf(areaLabel) < 0) missing.push(areaLabel);
         });
       }
     } else if (isSubstantiveGapIssue(i)) {
-      var label = i.check + (i.message ? ': ' + i.message : '');
+      var label = 'Missing area: ' + i.check + (i.message ? ' — ' + i.message : '');
       if (missing.indexOf(label) < 0) missing.push(label);
     }
   });
@@ -772,7 +714,7 @@ function hasBlockingIssues(issues) {
   return (issues || []).some(function (i) {
     if (i.severity === 'CRITICAL') return true;
     if (i.severity !== 'HIGH') return false;
-    return /format invalid \(expected 4 letters|format invalid \(expected e.g\. DXB|Package total mismatch|AI-generated text detected/i.test(i.message || '');
+    return /format invalid \(expected 4 letters|format invalid \(expected e.g\. DXB|Package total mismatch|AI-generated text detected|Calculation Error/i.test((i.check || '') + ' ' + (i.message || ''));
   });
 }
 
@@ -780,9 +722,10 @@ function hasMandatoryMissing(missingFields, issues) {
   issues = issues || [];
   missingFields = missingFields || [];
   if (issues.some(function (i) { return i.severity === 'CRITICAL'; })) return true;
+  if (issues.some(function (i) { return calcService.isCalculationErrorIssue(i); })) return true;
   if (issues.some(function (i) {
     return i.severity === 'HIGH' &&
-      /Invoice number missing or not readable|format invalid \(expected 6|Package total mismatch|Container.*format invalid|BL.*format invalid/i.test(i.message || '');
+      /Invoice number missing|format invalid \(expected 6|Package total mismatch|Container.*format invalid|BL.*format invalid|Calculation Error/i.test((i.check || '') + ' ' + (i.message || ''));
   })) return true;
   return false;
 }
@@ -805,8 +748,9 @@ module.exports = {
   scoreForMissingFieldGaps: scoreForFieldIncomplete,
   substantiveMissingFields: substantiveMissingFields,
   complianceScoreFromFieldGaps: complianceScoreFromFieldGaps,
-  MISSING_FIELD_SCORE_MIN: MISSING_FIELD_SCORE_MIN,
-  MISSING_FIELD_SCORE_MAX: MISSING_FIELD_SCORE_MAX,
+  MISSING_FIELD_PENALTY: MISSING_FIELD_PENALTY,
+  LOGO_GAP_PENALTY: LOGO_GAP_PENALTY,
+  penaltyForMissingLabel: penaltyForMissingLabel,
   riskLevelFromScore: riskLevelFromScore,
   fieldRiskPercent: fieldRiskPercent,
   complianceScoreFromStatus: complianceScoreFromStatus,

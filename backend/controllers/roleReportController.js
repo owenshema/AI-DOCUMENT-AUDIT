@@ -2,11 +2,12 @@
 
 const roleReportService = require('../services/roleReportService');
 const roleReportExportService = require('../services/roleReportExportService');
+const { normalizeRole, isExportFormatAllowed, allowedExportFormats } = require('../utils/roles');
 
 const getRoleReport = async (req, res) => {
   try {
     var reportId = req.params.reportId;
-    var role = req.user?.role || 'viewer';
+    var role = normalizeRole(req.user?.role);
 
     if (!roleReportService.canAccessReport(reportId, role)) {
       return res.status(403).json({ error: 'You do not have access to this report.' });
@@ -29,7 +30,7 @@ const getRoleReport = async (req, res) => {
 const exportRoleReport = async (req, res) => {
   try {
     var reportId = req.params.reportId;
-    var role = req.user?.role || 'viewer';
+    var role = normalizeRole(req.user?.role);
 
     if (!roleReportService.canAccessReport(reportId, role)) {
       return res.status(403).json({ error: 'You do not have access to this report.' });
@@ -42,9 +43,16 @@ const exportRoleReport = async (req, res) => {
       return res.status(404).json({ error: 'Report not found.' });
     }
 
+    var format = String(req.query.format || 'pdf').toLowerCase();
+
+    if (!isExportFormatAllowed(role, format)) {
+      return res.status(403).json({
+        error: 'Your role can only export reports as: ' + allowedExportFormats(role).join(', '),
+      });
+    }
+
     data.preparedBy = req.user?.fullName || req.user?.email || 'System';
 
-    var format = req.query.format || 'pdf';
     return roleReportExportService.sendReport(data, format, res);
   } catch (error) {
     console.error('Role report export error:', error);
@@ -55,13 +63,11 @@ const exportRoleReport = async (req, res) => {
 };
 
 const listCatalog = (req, res) => {
-  var role = req.user?.role || 'viewer';
+  var role = normalizeRole(req.user?.role);
   var meta = roleReportService.REPORT_META;
-  var ids = role === 'administrator'
-    ? Object.keys(meta)
-    : Object.keys(meta).filter(function (id) {
-      return roleReportService.canAccessReport(id, role);
-    });
+  var ids = Object.keys(meta).filter(function (id) {
+    return roleReportService.canAccessReport(id, role);
+  });
 
   res.json({
     role: role,

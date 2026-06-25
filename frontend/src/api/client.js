@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { authStorage } from '../utils/authStorage';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
 
@@ -13,7 +14,7 @@ const apiClient = axios.create({
 // Add token to requests; strip JSON Content-Type for multipart uploads
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = authStorage.getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -41,8 +42,7 @@ apiClient.interceptors.response.use(
 
     // Do not hard-redirect on failed login/register.
     if (status === 401 && !isAuthRequest) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      authStorage.clear();
       window.location.href = '/login';
     }
     if (status === 403 && !isAuthRequest) {

@@ -1,12 +1,12 @@
 'use strict';
 
-const OWNER_ROLES = ['viewer', 'document_manager'];
+const { OWNER_ROLES, normalizeRole } = require('./roles');
 
 function isOwnerRole(role) {
-  return OWNER_ROLES.includes(role);
+  return OWNER_ROLES.includes(normalizeRole(role));
 }
 
-/** Documents visible to viewer / document_manager: only their own uploads. */
+/** Documents visible to client / document_manager: only their own uploads. */
 function documentWhereForUser(user) {
   if (!user?.id) return {};
   if (isOwnerRole(user.role)) {
@@ -16,7 +16,8 @@ function documentWhereForUser(user) {
 }
 
 function userOwnsDocument(document, userId, role) {
-  if (role === 'administrator' || role === 'auditor') return true;
+  const normalized = normalizeRole(role);
+  if (normalized === 'administrator' || normalized === 'auditor') return true;
   return document?.uploadedBy === userId;
 }
 

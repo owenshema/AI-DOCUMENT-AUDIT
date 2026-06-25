@@ -159,7 +159,7 @@ const getDailyActivityScoped = async (req, res) => {
   try {
     const { date, days = 7 } = req.query;
     const { AuditLog, User, Document, DocumentAnalysis, AuditReport } = req.app.locals.models;
-    const role = req.user?.role || 'viewer';
+    const role = req.user?.role || 'client';
     const userId = req.user?.id;
     const ownerScoped = isOwnerRole(role);
 

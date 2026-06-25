@@ -7,7 +7,7 @@ const router = express.Router();
 const workflowController = require('../controllers/workflowController');
 const { verifyRole } = require('../middleware/authMiddleware');
 
-router.use(verifyRole(['administrator', 'auditor', 'document_manager', 'viewer']));
+router.use(verifyRole(['administrator', 'auditor', 'document_manager', 'client']));
 
 // Get task queue must be registered before /:workflowId
 router.get('/tasks/queue', workflowController.getTaskQueue);

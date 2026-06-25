@@ -11,8 +11,8 @@ const UserSchema = {
   employeeId: { type: String, unique: true },
   role: { 
     type: String, 
-    enum: ['auditor', 'document_manager', 'administrator', 'viewer'],
-    default: 'viewer',
+    enum: ['auditor', 'document_manager', 'administrator', 'client'],
+    default: 'client',
     required: true 
   },
   department: { type: String, required: true },

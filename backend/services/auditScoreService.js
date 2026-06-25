@@ -84,8 +84,8 @@ function computeOverallAuditScore(auditResult) {
     };
   }
 
-  if (isSifcoDocumentType(auditResult.document_type) && !forgeryBlocked) {
-    var sCompliance = clamp(Number(auditResult.compliance_score) || 60, 0, 100);
+  if (isSifcoDocumentType(auditResult.document_type) && auditResult.organization_match && !forgeryBlocked) {
+    var sCompliance = clamp(Number(auditResult.compliance_score) || 0, 0, 100);
     var sIntegrity = clamp(100 - forgeryRisk, 0, 100);
     var sOverall = round(sCompliance * COMPLIANCE_WEIGHT + sIntegrity * INTEGRITY_WEIGHT);
     sOverall = applyRequiredFieldOverallCap(clamp(sOverall, 0, 100), auditResult);
@@ -108,12 +108,12 @@ function computeOverallAuditScore(auditResult) {
 
   if ((!auditResult.organization_match && !isSifcoDocumentType(auditResult.document_type)) || forgeryBlocked) {
     return {
-      overall_audit_score: 10,
+      overall_audit_score: 0,
       overall_audit_status: 'Failed',
       overall_audit_status_code: 'failed',
       overall_audit_breakdown: {
-        compliance_percent: 10,
-        integrity_percent: 10,
+        compliance_percent: 0,
+        integrity_percent: 0,
         forgery_risk_percent: forgeryRisk,
         weights: {
           compliance: COMPLIANCE_WEIGHT,

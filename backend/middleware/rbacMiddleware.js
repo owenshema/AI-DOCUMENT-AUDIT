@@ -34,7 +34,7 @@ const rolePermissions = {
   administrator: ['read', 'write', 'delete', 'admin', 'compliance'],
   auditor: ['read', 'write', 'audit', 'compliance'],
   document_manager: ['read', 'write', 'delete'],
-  viewer: ['read', 'write']
+  client: ['read', 'write']
 };
 
 const requirePermission = (permission) => {
