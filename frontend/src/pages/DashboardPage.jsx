@@ -5,6 +5,7 @@ import {
   Clock, FileText, ShieldCheck, Upload, Users, Activity,
 } from 'lucide-react';
 import AppShell from '../components/AppShell';
+import PieChart from '../components/PieChart';
 import { analysisAPI, dashboardAPI, documentAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
 import { formatRoleLabel, normalizeRole, isOwnerRole } from '../config/roles';
@@ -19,6 +20,19 @@ const STATUS_LABEL = {
   rejected: 'Rejected',
   changes_requested: 'Changes Needed',
 };
+
+const STATUS_COLORS = {
+  uploaded: '#64748b',
+  in_review: '#f59e0b',
+  in_progress: '#3b82f6',
+  submitted: '#6366f1',
+  reviewed: '#a855f7',
+  approved: '#10b981',
+  rejected: '#ef4444',
+  changes_requested: '#f97316',
+};
+
+const STATUS_ORDER = ['uploaded', 'in_review', 'in_progress', 'changes_requested', 'approved', 'rejected'];
 
 function useDashboardStyles() {
   const { isDarkMode } = useAuthStore();
@@ -107,31 +121,28 @@ function StatCard({ label, value, icon: Icon, tone = 'indigo', loading }) {
   );
 }
 
-function StatusBarChart({ docs, statusCounts, title = 'Document Status Graph' }) {
+function StatusPieChart({ docs, statusCounts, title = 'Document Status' }) {
   const s = useDashboardStyles();
-  const statuses = ['uploaded', 'in_review', 'in_progress', 'changes_requested', 'approved', 'rejected'];
-  const counts = statuses.map(status => ({
-    status,
-    count: statusCounts?.[status] ?? docs.filter(doc => doc.status === status).length,
+  const chartData = STATUS_ORDER.map((status) => ({
+    label: STATUS_LABEL[status],
+    value: statusCounts?.[status] ?? docs.filter((doc) => doc.status === status).length,
+    color: STATUS_COLORS[status],
   }));
-  const max = Math.max(1, ...counts.map(item => item.count));
 
   return (
     <div className={`${s.card} p-5`}>
-      <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>{title}</h2>
-      <div className="space-y-3">
-        {counts.map(({ status, count }) => (
-          <div key={status}>
-            <div className="mb-1 flex items-center justify-between text-xs">
-              <span className={s.label}>{STATUS_LABEL[status]}</span>
-              <span className={`font-semibold ${s.text}`}>{count}</span>
-            </div>
-            <div className={`h-2 overflow-hidden rounded-full ${s.barTrack}`}>
-              <div className="h-full rounded-full bg-indigo-500" style={{ width: `${Math.max(5, (count / max) * 100)}%` }} />
-            </div>
-          </div>
-        ))}
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className={`text-sm font-semibold ${s.text}`}>{title}</h2>
+        <span className={`text-[10px] font-medium uppercase tracking-wider ${s.isDarkMode ? 'text-indigo-400/70' : 'text-indigo-500'}`}>
+          Rotating live
+        </span>
       </div>
+      <PieChart
+        data={chartData}
+        size={240}
+        rotating
+        isDarkMode={s.isDarkMode}
+      />
     </div>
   );
 }
@@ -174,7 +185,7 @@ function DocumentRow({ doc }) {
       <div className="min-w-0 flex-1">
         <p className={`truncate text-sm font-medium ${s.text}`}>{doc.title || doc.fileName}</p>
         <p className={`text-xs ${s.sub}`}>
-          {doc.category || 'document'} - {doc.department || 'General'}
+          {doc.category || 'document'}
           {doc.createdAt ? ` - ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
         </p>
         {doc.metadata?.statusReason && (
@@ -217,13 +228,15 @@ function OwnerDashboard({ user }) {
   }, []);
 
   const statusCounts = metrics?.documentMetrics?.statusBreakdown;
-  const totalDocs = metrics?.documentMetrics?.total ?? docs.length;
-  const pending = statusCounts
-    ? (statusCounts.uploaded || 0) + (statusCounts.in_review || 0) + (statusCounts.in_progress || 0) + (statusCounts.submitted || 0)
-    : docs.filter((d) => ['uploaded', 'in_review', 'in_progress', 'submitted'].includes(d.status)).length;
-  const approved = statusCounts?.approved ?? docs.filter((d) => d.status === 'approved').length;
-  const rejected = statusCounts?.rejected ?? docs.filter((d) => d.status === 'rejected').length;
-  const complianceScore = overview?.summary?.complianceScore ?? overview?.metrics?.complianceScore ?? 0;
+  const totalDocs = metrics?.documentMetrics?.total ?? 0;
+  const pending = metrics?.documentMetrics?.needsAudit ?? metrics?.taskMetrics?.pending ?? 0;
+  const completedAudits = metrics?.documentMetrics?.audited ?? metrics?.taskMetrics?.completed ?? 0;
+  const rejected = statusCounts?.rejected ?? 0;
+  const complianceScore = metrics?.aiMetrics?.averageOverallAuditScore
+    ?? overview?.summary?.complianceScore
+    ?? overview?.metrics?.complianceScore
+    ?? metrics?.complianceMetrics?.passRate
+    ?? 0;
   const recentActivity = activity.timeline?.slice(0, 8) || [];
 
   return (
@@ -241,13 +254,15 @@ function OwnerDashboard({ user }) {
       <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-5">
         <StatCard label="My Documents" value={totalDocs} icon={FileText} loading={loading} />
         <StatCard label="Pending Audit" value={pending} icon={Clock} tone="amber" loading={loading} />
-        <StatCard label="Approved" value={approved} icon={CheckCircle2} tone="emerald" loading={loading} />
+        <StatCard label="Audited" value={completedAudits} icon={CheckCircle2} tone="emerald" loading={loading} />
         <StatCard label="Rejected" value={rejected} icon={AlertTriangle} tone="red" loading={loading} />
         <StatCard label="Compliance Score" value={`${complianceScore}%`} icon={ShieldCheck} tone="blue" loading={loading} />
       </div>
 
-      <div className="mb-6">
-        <StatusBarChart docs={docs} statusCounts={statusCounts} title="My Document Status Graph" />
+      <div className="mb-6 flex justify-center">
+        <div className="w-full max-w-md">
+          <StatusPieChart docs={docs} statusCounts={statusCounts} title="My Document Status" />
+        </div>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
@@ -343,13 +358,17 @@ function StaffDashboard({ user }) {
   const [metrics, setMetrics] = useState(null);
   const [aiStats, setAiStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const isAdmin = user?.role === 'administrator';
+  const role = normalizeRole(user?.role);
+  const isAdmin = role === 'administrator';
+  const isAuditor = role === 'auditor';
+  const isDocManager = role === 'document_manager';
 
   useEffect(() => {
-    const calls = [documentAPI.getAll({ limit: 8 }), dashboardAPI.getMetrics()];
-    if (!isAdmin) calls.push(analysisAPI.getStats());
-
-    Promise.allSettled(calls).then(([docsRes, metricsRes, aiRes]) => {
+    Promise.allSettled([
+      documentAPI.getAll({ limit: 8 }),
+      dashboardAPI.getMetrics(),
+      analysisAPI.getStats(),
+    ]).then(([docsRes, metricsRes, aiRes]) => {
       if (docsRes.status === 'fulfilled') {
         const list = docsRes.value?.documents || docsRes.value?.data || docsRes.value || [];
         setDocs(Array.isArray(list) ? list : []);
@@ -358,19 +377,34 @@ function StaffDashboard({ user }) {
       if (aiRes?.status === 'fulfilled') setAiStats(aiRes.value);
       setLoading(false);
     });
-  }, [isAdmin]);
+  }, []);
 
-  const totalDocuments = metrics?.documentMetrics?.total ?? docs.length;
-  const uploadedToday = metrics?.documentMetrics?.uploadedToday ?? 0;
+  const totalDocuments = metrics?.documentMetrics?.total ?? 0;
+  const needsAudit = metrics?.documentMetrics?.needsAudit ?? metrics?.taskMetrics?.pending ?? 0;
   const statusCounts = metrics?.documentMetrics?.statusBreakdown;
   const passRate = metrics?.complianceMetrics?.passRate ?? 0;
-  const completed = metrics?.taskMetrics?.completed ?? 0;
-  const avgOverallAudit = aiStats?.averageOverallAuditScore ?? 0;
+  const completedAudits = metrics?.taskMetrics?.completed ?? metrics?.documentMetrics?.audited ?? 0;
+  const avgOverallAudit = aiStats?.averageOverallAuditScore
+    ?? metrics?.aiMetrics?.averageOverallAuditScore
+    ?? 0;
+  const aiPanelStats = {
+    totalAnalyzed: aiStats?.totalAnalyzed ?? metrics?.aiMetrics?.totalAnalyzed ?? 0,
+    averageOverallAuditScore: avgOverallAudit,
+    riskDistribution: aiStats?.riskDistribution ?? metrics?.aiMetrics?.riskDistribution ?? { high: 0, medium: 0, low: 0 },
+  };
+
+  const completedLabel = isAuditor ? 'Audits Completed' : 'Completed Audits';
 
   const actions = isAdmin
     ? [
         { label: 'Manage Users', detail: 'Approve roles', icon: Users, path: '/users' },
         { label: 'Document Hub', detail: 'View all uploads', icon: FileText, path: '/documents' },
+        { label: 'Audit Reports', detail: 'View system reports', icon: BarChart2, path: '/audit-reports' },
+      ]
+    : isDocManager
+    ? [
+        { label: 'Document Management', detail: 'Track audit status', icon: FileText, path: '/document-management' },
+        { label: 'Document Hub', detail: 'View all uploads', icon: Upload, path: '/documents' },
         { label: 'Audit Reports', detail: 'View system reports', icon: BarChart2, path: '/audit-reports' },
       ]
     : [
@@ -379,6 +413,12 @@ function StaffDashboard({ user }) {
         { label: 'Audit Reports', detail: 'Generate reports', icon: BarChart2, path: '/audit-reports' },
       ];
 
+  const welcomeCopy = isAdmin
+    ? 'Organization-wide document counts, completed audits, and AI health across the full system.'
+    : isDocManager
+    ? 'View all uploaded documents, track which still need audit, and monitor completed audits system-wide.'
+    : 'Audit uploaded documents, update their progress, and notify document owners when reviews are complete.';
+
   return (
     <AppShell title="Dashboard">
       <div className={`mb-6 ${s.card} p-5`}>
@@ -386,45 +426,39 @@ function StaffDashboard({ user }) {
           Welcome back, {user?.fullName?.split(' ')[0] || 'User'}
           <span className={`ml-2 ${s.pill}`}>{roleLabel(user?.role)}</span>
         </h2>
-        <p className={`mt-1 text-sm ${s.sub}`}>
-          {isAdmin
-            ? 'Manage users, approvals, documents, and reports. Audit execution is reserved for auditors.'
-            : 'Audit uploaded documents, update their progress, and notify document owners when reviews are complete.'}
-        </p>
+        <p className={`mt-1 text-sm ${s.sub}`}>{welcomeCopy}</p>
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-4 xl:grid-cols-5">
         <StatCard label="Total Documents" value={totalDocuments} icon={FileText} loading={loading} />
-        <StatCard label="Uploaded Today" value={uploadedToday} icon={Upload} tone="blue" loading={loading} />
+        <StatCard label="Needs Audit" value={needsAudit} icon={Clock} tone="amber" loading={loading} />
+        <StatCard label={completedLabel} value={completedAudits} icon={CheckCircle2} tone="emerald" loading={loading} />
         <StatCard label="Avg Audit Health" value={loading ? '-' : `${avgOverallAudit}%`} icon={Bot} tone="indigo" loading={loading} />
-        <StatCard label="Compliance Pass Rate" value={`${passRate}%`} icon={ShieldCheck} tone="emerald" loading={loading} />
-        <StatCard label="Completed Tasks" value={completed} icon={CheckCircle2} tone="amber" loading={loading} />
+        <StatCard label="Compliance Pass Rate" value={`${passRate}%`} icon={ShieldCheck} tone="blue" loading={loading} />
       </div>
 
       <div className="mb-5 grid gap-5 lg:grid-cols-3">
-        <StatusBarChart docs={docs} statusCounts={statusCounts} />
-        {!isAdmin && <RiskGraph aiStats={aiStats} />}
-        {!isAdmin && (
-          <div className={`${s.card} p-5`}>
-            <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>AI Analysis Engine</h2>
-            <div className="space-y-3">
-              {[
-                ['Analyzed', aiStats?.totalAnalyzed ?? 0, s.aiColors.indigo],
-                ['Avg Health', `${aiStats?.averageOverallAuditScore ?? 0}%`, s.aiColors.indigo],
-                ['High Risk', aiStats?.riskDistribution?.high ?? 0, s.aiColors.red],
-                ['Medium Risk', aiStats?.riskDistribution?.medium ?? 0, s.aiColors.amber],
-                ['Low Risk', aiStats?.riskDistribution?.low ?? 0, s.aiColors.emerald],
-              ].map(([label, value, color]) => (
-                <div key={label} className="flex items-center justify-between">
-                  <span className={`text-xs ${s.sub}`}>{label}</span>
-                  <span className={`text-sm font-bold ${color}`}>{value}</span>
-                </div>
-              ))}
-            </div>
+        <StatusPieChart docs={docs} statusCounts={statusCounts} />
+        <RiskGraph aiStats={aiPanelStats} />
+        <div className={`${s.card} p-5`}>
+          <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>AI Analysis Engine</h2>
+          <div className="space-y-3">
+            {[
+              ['Analyzed', aiPanelStats.totalAnalyzed, s.aiColors.indigo],
+              ['Avg Health', `${aiPanelStats.averageOverallAuditScore}%`, s.aiColors.indigo],
+              ['High Risk', aiPanelStats.riskDistribution?.high ?? 0, s.aiColors.red],
+              ['Medium Risk', aiPanelStats.riskDistribution?.medium ?? 0, s.aiColors.amber],
+              ['Low Risk', aiPanelStats.riskDistribution?.low ?? 0, s.aiColors.emerald],
+            ].map(([label, value, color]) => (
+              <div key={label} className="flex items-center justify-between">
+                <span className={`text-xs ${s.sub}`}>{label}</span>
+                <span className={`text-sm font-bold ${color}`}>{value}</span>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
-        <div className={`${s.card} p-5 ${isAdmin ? 'lg:col-span-1' : ''}`}>
+        <div className={`${s.card} p-5 lg:col-span-1`}>
           <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>Quick Actions</h2>
           <div className="grid gap-2.5">
             {actions.map(({ label, detail, icon: Icon, path }) => (
@@ -442,15 +476,17 @@ function StaffDashboard({ user }) {
         </div>
 
         <div className={`${s.card} p-5`}>
-          <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>Document Status</h2>
+          <h2 className={`mb-4 text-sm font-semibold ${s.text}`}>Audit Progress</h2>
           <div className="space-y-2.5">
-            {['in_review', 'in_progress', 'approved', 'rejected'].map((status) => (
-              <div key={status} className="flex items-center gap-3">
+            {[
+              ['Needs audit', needsAudit],
+              ['Completed audits', completedAudits],
+              ['Total documents', totalDocuments],
+            ].map(([label, value]) => (
+              <div key={label} className="flex items-center gap-3">
                 <div className="h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500" />
-                <span className={`flex-1 text-xs ${s.sub}`}>{STATUS_LABEL[status]}</span>
-                <span className={`text-sm font-bold ${s.text}`}>
-                  {statusCounts?.[status] ?? docs.filter((d) => d.status === status).length}
-                </span>
+                <span className={`flex-1 text-xs ${s.sub}`}>{label}</span>
+                <span className={`text-sm font-bold ${s.text}`}>{value}</span>
               </div>
             ))}
           </div>

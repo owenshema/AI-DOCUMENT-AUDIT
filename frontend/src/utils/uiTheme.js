@@ -1,7 +1,8 @@
 /** Dashboard theme tokens — landing-page style cards, readable in light & dark mode */
 
-const CARD_HOVER =
-  'transition-all duration-300 ease-out hover:-translate-y-1 hover:scale-[1.01] hover:shadow-lg hover:z-10';
+export const CARD_LIFT = 'card-lift';
+
+const CARD_HOVER = CARD_LIFT;
 
 export function getDashboardTheme(dark) {
   if (dark) {

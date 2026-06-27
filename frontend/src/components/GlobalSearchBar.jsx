@@ -29,7 +29,7 @@ export default function GlobalSearchBar({ compact = true }) {
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search documents, reports, departments..."
+        placeholder="Search documents and reports..."
         className="w-full bg-transparent py-2 text-sm outline-none"
       />
     </form>

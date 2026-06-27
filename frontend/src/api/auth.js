@@ -60,6 +60,19 @@ export const authAPI = {
     const response = await apiClient.delete(`/auth/users/${userId}`);
     return response.data;
   },
+
+  getLoginActivity: async (params) => {
+    const response = await apiClient.get('/auth/login-activity', { params });
+    return response.data;
+  },
+
+  exportLoginActivity: async (params) => {
+    const response = await apiClient.get('/auth/login-activity', {
+      params: { ...params, format: 'csv' },
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };
 
 export const documentAPI = {
@@ -109,6 +122,16 @@ export const documentAPI = {
 
   previewText: async (id) => {
     const response = await apiClient.get(`/documents/${id}/preview-text`);
+    return response.data;
+  },
+
+  getManagement: async (params) => {
+    const response = await apiClient.get('/documents/management', { params });
+    return response.data;
+  },
+
+  requestAudit: async (id, data) => {
+    const response = await apiClient.post(`/documents/${id}/request-audit`, data);
     return response.data;
   },
 

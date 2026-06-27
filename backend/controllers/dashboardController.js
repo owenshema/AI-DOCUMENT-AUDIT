@@ -4,94 +4,126 @@
  */
 
 const { documentWhereForUser, isOwnerRole } = require('../utils/ownerScope');
+const { normalizeRole } = require('../utils/roles');
+const {
+  countAuditedDocuments,
+  countPendingAuditDocuments,
+  countAuditorCompletedAudits,
+  documentHasAuditorReview,
+  documentNeedsAudit,
+} = require('../utils/documentAudit');
+
+async function buildRoleAuditMetrics(models, userId, role) {
+  const { Document, DocumentAnalysis } = models;
+  const roleNorm = normalizeRole(role);
+  const docWhere = documentWhereForUser({ id: userId, role });
+
+  if (roleNorm === 'client') {
+    const completed = await countAuditedDocuments(Document, docWhere);
+    const pending = await countPendingAuditDocuments(Document, docWhere);
+    return { completed, pending, scope: 'personal' };
+  }
+
+  if (roleNorm === 'auditor') {
+    const completed = await countAuditorCompletedAudits(DocumentAnalysis, userId);
+    const pending = await countPendingAuditDocuments(Document, {});
+    return { completed, pending, scope: 'organization' };
+  }
+
+  if (roleNorm === 'administrator' || roleNorm === 'document_manager') {
+    const completed = await countAuditedDocuments(Document, {});
+    const pending = await countPendingAuditDocuments(Document, {});
+    return { completed, pending, scope: 'organization' };
+  }
+
+  return { completed: 0, pending: 0, scope: 'organization' };
+}
+
+async function scopedAnalysisWhere(models, userId, role) {
+  const { Document } = models;
+  const roleNorm = normalizeRole(role);
+  if (roleNorm !== 'client') {
+    return { status: 'completed' };
+  }
+
+  const ownedDocs = await Document.findAll({
+    where: documentWhereForUser({ id: userId, role }),
+    attributes: ['id'],
+  });
+  const docIds = ownedDocs.map(d => d.id);
+  return {
+    status: 'completed',
+    documentId: docIds.length ? docIds : { [require('sequelize').Op.in]: [] },
+  };
+}
 
 const getDashboard = async (req, res) => {
   try {
-    const { Document, Task, ComplianceCheck, AuditLog } = req.app.locals.models;
+    const { Document, ComplianceCheck, AuditLog } = req.app.locals.models;
     const userId = req.user?.id || 'system';
     const role = req.user?.role || 'client';
     const Op = require('sequelize').Op;
 
-    // Define role-based isolation filters
-    const docWhere = {};
-    const taskWhere = {};
+    const docWhere = documentWhereForUser({ id: userId, role });
     const logWhere = {};
     const checkWhere = {};
+    const roleNorm = normalizeRole(role);
 
-    Object.assign(docWhere, documentWhereForUser({ id: userId, role }));
-    if (isOwnerRole(role)) {
+    if (roleNorm === 'client') {
       logWhere.userId = userId;
-    }
-
-    if (role !== 'administrator') {
-      taskWhere.assignedTo = userId;
-    }
-
-    if (isOwnerRole(role)) {
-      const allowedDocs = await Document.findAll({
-        where: docWhere,
-        attributes: ['id']
-      });
+      const allowedDocs = await Document.findAll({ where: docWhere, attributes: ['id'] });
       const allowedDocIds = allowedDocs.map(d => d.id);
-      checkWhere.documentId = allowedDocIds;
+      if (allowedDocIds.length) {
+        checkWhere.documentId = allowedDocIds;
+      } else {
+        checkWhere.documentId = { [Op.in]: [] };
+      }
     }
 
-    // Fetch metrics
     const totalDocuments = await Document.count({ where: docWhere });
-    const pendingTasks = await Task.count({ where: { ...taskWhere, status: 'pending' } });
-    const completedTasks = await Task.count({ where: { ...taskWhere, status: 'completed' } });
-    const overdueTasks = await Task.count({ 
-      where: { 
-        ...taskWhere,
-        status: 'pending',
-        dueDate: { [Op.lt]: new Date() }
-      }
-    });
+    const auditMetrics = await buildRoleAuditMetrics(req.app.locals.models, userId, role);
 
-    // Get recent audit logs
     const recentLogs = await AuditLog.findAll({
-      where: logWhere,
+      where: roleNorm === 'client' ? logWhere : {},
       limit: 10,
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
     });
 
-    // Calculate average compliance score - use proper column name (snake_case)
     let avgComplianceScore = 0;
     try {
       const complianceChecks = await ComplianceCheck.findAll({
         where: checkWhere,
         attributes: [
-          [require('sequelize').fn('AVG', require('sequelize').col('compliance_score')), 'avgScore']
-        ]
+          [require('sequelize').fn('AVG', require('sequelize').col('compliance_score')), 'avgScore'],
+        ],
       });
       avgComplianceScore = Math.round(complianceChecks[0]?.dataValues?.avgScore || 0);
     } catch (error) {
       console.error('Error calculating compliance score:', error);
-      avgComplianceScore = 0;
     }
 
     const dashboard = {
-      scope: isOwnerRole(role) ? 'personal' : 'organization',
+      scope: auditMetrics.scope,
       summary: {
         totalDocuments,
-        pendingTasks,
-        completedTasks,
-        overdueTasks,
+        pendingTasks: auditMetrics.pending,
+        completedTasks: auditMetrics.completed,
+        overdueTasks: 0,
         complianceScore: avgComplianceScore,
-        recentActivityCount: recentLogs.length
+        recentActivityCount: recentLogs.length,
       },
       recentActivities: recentLogs.map(log => ({
         action: log.action,
         userId: log.userId,
         timestamp: log.createdAt,
-        description: log.description
+        description: log.description,
       })),
       metrics: {
-        taskCompletionRate: pendingTasks + completedTasks > 0 
-          ? Math.round((completedTasks / (pendingTasks + completedTasks)) * 100)
+        taskCompletionRate: auditMetrics.completed + auditMetrics.pending > 0
+          ? Math.round((auditMetrics.completed / (auditMetrics.completed + auditMetrics.pending)) * 100)
           : 0,
-        complianceScore: avgComplianceScore
-      }
+        complianceScore: avgComplianceScore,
+      },
     };
 
     res.json(dashboard);
@@ -103,40 +135,27 @@ const getDashboard = async (req, res) => {
 
 const getDashboardMetrics = async (req, res) => {
   try {
-    const { ComplianceCheck, Document, Task, DocumentAnalysis } = req.app.locals.models;
+    const { ComplianceCheck, Document, DocumentAnalysis } = req.app.locals.models;
     const userId = req.user?.id || 'system';
     const role = req.user?.role || 'client';
     const Op = require('sequelize').Op;
 
-    // Define role-based isolation filters
-    const docWhere = {};
-    const taskWhere = {};
+    const docWhere = documentWhereForUser({ id: userId, role });
+    const roleNorm = normalizeRole(role);
     const checkWhere = {};
-    const analysisWhere = { status: 'completed' };
+    const analysisWhere = await scopedAnalysisWhere(req.app.locals.models, userId, role);
 
-    Object.assign(docWhere, documentWhereForUser({ id: userId, role }));
-
-    if (role !== 'administrator') {
-      taskWhere.assignedTo = userId;
-    }
-
-    if (isOwnerRole(role)) {
-      const allowedDocs = await Document.findAll({
-        where: docWhere,
-        attributes: ['id']
-      });
+    if (roleNorm === 'client') {
+      const allowedDocs = await Document.findAll({ where: docWhere, attributes: ['id'] });
       const allowedDocIds = allowedDocs.map(d => d.id);
-      checkWhere.documentId = allowedDocIds;
-      analysisWhere.documentId = allowedDocIds;
+      checkWhere.documentId = allowedDocIds.length ? allowedDocIds : { [Op.in]: [] };
     }
 
-    // Audit metrics from compliance checks table
     const totalComplianceChecks = await ComplianceCheck.count({ where: checkWhere });
     const passedChecks = await ComplianceCheck.count({ where: { ...checkWhere, status: 'passed' } });
     const failedChecks = await ComplianceCheck.count({ where: { ...checkWhere, status: 'failed' } });
     const pendingChecks = await ComplianceCheck.count({ where: { ...checkWhere, status: 'pending' } });
 
-    // Pass rate — fall back to AI analysis scores when no formal compliance checks exist
     let passRate = totalComplianceChecks > 0
       ? Math.round((passedChecks / totalComplianceChecks) * 100)
       : 0;
@@ -157,13 +176,12 @@ const getDashboardMetrics = async (req, res) => {
       }
     }
 
-    // Document metrics
     const totalDocuments = await Document.count({ where: docWhere });
     const uploadedToday = await Document.count({
       where: {
         ...docWhere,
-        createdAt: { [Op.gte]: new Date(new Date().setHours(0, 0, 0, 0)) }
-      }
+        createdAt: { [Op.gte]: new Date(new Date().setHours(0, 0, 0, 0)) },
+      },
     });
 
     const statusRows = await Document.findAll({
@@ -177,30 +195,21 @@ const getDashboardMetrics = async (req, res) => {
       statusBreakdown[row.status] = parseInt(row.count, 10) || 0;
     });
 
-    // Task metrics — fall back to completed audits / reviewed documents when no tasks exist
-    const totalTasks = await Task.count({ where: taskWhere });
-    let completedTasks = await Task.count({ where: { ...taskWhere, status: 'completed' } });
-    const pendingTasks = await Task.count({ where: { ...taskWhere, status: 'pending' } });
+    const auditMetrics = await buildRoleAuditMetrics(req.app.locals.models, userId, role);
+    const completedTasks = auditMetrics.completed;
+    const pendingTasks = auditMetrics.pending;
+    const effectiveTotalTasks = completedTasks + pendingTasks;
 
-    if (completedTasks === 0) {
-      if (role === 'auditor') {
-        completedTasks = await DocumentAnalysis.count({
-          where: { status: 'completed', performedBy: userId },
-        });
-      }
-      if (completedTasks === 0) {
-        completedTasks = await Document.count({
-          where: {
-            ...docWhere,
-            status: { [Op.in]: ['approved', 'reviewed', 'rejected'] },
-          },
-        });
-      }
-    }
-
-    const effectiveTotalTasks = Math.max(totalTasks, completedTasks + pendingTasks);
+    const completedAnalyses = await DocumentAnalysis.count({ where: analysisWhere });
+    const { averageOverallScore } = require('../services/auditScoreService');
+    const analysisRows = await DocumentAnalysis.findAll({
+      where: analysisWhere,
+      attributes: ['results', 'riskFactors'],
+    });
 
     const metrics = {
+      scope: auditMetrics.scope,
+      role: roleNorm,
       complianceMetrics: {
         totalChecks: totalComplianceChecks,
         passed: passedChecks,
@@ -212,6 +221,8 @@ const getDashboardMetrics = async (req, res) => {
         total: totalDocuments,
         uploadedToday,
         statusBreakdown,
+        audited: completedTasks,
+        needsAudit: pendingTasks,
       },
       taskMetrics: {
         total: effectiveTotalTasks,
@@ -220,6 +231,15 @@ const getDashboardMetrics = async (req, res) => {
         completionRate: effectiveTotalTasks > 0
           ? Math.round((completedTasks / effectiveTotalTasks) * 100)
           : 0,
+      },
+      aiMetrics: {
+        totalAnalyzed: completedAnalyses,
+        averageOverallAuditScore: averageOverallScore(analysisRows),
+        riskDistribution: {
+          high: analysisRows.filter(a => (a.riskFactors?.level || a.results?.risk_level) === 'high').length,
+          medium: analysisRows.filter(a => (a.riskFactors?.level || a.results?.risk_level) === 'medium').length,
+          low: analysisRows.filter(a => (a.riskFactors?.level || a.results?.risk_level || 'low') === 'low').length,
+        },
       },
     };
 
@@ -236,20 +256,18 @@ const getAuditTrend = async (req, res) => {
     const { AuditLog } = req.app.locals.models;
     const where = {
       createdAt: {
-        [require('sequelize').Op.gte]: new Date(Date.now() - days * 24 * 60 * 60 * 1000)
-      }
+        [require('sequelize').Op.gte]: new Date(Date.now() - days * 24 * 60 * 60 * 1000),
+      },
     };
-    if (!['administrator', 'auditor'].includes(req.user?.role)) {
+    if (!['administrator', 'auditor', 'document_manager'].includes(normalizeRole(req.user?.role))) {
       where.userId = req.user?.id;
     }
 
-    // Get audit logs for the period
     const logs = await AuditLog.findAll({
       where,
-      order: [['createdAt', 'ASC']]
+      order: [['createdAt', 'ASC']],
     });
 
-    // Group by date
     const trendData = {};
     logs.forEach(log => {
       const date = log.createdAt.toISOString().split('T')[0];
@@ -261,15 +279,10 @@ const getAuditTrend = async (req, res) => {
       else trendData[date].failed++;
     });
 
-    const data = Object.entries(trendData).map(([date, stats]) => ({
-      date,
-      ...stats
-    }));
-
     res.json({
-      data,
+      data: Object.entries(trendData).map(([date, stats]) => ({ date, ...stats })),
       period: `${days} days`,
-      totalAudits: logs.length
+      totalAudits: logs.length,
     });
   } catch (error) {
     console.error('Get audit trend error:', error);
@@ -281,7 +294,7 @@ const getComplianceOverview = async (req, res) => {
   try {
     const { ComplianceCheck, Document } = req.app.locals.models;
     const options = {};
-    if (isOwnerRole(req.user?.role)) {
+    if (normalizeRole(req.user?.role) === 'client') {
       options.include = [{
         model: Document,
         attributes: [],
@@ -295,19 +308,17 @@ const getComplianceOverview = async (req, res) => {
     const failedCount = allChecks.filter(c => c.status === 'failed').length;
     const warningCount = allChecks.filter(c => c.status === 'warning').length;
 
-    const overview = {
-      overallScore: allChecks.length > 0 
+    res.json({
+      overallScore: allChecks.length > 0
         ? Math.round(allChecks.reduce((sum, c) => sum + (c.complianceScore || 0), 0) / allChecks.length)
         : 0,
       statusDistribution: {
         passed: passedCount,
         failed: failedCount,
-        warning: warningCount
+        warning: warningCount,
       },
-      totalChecksPerformed: allChecks.length
-    };
-
-    res.json(overview);
+      totalChecksPerformed: allChecks.length,
+    });
   } catch (error) {
     console.error('Get compliance overview error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch overview' });
@@ -315,12 +326,11 @@ const getComplianceOverview = async (req, res) => {
 };
 
 const getSystemHealth = (req, res) => {
-  // Return basic system health (could connect to monitoring service)
   res.json({
     status: 'healthy',
     uptime: process.uptime(),
     timestamp: new Date(),
-    version: '0.2.0'
+    version: '0.2.0',
   });
 };
 
@@ -343,14 +353,14 @@ const getNotifications = async (req, res) => {
       where,
       limit: parseInt(limit),
       offset: (page - 1) * limit,
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
     });
 
     res.json({
       notifications: rows,
       total: count,
       page: parseInt(page),
-      limit: parseInt(limit)
+      limit: parseInt(limit),
     });
   } catch (error) {
     console.error('Get notifications error:', error);
@@ -364,5 +374,7 @@ module.exports = {
   getAuditTrend,
   getComplianceOverview,
   getSystemHealth,
-  getNotifications
+  getNotifications,
+  documentHasAuditorReview,
+  documentNeedsAudit,
 };

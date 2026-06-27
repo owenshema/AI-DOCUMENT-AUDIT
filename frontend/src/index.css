@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 * {
   transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
@@ -73,12 +77,98 @@ body {
   background: #b91c1c;
 }
 
+@layer components {
+  .card-lift {
+    position: relative;
+    z-index: 1;
+    transition:
+      transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1),
+      box-shadow 0.28s ease,
+      border-color 0.22s ease,
+      background-color 0.22s ease;
+  }
+
+  .card-lift:hover {
+    z-index: 40;
+    transform: translateY(-6px) scale(1.018);
+    box-shadow:
+      0 22px 44px -14px rgba(79, 70, 229, 0.32),
+      0 12px 28px -12px rgba(15, 23, 42, 0.16);
+  }
+
+  /* Auto-apply lift to card-like elements inside marked surfaces */
+  .card-surface :where(div, a, article, section):is(
+    [class*='rounded-2xl'][class*='border'],
+    [class*='rounded-xl'][class*='border'],
+    [class*='rounded-lg'][class*='border'],
+    [class*='rounded-2xl'][class*='p-3'],
+    [class*='rounded-2xl'][class*='p-4'],
+    [class*='rounded-2xl'][class*='p-5'],
+    [class*='rounded-2xl'][class*='p-6'],
+    [class*='rounded-2xl'][class*='p-7'],
+    [class*='rounded-2xl'][class*='p-8'],
+    [class*='rounded-xl'][class*='p-4'],
+    [class*='rounded-xl'][class*='p-5'],
+    [class*='rounded-xl'][class*='p-6']
+  ):not(.no-card-lift):not(.fixed) {
+    position: relative;
+    z-index: 1;
+    transition:
+      transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1),
+      box-shadow 0.28s ease,
+      border-color 0.22s ease,
+      background-color 0.22s ease;
+  }
+
+  .card-surface :where(div, a, article, section):is(
+    [class*='rounded-2xl'][class*='border'],
+    [class*='rounded-xl'][class*='border'],
+    [class*='rounded-lg'][class*='border'],
+    [class*='rounded-2xl'][class*='p-3'],
+    [class*='rounded-2xl'][class*='p-4'],
+    [class*='rounded-2xl'][class*='p-5'],
+    [class*='rounded-2xl'][class*='p-6'],
+    [class*='rounded-2xl'][class*='p-7'],
+    [class*='rounded-2xl'][class*='p-8'],
+    [class*='rounded-xl'][class*='p-4'],
+    [class*='rounded-xl'][class*='p-5'],
+    [class*='rounded-xl'][class*='p-6']
+  ):not(.no-card-lift):not(.fixed):hover {
+    z-index: 40;
+    transform: translateY(-6px) scale(1.018);
+    box-shadow:
+      0 22px 44px -14px rgba(79, 70, 229, 0.32),
+      0 12px 28px -12px rgba(15, 23, 42, 0.16);
+  }
+
+  /* Keep grids from clipping lifted cards */
+  .card-surface .grid,
+  .card-surface [class*='grid-cols'] {
+    overflow: visible;
+  }
+}
+
 .card {
+  position: relative;
+  z-index: 1;
   background: #ffffff;
   border: 1px solid #dbeafe;
   border-radius: 0.75rem;
   box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
   padding: 1.5rem;
+  transition:
+    transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1),
+    box-shadow 0.28s ease,
+    border-color 0.22s ease;
+}
+
+.card:hover {
+  z-index: 40;
+  transform: translateY(-6px) scale(1.018);
+  box-shadow:
+    0 22px 44px -14px rgba(79, 70, 229, 0.32),
+    0 12px 28px -12px rgba(15, 23, 42, 0.16);
+  border-color: #a5b4fc;
 }
 
 .input-field {
@@ -136,4 +226,84 @@ body {
 
 .animate-slideIn {
   animation: slideIn 0.5s ease-in;
+}
+
+/* Hide browser-native password reveal so only our toggle shows */
+.hide-password-reveal::-ms-reveal,
+.hide-password-reveal::-ms-clear {
+  display: none;
+}
+
+.hide-password-reveal::-webkit-credentials-auto-fill-button {
+  visibility: hidden;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+
+/* Rotating status pie chart (dashboard) */
+@keyframes pieChartSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pieChartGlowPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+}
+
+@keyframes pieChartSegmentIn {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.pie-chart-spin {
+  animation: pieChartSpin 22s linear infinite;
+}
+
+.pie-chart-idle-spin {
+  animation: pieChartSpin 30s linear infinite;
+}
+
+.pie-chart-rotating:hover .pie-chart-spin {
+  animation-play-state: paused;
+}
+
+.pie-chart-glow {
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.22) 0%, transparent 68%);
+  animation: pieChartGlowPulse 4s ease-in-out infinite;
+}
+
+.pie-chart-segment {
+  animation: pieChartSegmentIn 0.6s cubic-bezier(0.34, 1.2, 0.64, 1) backwards;
+}
+
+.pie-chart-segment:nth-child(1) { animation-delay: 0.05s; }
+.pie-chart-segment:nth-child(2) { animation-delay: 0.12s; }
+.pie-chart-segment:nth-child(3) { animation-delay: 0.19s; }
+.pie-chart-segment:nth-child(4) { animation-delay: 0.26s; }
+.pie-chart-segment:nth-child(5) { animation-delay: 0.33s; }
+.pie-chart-segment:nth-child(6) { animation-delay: 0.4s; }
+.pie-chart-segment:nth-child(7) { animation-delay: 0.47s; }
+.pie-chart-segment:nth-child(8) { animation-delay: 0.54s; }
+
+.pie-chart-center {
+  filter: drop-shadow(0 4px 12px rgba(15, 23, 42, 0.12));
 }

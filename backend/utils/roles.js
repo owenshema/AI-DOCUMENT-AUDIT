@@ -2,7 +2,7 @@
 
 const VALID_ROLES = ['administrator', 'auditor', 'document_manager', 'client'];
 const DEFAULT_ROLE = 'client';
-const OWNER_ROLES = ['client', 'document_manager'];
+const OWNER_ROLES = ['client'];
 
 const ROLE_LABELS = {
   administrator: 'Administrator',

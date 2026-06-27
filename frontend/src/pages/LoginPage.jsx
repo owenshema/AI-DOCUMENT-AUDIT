@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, Loader, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Loader, ShieldCheck, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { authAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
 
@@ -50,21 +50,11 @@ const OTPInput = ({ value, onChange }) => {
   );
 };
 
-function StepBadge({ step, total, label }) {
-  return (
-    <div className="mb-5 rounded-xl border border-indigo-400/25 bg-indigo-500/10 px-4 py-2.5 text-center">
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-300">
-        Step {step} of {total}
-      </p>
-      <p className="text-xs text-white/80 mt-0.5">{label}</p>
-    </div>
-  );
-}
-
 export default function LoginPage() {
   const [step, setStep]         = useState('credentials');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw]       = useState(false);
   const [userId, setUserId]     = useState('');
   const [otp, setOtp]           = useState('');
   const [error, setError]       = useState('');
@@ -175,7 +165,7 @@ export default function LoginPage() {
           </div>
 
           {/* Form area */}
-          <div className="flex-1 flex items-center justify-center px-8 sm:px-12 py-10">
+          <div className="flex-1 flex items-center justify-center px-8 sm:px-12 py-10 card-surface">
             <div className="w-full max-w-sm">
               <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md p-7 shadow-2xl">
                 {isPending && (
@@ -188,7 +178,6 @@ export default function LoginPage() {
                 {/* ── Credentials ── */}
                 {step === 'credentials' && (
                   <>
-                    <StepBadge step={1} total={2} label="Sign in with your email and password" />
                     <h2 className="text-base font-semibold text-white mb-5">Sign in to your account</h2>
                     <ErrorBanner />
                     <form onSubmit={handleCredentials} className="space-y-4" autoComplete="off">
@@ -204,9 +193,16 @@ export default function LoginPage() {
                         <label className={labelCls}>Password</label>
                         <div className="relative">
                           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                          <input type="password" name="login-password" value={password} onChange={e => setPassword(e.target.value)}
-                            autoComplete="off" className={inputCls}
-                            placeholder="••••••••" required />
+                          <input type="text" name="login-password" value={password} onChange={e => setPassword(e.target.value)}
+                            autoComplete="current-password"
+                            style={showPw ? undefined : { WebkitTextSecurity: 'disc' }}
+                            className="hide-password-reveal w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-10 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors"
+                            required />
+                          <button type="button" onClick={() => setShowPw(p => !p)}
+                            aria-label={showPw ? 'Hide password' : 'Show password'}
+                            className="absolute right-3 top-1/2 z-10 -translate-y-1/2 text-white/50 hover:text-white">
+                            {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
                         </div>
                       </div>
                       <div className="flex justify-end">
@@ -225,7 +221,6 @@ export default function LoginPage() {
                 {/* ── Email OTP ── */}
                 {step === 'otp' && (
                   <>
-                    <StepBadge step={2} total={2} label="Enter the verification code from your email" />
                     <div className="text-center mb-4">
                       <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/30 border border-indigo-400/30 mb-3">
                         <ShieldCheck className="h-6 w-6 text-indigo-300" />
@@ -264,7 +259,6 @@ export default function LoginPage() {
                 {/* ── TOTP ── */}
                 {step === 'totp' && (
                   <>
-                    <StepBadge step={2} total={2} label="Enter the code from your authenticator app" />
                     <div className="text-center mb-4">
                       <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/30 border border-indigo-400/30 mb-3">
                         <ShieldCheck className="h-6 w-6 text-indigo-300" />

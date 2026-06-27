@@ -15,9 +15,9 @@ const ROLE_COLORS = {
 };
 
 const PERMISSIONS = {
-  administrator:    ['Full system access', 'Manage all users', 'Generate & export reports', 'Configure policies', 'View audit logs'],
+  administrator:    ['Full system access', 'Manage all users', 'Generate login activity reports', 'Generate & export reports', 'Configure policies', 'View audit logs'],
   auditor:          ['Read & flag documents', 'Run AI analysis', 'Generate audit reports', 'View compliance data'],
-  document_manager: ['Upload & manage documents', 'Run AI analysis', 'View audit reports', 'Manage workflows'],
+  document_manager: ['View all documents', 'Track audit status', 'Notify auditors', 'View workflow (read-only)', 'View audit reports'],
   client: ['Upload logistics documents', 'Track audit status', 'View own reports'],
 };
 
@@ -26,6 +26,8 @@ export default function UsersPage() {
   const [users, setUsers]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [editUser, setEditUser]   = useState(null);
+  const [deleteUser, setDeleteUser] = useState(null);
+  const [deleting, setDeleting]   = useState(false);
   const [editRole, setEditRole]   = useState('');
   const [msg, setMsg]             = useState('');
   const [showPerms, setShowPerms] = useState(true);
@@ -70,14 +72,18 @@ export default function UsersPage() {
     setTimeout(() => setMsg(''), 3000);
   };
 
-  const handleDelete = async (u) => {
-    if (!window.confirm(`Permanently delete ${u.fullName || u.email}? This removes the user from the database.`)) return;
+  const handleDelete = async () => {
+    if (!deleteUser) return;
+    setDeleting(true);
     try {
-      await authAPI.deleteUser(u.id);
-      setMsg(`${u.fullName || u.email} deleted permanently`);
+      await authAPI.deleteUser(deleteUser.id);
+      setMsg(`${deleteUser.fullName || deleteUser.email} deleted permanently`);
+      setDeleteUser(null);
       load();
     } catch (e) {
       setMsg(e?.response?.data?.error || 'Delete failed');
+    } finally {
+      setDeleting(false);
     }
     setTimeout(() => setMsg(''), 3000);
   };
@@ -175,7 +181,14 @@ export default function UsersPage() {
                         {u.approvalStatus || 'approved'}
                       </span>
                     </td>
-                    <td className={`px-5 py-3 text-xs ${sub}`}>{u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : 'Never'}</td>
+                    <td className={`px-5 py-3 text-xs ${sub}`}>
+                      {u.lastLogin
+                        ? new Date(u.lastLogin).toLocaleString(undefined, {
+                          year: 'numeric', month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })
+                        : 'Never'}
+                    </td>
                     {me?.role === 'administrator' && (
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2">
@@ -190,7 +203,7 @@ export default function UsersPage() {
                             {u.isActive ? 'Deactivate' : u.approvalStatus === 'pending' ? 'Approve' : 'Activate'}
                           </button>
                           {u.id !== me?.id && u.role !== 'administrator' && (
-                            <button onClick={() => handleDelete(u)}
+                            <button onClick={() => setDeleteUser(u)}
                               className="rounded-lg px-2 py-1 text-[10px] font-medium border bg-red-600/10 border-red-600/20 text-red-400 hover:bg-red-600/20 transition-colors">
                               <span className="inline-flex items-center gap-1"><Trash2 className="h-3 w-3" /> Delete</span>
                             </button>
@@ -205,6 +218,52 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+
+      {/* Delete user confirmation */}
+      {deleteUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className={`no-card-lift w-full max-w-md rounded-2xl border p-6 shadow-2xl ${modalBg}`}>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/15">
+                <Trash2 className="h-5 w-5 text-red-400" />
+              </div>
+              <div>
+                <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                  AI Audit Document System
+                </p>
+                <h3 className={`text-base font-semibold ${text}`}>Delete User</h3>
+              </div>
+            </div>
+            <p className={`text-sm leading-relaxed ${text}`}>
+              Do you want to delete this user?
+            </p>
+            <div className={`mt-3 rounded-xl border px-4 py-3 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
+              <p className={`text-sm font-semibold ${text}`}>{deleteUser.fullName}</p>
+              <p className={`text-xs ${sub}`}>{deleteUser.email}</p>
+              <p className={`mt-1 text-[10px] capitalize ${sub}`}>{formatRoleLabel(deleteUser.role)}</p>
+            </div>
+            <p className={`mt-3 text-xs leading-relaxed ${sub}`}>
+              This action is permanent and cannot be undone. The user will be removed from the system.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => setDeleteUser(null)}
+                disabled={deleting}
+                className={`flex-1 rounded-xl border py-2.5 text-sm font-medium transition-colors disabled:opacity-50 ${isDarkMode ? 'border-white/10 bg-white/5 text-slate-400 hover:text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {deleting ? 'Deleting…' : 'Yes, Delete User'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit role modal */}
       {editUser && (

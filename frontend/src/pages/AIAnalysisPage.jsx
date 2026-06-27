@@ -1066,7 +1066,7 @@ export default function AIAnalysisPage() {
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium truncate ${text}`}>{doc.title || doc.fileName}</p>
                     <p className={`text-xs truncate ${sub}`}>
-                      {doc.category} · {doc.department}
+                      {doc.category}
                       {doc.uploader?.fullName ? ` · ${doc.uploader.fullName}` : ''}
                       {doc.createdAt ? ` · ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
                     </p>

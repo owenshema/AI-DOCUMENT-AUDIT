@@ -31,7 +31,7 @@ class AuthService {
       // User model hook hashes passwordHash on create.
       password: registerDTO.password,
       fullName: registerDTO.fullName,
-      department: registerDTO.department,
+      department: registerDTO.department || 'General',
       role: registerDTO.role || 'client'
     });
 

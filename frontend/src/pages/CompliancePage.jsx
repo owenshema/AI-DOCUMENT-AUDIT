@@ -12,7 +12,7 @@ const CompliancePage = () => {
   const [loading, setLoading] = useState(true);
   const [checkState, setCheckState] = useState({ documentId: '', result: null, busy: false, error: '' });
   const [showNewPolicy, setShowNewPolicy] = useState(false);
-  const [newPolicy, setNewPolicy] = useState({ name: '', description: '', policyType: 'organizational', department: '' });
+  const [newPolicy, setNewPolicy] = useState({ name: '', description: '', policyType: 'organizational' });
   const [policyMsg, setPolicyMsg] = useState('');
 
   const load = useCallback(async () => {
@@ -48,7 +48,7 @@ const CompliancePage = () => {
       await complianceAPI.createPolicy(newPolicy);
       setPolicyMsg('Policy created successfully.');
       setShowNewPolicy(false);
-      setNewPolicy({ name: '', description: '', policyType: 'organizational', department: '' });
+      setNewPolicy({ name: '', description: '', policyType: 'organizational' });
       load();
     } catch (err) {
       setPolicyMsg(err?.response?.data?.error || 'Failed to create policy.');
@@ -187,13 +187,8 @@ const CompliancePage = () => {
                 <label className="mb-1 block text-xs font-medium text-slate-400">Type *</label>
                 <select value={newPolicy.policyType} onChange={e => setNewPolicy(p => ({ ...p, policyType: e.target.value }))}
                   className="w-full rounded-lg border border-white/10 bg-[#0a0f1e] px-3 py-2 text-sm text-white outline-none">
-                  {['organizational', 'regulatory', 'departmental', 'security'].map(t => <option key={t} value={t}>{t}</option>)}
+                  {['organizational', 'regulatory', 'security'].map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-400">Department</label>
-                <input value={newPolicy.department} onChange={e => setNewPolicy(p => ({ ...p, department: e.target.value }))}
-                  className="w-full rounded-lg border border-white/10 bg-[#0a0f1e] px-3 py-2 text-sm text-white outline-none focus:border-[#0ea5e9]/50" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-slate-400">Description</label>

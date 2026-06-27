@@ -18,7 +18,7 @@ export function formatRoleLabel(role) {
   return ROLE_LABELS[key] || key.replace(/_/g, ' ');
 }
 
-export const OWNER_ROLES = ['client', 'document_manager'];
+export const OWNER_ROLES = ['client'];
 
 export function isOwnerRole(role) {
   return OWNER_ROLES.includes(normalizeRole(role));

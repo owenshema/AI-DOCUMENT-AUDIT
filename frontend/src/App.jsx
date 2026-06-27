@@ -11,11 +11,13 @@ import ForgotPasswordPage  from './pages/ForgotPasswordPage';
 import PendingApprovalPage from './pages/PendingApprovalPage';
 import DashboardPage       from './pages/DashboardPage';
 import DocumentsPage       from './pages/DocumentsPage';
+import DocumentManagementPage from './pages/DocumentManagementPage';
 import AIAnalysisPage      from './pages/AIAnalysisPage';
 import AuditReportsPage    from './pages/AuditReportsPage';
 import SearchPage          from './pages/SearchPage';
 import WorkflowPage        from './pages/WorkflowPage';
 import UsersPage           from './pages/UsersPage';
+import LoginActivityPage   from './pages/LoginActivityPage';
 
 export default function App() {
   const { isAuthenticated, user, hydrateAuth } = useAuthStore();
@@ -50,6 +52,11 @@ export default function App() {
 
         <Route path="/dashboard"     element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         <Route path="/documents"     element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />
+        <Route path="/document-management" element={
+          <ProtectedRoute requiredRole={['document_manager', 'administrator']}>
+            <DocumentManagementPage />
+          </ProtectedRoute>
+        } />
         <Route path="/audit-reports" element={<ProtectedRoute><AuditReportsPage /></ProtectedRoute>} />
         <Route path="/search"        element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
 
@@ -59,13 +66,18 @@ export default function App() {
           </ProtectedRoute>
         } />
         <Route path="/workflow" element={
-          <ProtectedRoute requiredRole={['administrator','auditor']}>
+          <ProtectedRoute requiredRole={['administrator', 'auditor', 'document_manager']}>
             <WorkflowPage />
           </ProtectedRoute>
         } />
         <Route path="/users" element={
           <ProtectedRoute requiredRole={['administrator']}>
             <UsersPage />
+          </ProtectedRoute>
+        } />
+        <Route path="/login-activity" element={
+          <ProtectedRoute requiredRole={['administrator']}>
+            <LoginActivityPage />
           </ProtectedRoute>
         } />
 

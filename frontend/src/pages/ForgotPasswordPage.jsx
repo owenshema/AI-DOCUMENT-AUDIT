@@ -86,7 +86,7 @@ export default function ForgotPasswordPage() {
       <div className="absolute inset-0 opacity-5"
         style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
 
-      <div className="relative w-full max-w-sm">
+      <div className="relative w-full max-w-sm card-surface">
         <div className="text-center mb-7">
           <Link to="/" className="inline-flex flex-col items-center gap-2">
             <img src="/sifco/logo.png" alt="SIFCO AE" className="h-10 w-auto brightness-0 invert"
@@ -144,11 +144,14 @@ export default function ForgotPasswordPage() {
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                  <input type={showPw ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} required
-                    className="w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-9 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors"
+                  <input type="text" value={newPw} onChange={e => setNewPw(e.target.value)} required
+                    style={showPw ? undefined : { WebkitTextSecurity: 'disc' }}
+                    autoComplete="new-password"
+                    className="hide-password-reveal w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-10 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors"
                     placeholder="New password" />
                   <button type="button" onClick={() => setShowPw(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                    aria-label={showPw ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 text-white/50 hover:text-white">
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>

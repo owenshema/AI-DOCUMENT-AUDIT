@@ -63,5 +63,7 @@ router.patch('/users/:userId/status',
   verifyToken, verifyRole(['administrator']), ctrl.updateUserStatus);
 router.delete('/users/:userId',
   verifyToken, verifyRole(['administrator']), ctrl.deleteUser);
+router.get('/login-activity',
+  verifyToken, verifyRole(['administrator']), ctrl.getLoginActivity);
 
 module.exports = router;

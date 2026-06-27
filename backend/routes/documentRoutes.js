@@ -35,11 +35,13 @@ const upload = multer({
   }
 });
 
+router.get('/management', documentController.getDocumentManagement);
 router.get('/', documentController.getAllDocuments);
 router.post('/', upload.single('file'), documentController.uploadDocument);
 router.post('/bulk/upload', upload.array('files', 20), documentController.bulkUpload);
 router.get('/:id', documentController.getDocumentById);
 router.put('/:id', documentController.updateDocument);
+router.post('/:id/request-audit', documentController.requestDocumentAudit);
 router.post('/:id/reupload', upload.single('file'), documentController.reuploadDocument);
 router.patch('/:id/status', documentController.updateDocumentStatus);
 router.delete('/:id', documentController.deleteDocument);

@@ -25,7 +25,7 @@ class RegisterRequestDTO {
       errors.push('Full name required');
     }
     if (!this.department || this.department.trim() === '') {
-      errors.push('Department required');
+      this.department = 'General';
     }
     if (!['client', 'viewer', 'document_manager', 'auditor', 'administrator'].includes(this.role)) {
       errors.push('Invalid role');

@@ -6,7 +6,6 @@ import useAuthStore from '../store/authStore';
 import { normalizeRole, isOwnerRole } from '../config/roles';
 
 const CATS = ['policy', 'contract', 'invoice', 'compliance', 'report', 'memo', 'other'];
-const DEPARTMENTS = ['General', 'Finance', 'HR', 'IT', 'Compliance', 'Operations', 'Procurement', 'Logistics', 'Legal'];
 const AUDIT_STATUSES = ['in_review', 'in_progress', 'changes_requested', 'approved', 'rejected'];
 
 const getProcessingStatus = (doc) => {
@@ -90,7 +89,7 @@ function DocumentViewer({ doc, onClose }) {
             <FileText className="h-5 w-5 text-indigo-400 flex-shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white truncate">{doc.title || doc.fileName}</p>
-              <p className="text-xs text-slate-500">{doc.category} Â· {doc.department} Â· {ext?.toUpperCase()}</p>
+              <p className="text-xs text-slate-500">{doc.category} · {ext?.toUpperCase()}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -161,7 +160,7 @@ export default function DocumentsPage() {
   const [loading, setLoading]     = useState(true);
   const [dragging, setDragging]   = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [upload, setUpload]       = useState({ files: [], title: '', category: 'policy', department: '', busy: false, error: '', success: '' });
+  const [upload, setUpload]       = useState({ files: [], title: '', category: 'policy', priority: 'normal', busy: false, error: '', success: '' });
   const [analysisMsg, setAnalysisMsg] = useState({});
   const [analysisDraft, setAnalysisDraft] = useState({});
   const [auditResults, setAuditResults] = useState({});
@@ -215,7 +214,10 @@ export default function DocumentsPage() {
     try {
       const form = new FormData();
       form.append('category', upload.category);
-      form.append('department', upload.department || user?.department || 'General');
+      form.append('department', 'General');
+      if (isDocumentManager) {
+        form.append('isUrgent', upload.priority === 'urgent' ? 'true' : 'false');
+      }
       if (upload.files.length === 1) {
         form.append('file', upload.files[0]);
         form.append('title', upload.title || upload.files[0].name);
@@ -224,7 +226,7 @@ export default function DocumentsPage() {
         upload.files.forEach(file => form.append('files', file));
         await documentAPI.bulkUpload(form);
       }
-      setUpload({ files: [], title: '', category: 'policy', department: '', busy: false, error: '', success: 'Uploaded!' });
+      setUpload({ files: [], title: '', category: 'policy', priority: 'normal', busy: false, error: '', success: 'Uploaded!' });
       setShowUpload(false);
       load();
     } catch (e) {
@@ -243,7 +245,6 @@ export default function DocumentsPage() {
       await documentAPI.update(doc.id, {
         title: draft.title ?? doc.title,
         category: draft.category ?? doc.category,
-        department: draft.department ?? doc.department,
         description: draft.description ?? doc.description ?? '',
       });
       setEditDraft(p => ({ ...p, [doc.id]: { editing: false } }));
@@ -322,6 +323,7 @@ export default function DocumentsPage() {
 
   const role = normalizeRole(user?.role);
   const isOwnerPortal = isOwnerRole(role);
+  const isDocumentManager = role === 'document_manager';
   const pageTitle = isOwnerPortal ? 'My Documents' : 'Document Hub';
 
   return (
@@ -403,8 +405,8 @@ export default function DocumentsPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white truncate">{doc.title || doc.fileName}</p>
                     <p className="text-xs text-slate-500">
-                      {doc.category} Â· {doc.department}
-                      {doc.createdAt ? ` Â· ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
+                      {doc.category}
+                      {doc.createdAt ? ` · ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
                     </p>
                     {analysisMsg[doc.id] && (
                       <p className="text-[10px] text-indigo-400 mt-0.5">{analysisMsg[doc.id]}</p>
@@ -428,7 +430,7 @@ export default function DocumentsPage() {
                       <Bot className="h-3.5 w-3.5" />
                     </button>
                     )}
-                    <button onClick={() => setEditDraft(p => ({ ...p, [doc.id]: { editing: true, title: doc.title || '', category: doc.category || 'policy', department: doc.department || 'General', description: doc.description || '' } }))}
+                    <button onClick={() => setEditDraft(p => ({ ...p, [doc.id]: { editing: true, title: doc.title || '', category: doc.category || 'policy', description: doc.description || '' } }))}
                       className="rounded-lg p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10" title="Edit">
                       <Edit2 className="h-3.5 w-3.5" />
                     </button>
@@ -448,7 +450,6 @@ export default function DocumentsPage() {
                         ['Size', doc.fileSize ? `${Math.round(doc.fileSize / 1024)} KB` : 'â€”'],
                         ['Text extraction', getProcessingStatus(doc)],
                         ['Uploader', getUploaderLabel(doc)],
-                        ['Department', doc.department || 'â€”'],
                       ].map(([k, v]) => (
                         <div key={k} className="rounded-lg bg-white/3 border border-white/5 p-2">
                           <p className="text-slate-500 mb-0.5">{k}</p>
@@ -467,10 +468,6 @@ export default function DocumentsPage() {
                           <select value={editDraft[doc.id]?.category || 'policy'} onChange={e => setEditDraft(p => ({ ...p, [doc.id]: { ...(p[doc.id] || {}), category: e.target.value } }))}
                             className="rounded-lg border border-white/10 bg-[#0d0f14] px-2 py-2 text-xs text-white outline-none">
                             {CATS.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
-                          <select value={editDraft[doc.id]?.department || 'General'} onChange={e => setEditDraft(p => ({ ...p, [doc.id]: { ...(p[doc.id] || {}), department: e.target.value } }))}
-                            className="rounded-lg border border-white/10 bg-[#0d0f14] px-2 py-2 text-xs text-white outline-none">
-                            {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                           </select>
                           <input value={editDraft[doc.id]?.description || ''} onChange={e => setEditDraft(p => ({ ...p, [doc.id]: { ...(p[doc.id] || {}), description: e.target.value } }))}
                             className="rounded-lg border border-white/10 bg-[#0d0f14] px-2 py-2 text-xs text-white outline-none" placeholder="Description" />
@@ -641,23 +638,40 @@ export default function DocumentsPage() {
                   placeholder="Leave blank to use filename"
                   className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500/50" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">Category</label>
-                  <select value={upload.category} onChange={e => setUpload(p => ({ ...p, category: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none">
-                    {CATS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1.5">Department</label>
-                  <select value={upload.department} onChange={e => setUpload(p => ({ ...p, department: e.target.value }))}
-                    className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-500/50">
-                    <option value="">Select</option>
-                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">Category</label>
+                <select value={upload.category} onChange={e => setUpload(p => ({ ...p, category: e.target.value }))}
+                  className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none">
+                  {CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
+              {isDocumentManager && (
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1.5">Audit priority</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: 'normal', label: 'Normal', hint: 'Standard review queue' },
+                      { key: 'urgent', label: 'Urgent', hint: 'Notify auditors immediately' },
+                    ].map(opt => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setUpload(p => ({ ...p, priority: opt.key }))}
+                        className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          upload.priority === opt.key
+                            ? opt.key === 'urgent'
+                              ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                              : 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300'
+                            : 'border-white/10 bg-[#0d0f14] text-slate-400 hover:border-white/20'
+                        }`}
+                      >
+                        <p className="text-sm font-semibold">{opt.label}</p>
+                        <p className="text-[10px] opacity-80">{opt.hint}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {upload.error && <p className="text-xs text-red-400">{upload.error}</p>}
               <button onClick={handleUpload} disabled={upload.busy}
                 className="w-full rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60 flex items-center justify-center gap-2">

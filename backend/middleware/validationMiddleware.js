@@ -26,11 +26,12 @@ const validateRequest = (req, res, next) => {
 };
 
 const validateDocumentUpload = (req, res, next) => {
-  const { title, category, department } = req.body;
+  const { title, category } = req.body;
+  if (!req.body.department) req.body.department = 'General';
 
-  if (!title || !category || !department) {
+  if (!title || !category) {
     return res.status(400).json({
-      error: 'title, category, and department are required for document upload'
+      error: 'title and category are required for document upload'
     });
   }
 

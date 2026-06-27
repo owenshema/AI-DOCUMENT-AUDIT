@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FolderOpen, Bot, FileBarChart2,
-  GitBranch, LogOut, Menu, ChevronDown, Sun, Moon, Search,
+  GitBranch, LogOut, Menu, ChevronDown, Sun, Moon, Search, ClipboardList, LogIn,
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import { formatRoleLabel, ROLE_LABELS, normalizeRole } from '../config/roles';
@@ -21,12 +21,14 @@ const ALL_NAV = [
   { path: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard',     roles: null },
   { path: '/search',         icon: Search,          label: 'Search',        roles: null },
   { path: '/documents',     icon: FolderOpen,      label: 'My Documents',  roles: ['client', 'document_manager'] },
+  { path: '/document-management', icon: ClipboardList, label: 'Document Management', roles: ['document_manager', 'administrator'] },
   { path: '/documents',     icon: FolderOpen,      label: 'Document Hub',  roles: ['administrator','auditor'] },
   { path: '/ai-analysis',   icon: Bot,             label: 'AI Analysis',   roles: ['auditor'] },
   { path: '/audit-reports', icon: FileBarChart2,   label: 'My Reports',    roles: ['client', 'document_manager'] },
   { path: '/audit-reports', icon: FileBarChart2,   label: 'Audit Reports', roles: ['administrator','auditor'] },
-  { path: '/workflow',      icon: GitBranch,       label: 'Workflow',      roles: ['administrator','auditor'] },
+  { path: '/workflow',      icon: GitBranch,       label: 'Workflow',      roles: ['administrator', 'auditor', 'document_manager'] },
   { path: '/users',         icon: Users,           label: 'Users & Auth',  roles: ['administrator'] },
+  { path: '/login-activity', icon: LogIn,          label: 'Login Activity', roles: ['administrator'] },
 ];
 
 // Role descriptions shown in sidebar
@@ -113,7 +115,7 @@ export default function AppShell({ children, title }) {
         {visibleNav.map(({ path, icon: Icon, label }) => {
           const active = pathname === path;
           return (
-            <Link key={path} to={path} onClick={() => setMobileOpen(false)}
+            <Link key={`${path}-${label}`} to={path} onClick={() => setMobileOpen(false)}
               title={collapsed ? label : undefined}
               className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-xl px-3 py-2.5 text-sm transition-all ${active ? navActive : navIdle}`}>
               <Icon className="h-4 w-4 flex-shrink-0" />
@@ -213,7 +215,7 @@ export default function AppShell({ children, title }) {
         </header>
 
         {/* Page content */}
-        <main className={`flex-1 overflow-y-auto p-5 sm:p-6 ${bg}`}>
+        <main className={`card-surface flex-1 overflow-y-auto p-5 sm:p-6 ${bg}`}>
           {children}
         </main>
       </div>

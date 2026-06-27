@@ -7,6 +7,12 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 const { documentWhereForUser, userOwnsDocument } = require('../utils/ownerScope');
+const {
+  AUDIT_PENDING_STATUSES,
+  AUDIT_DONE_STATUSES,
+  documentHasAuditorReview,
+  documentNeedsAudit,
+} = require('../utils/documentAudit');
 
 const getStoredFilePath = (document) => {
   const storedPath = document.filePath;
@@ -68,46 +74,84 @@ const getStoredFilePath = (document) => {
 
 const userCanAccessDocument = (document, userId, role) => userOwnsDocument(document, userId, role);
 
+const parseBool = (value) => value === true || value === 'true' || value === '1';
+
 const DOCUMENT_STATUSES = ['uploaded', 'in_review', 'in_progress', 'submitted', 'reviewed', 'changes_requested', 'approved', 'rejected'];
 
-// Audit lifecycle: documents waiting for an auditor vs. documents already audited.
-const AUDIT_PENDING_STATUSES = ['uploaded', 'in_review', 'in_progress', 'submitted'];
-const AUDIT_DONE_STATUSES = ['reviewed', 'changes_requested', 'approved', 'rejected'];
+const enrichDocumentManagement = (document) => {
+  const meta = document.metadata || {};
+  const plain = document.toJSON ? document.toJSON() : document;
+  return {
+    ...plain,
+    auditState: documentNeedsAudit(plain) ? 'needs_audit' : documentHasAuditorReview(plain) ? 'audited' : 'pending',
+    neverAudited: !documentHasAuditorReview(plain),
+    isUrgent: Boolean(meta.isUrgent),
+    arrivalPort: meta.arrivalPort || null,
+    lastAuditRequestAt: meta.lastAuditRequestAt || null,
+  };
+};
 
 /**
  * Notify every active auditor that a freshly uploaded/re-uploaded document needs an audit.
  * Each auditor gets an in-app notification (and email) tagged so it can be cleared once audited.
  */
-const notifyAuditorsNeedAudit = async (models, document, actorId) => {
+const notifyAuditorsNeedAudit = async (models, document, actorId, options = {}) => {
   const { Notification, User } = models;
+  const {
+    urgent = false,
+    port = null,
+    note = null,
+    requestedByName = null,
+  } = options;
+
   try {
-    const [auditors, uploader] = await Promise.all([
+    const [auditors, uploader, requester] = await Promise.all([
       User.findAll({
         where: { role: 'auditor', isActive: true, approvalStatus: 'approved' },
         attributes: ['id', 'email', 'fullName'],
       }),
       actorId ? User.findByPk(actorId, { attributes: ['id', 'fullName', 'email'] }) : null,
+      requestedByName ? null : (actorId ? User.findByPk(actorId, { attributes: ['fullName', 'email'] }) : null),
     ]);
-    if (!auditors.length) return;
+    if (!auditors.length) return { notified: 0 };
 
     const uploaderName = uploader?.fullName || uploader?.email || 'A user';
-    const message = `Document "${document.title}" uploaded by ${uploaderName} needs audit.`;
+    const managerName = requestedByName || requester?.fullName || uploaderName;
+    const meta = document.metadata || {};
+    const isUrgent = urgent || meta.isUrgent;
+    const arrivalPort = port || meta.arrivalPort || null;
+
+    let message = `Document "${document.title}" has not been audited yet. Please complete the audit.`;
+    if (isUrgent) message = `URGENT: Document "${document.title}" needs audit immediately.`;
+    if (arrivalPort) message += ` Document arrived at port ${arrivalPort}.`;
+    if (note) message += ` ${note}`;
+    message += ` Requested by ${managerName}.`;
+
+    const priority = isUrgent ? 'critical' : 'high';
+    const subject = isUrgent
+      ? `URGENT audit required: "${document.title}"`
+      : `Document needs audit: "${document.title}"`;
 
     await Promise.all(auditors.map(auditor => Notification.create({
       recipientId: auditor.id,
       notificationType: 'document_needs_audit',
-      priority: 'high',
-      subject: 'Document needs audit',
+      priority,
+      subject,
       message,
       details: {
         documentId: document.id,
         documentTitle: document.title,
-        uploadedBy: actorId || null,
+        uploadedBy: document.uploadedBy || actorId || null,
         uploaderName,
+        requestedBy: actorId || null,
+        requestedByName: managerName,
+        urgent: isUrgent,
+        arrivalPort,
+        note: note || null,
       },
       relatedEntityType: 'document',
       relatedEntityId: document.id,
-      actionUrl: `/documents?documentId=${document.id}`,
+      actionUrl: `/ai-analysis?documentId=${document.id}`,
       status: 'unread',
       sentAt: new Date(),
       deliveryStatus: 'sent',
@@ -115,16 +159,19 @@ const notifyAuditorsNeedAudit = async (models, document, actorId) => {
 
     try {
       const emailService = require('../services/emailService');
-      const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000/documents';
+      const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000/ai-analysis';
       await Promise.all(auditors.filter(a => a.email).map(auditor => emailService.sendEmail({
         to: auditor.email,
-        subject: `Document needs audit: "${document.title}"`,
-        html: `<p>Hi <strong>${auditor.fullName || auditor.email}</strong>,</p><p>A new document <strong>"${document.title}"</strong> uploaded by ${uploaderName} needs audit.</p><p><a href="${portalUrl}">Open the audit portal</a></p>`,
-        text: `Hi ${auditor.fullName || auditor.email},\n\nA new document "${document.title}" uploaded by ${uploaderName} needs audit.\nOpen the audit portal: ${portalUrl}`,
+        subject,
+        html: `<p>Hi <strong>${auditor.fullName || auditor.email}</strong>,</p><p>${message}</p><p><a href="${portalUrl}">Open the audit portal</a></p>`,
+        text: `${message}\nOpen the audit portal: ${portalUrl}`,
       }).catch(() => {})));
     } catch (e) { console.warn('Auditor email notification failed:', e.message); }
+
+    return { notified: auditors.length };
   } catch (e) {
     console.warn('Notify auditors (needs audit) failed:', e.message);
+    return { notified: 0, error: e.message };
   }
 };
 
@@ -244,29 +291,35 @@ const getAllDocuments = async (req, res) => {
     if (status) where.status = status;
     if (department) where.department = department;
 
-    // Auditors/admins can split their queue into "needs audit" vs. "already audited".
-    if (auditState && ['auditor', 'administrator'].includes(role)) {
-      if (auditState === 'needs_audit') where.status = AUDIT_PENDING_STATUSES;
-      else if (auditState === 'audited') where.status = AUDIT_DONE_STATUSES;
-    }
+    const staffAuditFilter = auditState && ['auditor', 'administrator', 'document_manager'].includes(role)
+      ? auditState
+      : null;
 
     Object.assign(where, documentWhereForUser({ id: userId, role }));
 
-    // Fetch with pagination
-    const { count, rows } = await Document.findAndCountAll({
+    const allRows = await Document.findAll({
       where,
       include: [{ model: User, as: 'uploader', attributes: ['id', 'fullName', 'email'] }],
-      limit: parseInt(limit),
-      offset: (page - 1) * limit,
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
     });
 
+    let filteredRows = allRows;
+    if (staffAuditFilter === 'needs_audit') {
+      filteredRows = allRows.filter(doc => documentNeedsAudit(doc.toJSON ? doc.toJSON() : doc));
+    } else if (staffAuditFilter === 'audited') {
+      filteredRows = allRows.filter(doc => documentHasAuditorReview(doc.toJSON ? doc.toJSON() : doc));
+    }
+
+    const count = filteredRows.length;
+    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const rows = filteredRows.slice(offset, offset + parseInt(limit, 10));
+
     res.json({
-      documents: rows,
+      documents: rows.map(enrichDocumentManagement),
       total: count,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      pages: Math.ceil(count / limit)
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      pages: Math.ceil(count / parseInt(limit, 10)),
     });
   } catch (error) {
     console.error('Get documents error:', error);
@@ -302,7 +355,7 @@ const getDocumentById = async (req, res) => {
 
 const uploadDocument = async (req, res) => {
   try {
-    const { title, description, category, department, classificationLevel, tags } = req.body;
+    const { title, description, category, department, classificationLevel, tags, isUrgent } = req.body;
     const { Document } = req.app.locals.models;
     const userId = req.user?.id || null;
 
@@ -314,11 +367,13 @@ const uploadDocument = async (req, res) => {
       validUserId = userExists ? userId : null;
     }
 
-    if (!title || !category || !department) {
+    if (!title || !category) {
       return res.status(400).json({ 
-        error: 'Missing required fields: title, category, department' 
+        error: 'Missing required fields: title, category' 
       });
     }
+
+    const resolvedDepartment = department || 'General';
 
     if (!req.file) {
       return res.status(400).json({ error: 'No file received. Select a PDF, DOCX, or other supported file and try again.' });
@@ -337,7 +392,7 @@ const uploadDocument = async (req, res) => {
       fileFormat: req.file?.originalname ? path.extname(req.file.originalname).replace('.', '').toUpperCase() : 'FILE',
       mimeType: req.file?.mimetype || 'application/pdf',
       category,
-      department,
+      department: resolvedDepartment,
       classificationLevel: classificationLevel || 'internal',
       status: 'in_review',
       uploadedBy: validUserId,
@@ -351,6 +406,7 @@ const uploadDocument = async (req, res) => {
         uploadedFrom: req.ip || 'unknown',
         userAgent: req.get('user-agent') || 'unknown',
         textExtractedOnUpload: false,
+        isUrgent: parseBool(isUrgent),
       }
     });
 
@@ -378,7 +434,9 @@ const uploadDocument = async (req, res) => {
     }
 
     // Alert every auditor that this new document needs an audit.
-    notifyAuditorsNeedAudit(req.app.locals.models, document, req.user?.id).catch(() => {});
+    notifyAuditorsNeedAudit(req.app.locals.models, document, req.user?.id, {
+      urgent: parseBool(isUrgent),
+    }).catch(() => {});
 
     res.status(201).json({
       message: 'Document uploaded successfully',
@@ -393,7 +451,7 @@ const uploadDocument = async (req, res) => {
 const updateDocument = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, category, status, tags, classificationLevel } = req.body;
+    const { title, description, category, status, tags, classificationLevel, isUrgent, arrivalPort } = req.body;
     const { Document } = req.app.locals.models;
     const role = req.user?.role || 'client';
     const userId = req.user?.id;
@@ -406,7 +464,6 @@ const updateDocument = async (req, res) => {
       return res.status(403).json({ error: 'Access denied to this document' });
     }
 
-    // Update fields
     const updates = {};
     if (title !== undefined) updates.title = title;
     if (description !== undefined) updates.description = description;
@@ -422,6 +479,18 @@ const updateDocument = async (req, res) => {
     }
     if (tags !== undefined) updates.tags = Array.isArray(tags) ? tags : tags.split(',').map(t => t.trim());
     if (classificationLevel !== undefined) updates.classificationLevel = classificationLevel;
+
+    if (['document_manager', 'administrator'].includes(role)) {
+      const metadata = { ...(document.metadata || {}) };
+      let metadataChanged = false;
+      if (isUrgent !== undefined) { metadata.isUrgent = Boolean(isUrgent); metadataChanged = true; }
+      if (arrivalPort !== undefined) {
+        metadata.arrivalPort = arrivalPort ? String(arrivalPort).trim() : null;
+        metadataChanged = true;
+      }
+      if (metadataChanged) updates.metadata = metadata;
+    }
+
     updates.lastModifiedAt = new Date();
     updates.lastModifiedBy = req.user?.id || 'system';
 
@@ -786,13 +855,15 @@ const getAccessLogs = async (req, res) => {
 const bulkUpload = async (req, res) => {
   try {
     const files = req.files || [];
-    const { category, department } = req.body;
+    const { category, department, isUrgent } = req.body;
     const { Document } = req.app.locals.models;
     const userId = req.user?.id || 'system';
 
-    if (!category || !department) {
-      return res.status(400).json({ error: 'Category and department required' });
+    if (!category) {
+      return res.status(400).json({ error: 'Category required' });
     }
+
+    const resolvedDepartment = department || 'General';
 
     const uploadedDocs = [];
     const failedUploads = [];
@@ -808,12 +879,13 @@ const bulkUpload = async (req, res) => {
           fileFormat: file.originalname.split('.').pop().toUpperCase(),
           mimeType: file.mimetype,
           category,
-          department,
+          department: resolvedDepartment,
           status: 'in_review',
           uploadedBy: userId,
           metadata: {
             originalName: file.originalname,
-            storedFileName: file.filename
+            storedFileName: file.filename,
+            isUrgent: parseBool(isUrgent),
           }
         });
         uploadedDocs.push(doc);
@@ -824,7 +896,9 @@ const bulkUpload = async (req, res) => {
 
     // Alert auditors that each newly uploaded document needs an audit.
     Promise.all(uploadedDocs.map(doc =>
-      notifyAuditorsNeedAudit(req.app.locals.models, doc, req.user?.id)
+      notifyAuditorsNeedAudit(req.app.locals.models, doc, req.user?.id, {
+        urgent: Boolean(doc.metadata?.isUrgent),
+      })
     )).catch(() => {});
 
     res.json({
@@ -832,7 +906,7 @@ const bulkUpload = async (req, res) => {
       uploadedCount: uploadedDocs.length,
       failedCount: failedUploads.length,
       documents: uploadedDocs,
-      failures: failedUploads
+      failures: failedUploads,
     });
   } catch (error) {
     console.error('Bulk upload error:', error);
@@ -840,9 +914,115 @@ const bulkUpload = async (req, res) => {
   }
 };
 
+const getDocumentManagement = async (req, res) => {
+  try {
+    const role = req.user?.role || 'client';
+    if (!['document_manager', 'administrator'].includes(role)) {
+      return res.status(403).json({ error: 'Document management is available to document managers and administrators only.' });
+    }
+
+    const { filter = 'all', page = 1, limit = 50 } = req.query;
+    const { Document, User } = req.app.locals.models;
+
+    const { count, rows } = await Document.findAndCountAll({
+      include: [{ model: User, as: 'uploader', attributes: ['id', 'fullName', 'email'] }],
+      limit: parseInt(limit, 10),
+      offset: (parseInt(page, 10) - 1) * parseInt(limit, 10),
+      order: [['createdAt', 'DESC']],
+    });
+
+    let documents = rows.map(enrichDocumentManagement);
+
+    if (filter === 'needs_audit') {
+      documents = documents.filter(doc => doc.auditState === 'needs_audit');
+    } else if (filter === 'never_audited') {
+      documents = documents.filter(doc => doc.neverAudited);
+    } else if (filter === 'urgent') {
+      documents = documents.filter(doc => doc.isUrgent);
+    }
+
+    const all = rows.map(enrichDocumentManagement);
+    res.json({
+      summary: {
+        total: count,
+        needsAudit: all.filter(doc => doc.auditState === 'needs_audit').length,
+        neverAudited: all.filter(doc => doc.neverAudited).length,
+        urgent: all.filter(doc => doc.isUrgent).length,
+        audited: all.filter(doc => doc.auditState === 'audited').length,
+      },
+      documents,
+      total: documents.length,
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+    });
+  } catch (error) {
+    console.error('Document management error:', error);
+    res.status(500).json({ error: error.message || 'Failed to load document management data' });
+  }
+};
+
+const requestDocumentAudit = async (req, res) => {
+  try {
+    const role = req.user?.role || 'client';
+    if (!['document_manager', 'administrator'].includes(role)) {
+      return res.status(403).json({ error: 'Only document managers can request audits from this page.' });
+    }
+
+    const { id } = req.params;
+    const { urgent = false, port = null, note = null } = req.body || {};
+    const { Document } = req.app.locals.models;
+
+    const document = await Document.findByPk(id);
+    if (!document) return res.status(404).json({ error: 'Document not found' });
+
+    const plain = document.toJSON ? document.toJSON() : document;
+    if (documentHasAuditorReview(plain)) {
+      return res.status(400).json({
+        error: 'This document has already been audited. Notification is only available for documents that still need audit.',
+      });
+    }
+
+    const metadata = {
+      ...(document.metadata || {}),
+      isUrgent: Boolean(urgent),
+      arrivalPort: port || document.metadata?.arrivalPort || null,
+      lastAuditRequestAt: new Date(),
+      lastAuditRequestBy: req.user.id,
+      lastAuditRequestNote: note || null,
+    };
+
+    await document.update({ metadata });
+
+    const result = await notifyAuditorsNeedAudit(
+      req.app.locals.models,
+      { ...document.toJSON(), metadata },
+      req.user.id,
+      {
+        urgent: metadata.isUrgent,
+        port: metadata.arrivalPort,
+        note: note || 'This document has not been audited yet. Please complete the audit.',
+        requestedByName: req.user.fullName || req.user.email,
+      }
+    );
+
+    res.json({
+      message: result.notified
+        ? `Audit request sent to ${result.notified} auditor(s).`
+        : 'No active auditors are available to notify.',
+      notified: result.notified || 0,
+      document: enrichDocumentManagement({ ...document.toJSON(), metadata }),
+    });
+  } catch (error) {
+    console.error('Request document audit error:', error);
+    res.status(500).json({ error: error.message || 'Failed to notify auditors' });
+  }
+};
+
 module.exports = {
   getAllDocuments,
   getDocumentById,
+  getDocumentManagement,
+  requestDocumentAudit,
   uploadDocument,
   updateDocument,
   reuploadDocument,

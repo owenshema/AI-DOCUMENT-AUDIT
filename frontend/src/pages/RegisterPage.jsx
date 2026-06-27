@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { User, Mail, Lock, Building2, AlertCircle, Loader, ShieldCheck, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { User, Mail, Lock, AlertCircle, Loader, ShieldCheck, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { authAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
 
@@ -50,14 +50,14 @@ const OTPInput = ({ value, onChange }) => {
 };
 
 const inputCls = "w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-3 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors";
-const DEPARTMENTS = ['General', 'Finance', 'HR', 'IT', 'Compliance', 'Operations', 'Procurement', 'Logistics', 'Legal'];
 
 export default function RegisterPage() {
   const [step, setStep]     = useState('form');
   const [userId, setUserId] = useState('');
   const [otp, setOtp]       = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [form, setForm]     = useState({ fullName: '', email: '', password: '', confirmPassword: '', department: '', role: 'client', phone: '' });
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [form, setForm]     = useState({ fullName: '', email: '', password: '', confirmPassword: '', role: 'client', phone: '' });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -76,7 +76,7 @@ export default function RegisterPage() {
     if (!/[0-9]/.test(form.password)) return setError('Password must contain at least one number');
     setLoading(true);
     try {
-      const res = await authAPI.register({ fullName: form.fullName, email: form.email, password: form.password, department: form.department, role: form.role, phone: form.phone });
+      const res = await authAPI.register({ fullName: form.fullName, email: form.email, password: form.password, role: form.role, phone: form.phone });
       setUserId(res.userId);
       if (res.devOTP) setOtp(res.devOTP);
       setStep('verify');
@@ -119,7 +119,7 @@ export default function RegisterPage() {
       <div className="absolute inset-0 opacity-5"
         style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
 
-      <div className="relative w-full max-w-sm">
+      <div className="relative w-full max-w-sm card-surface">
         <div className="text-center mb-7">
           <Link to="/" className="inline-flex flex-col items-center gap-2">
             <img src="/sifco/logo.png" alt="SIFCO AE" className="h-10 w-auto brightness-0 invert"
@@ -149,7 +149,7 @@ export default function RegisterPage() {
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
                     <input name="fullName" value={form.fullName} onChange={handleChange} required
-                      className={inputCls} placeholder="John Smith" />
+                      className={inputCls} />
                   </div>
                 </div>
                 <div>
@@ -158,17 +158,6 @@ export default function RegisterPage() {
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
                     <input name="email" type="email" value={form.email} onChange={handleChange} required
                       className={inputCls} placeholder="you@sifco.local" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs text-white/60 mb-1.5">Department *</label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                    <select name="department" value={form.department} onChange={handleChange} required
-                      className="w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-3 text-sm text-white outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors">
-                      <option value="" className="bg-[#0d2044]">Select department</option>
-                      {DEPARTMENTS.map(dept => <option key={dept} value={dept} className="bg-[#0d2044]">{dept}</option>)}
-                    </select>
                   </div>
                 </div>
                 <div>
@@ -187,11 +176,14 @@ export default function RegisterPage() {
                   <label className="block text-xs text-white/60 mb-1.5">Password *</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                    <input name="password" type={showPw ? 'text' : 'password'} value={form.password} onChange={handleChange} required
-                      className="w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-9 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors"
+                    <input name="password" type="text" value={form.password} onChange={handleChange} required
+                      style={showPw ? undefined : { WebkitTextSecurity: 'disc' }}
+                      autoComplete="new-password"
+                      className="hide-password-reveal w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-10 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors"
                       placeholder="Min 8 chars, 1 uppercase, 1 number" />
                     <button type="button" onClick={() => setShowPw(p => !p)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                      aria-label={showPw ? 'Hide password' : 'Show password'}
+                      className="absolute right-3 top-1/2 z-10 -translate-y-1/2 text-white/50 hover:text-white">
                       {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
@@ -208,12 +200,18 @@ export default function RegisterPage() {
                   <label className="block text-xs text-white/60 mb-1.5">Confirm Password *</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                    <input name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange} required
-                      className={`w-full rounded-xl border py-2.5 pl-9 pr-3 text-sm text-white placeholder-white/30 outline-none bg-white/10 transition-colors ${
+                    <input name="confirmPassword" type="text" value={form.confirmPassword} onChange={handleChange} required
+                      style={showConfirmPw ? undefined : { WebkitTextSecurity: 'disc' }}
+                      autoComplete="new-password"
+                      className={`hide-password-reveal w-full rounded-xl border py-2.5 pl-9 pr-10 text-sm text-white placeholder-white/30 outline-none bg-white/10 transition-colors ${
                         form.confirmPassword && form.password !== form.confirmPassword
                           ? 'border-red-400/50 focus:border-red-400' : 'border-white/20 focus:border-indigo-400 focus:bg-white/15'
-                      }`}
-                      placeholder="••••••••" />
+                      }`} />
+                    <button type="button" onClick={() => setShowConfirmPw(p => !p)}
+                      aria-label={showConfirmPw ? 'Hide password' : 'Show password'}
+                      className="absolute right-3 top-1/2 z-10 -translate-y-1/2 text-white/50 hover:text-white">
+                      {showConfirmPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
                 <button type="submit" disabled={loading}

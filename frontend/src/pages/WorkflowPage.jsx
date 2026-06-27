@@ -8,11 +8,11 @@ import {
   GitBranch,
   MessageSquare,
   RefreshCw,
-  Send,
 } from 'lucide-react';
 import AppShell from '../components/AppShell';
-import { documentAPI, taskAPI, workflowAPI } from '../api/auth';
+import { documentAPI, workflowAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
+import { normalizeRole } from '../config/roles';
 
 const PIPELINE = ['uploaded', 'in_review', 'in_progress', 'changes_requested', 'approved', 'rejected'];
 
@@ -33,14 +33,6 @@ const PRIORITY_STYLE = {
   normal: 'bg-blue-500/15 text-blue-400',
   low: 'bg-slate-500/15 text-slate-400',
 };
-
-function nextDocumentStatus(status) {
-  const current = status || 'uploaded';
-  if (current === 'rejected' || current === 'approved') return current;
-  if (current === 'changes_requested') return 'in_review';
-  const idx = PIPELINE.indexOf(current);
-  return PIPELINE[Math.min(idx + 1, PIPELINE.indexOf('approved'))] || 'in_review';
-}
 
 function visiblePipeline(status) {
   if (status === 'rejected') return ['uploaded', 'in_review', 'in_progress', 'rejected'];
@@ -87,8 +79,8 @@ function documentToWorkflowItem(doc) {
 
 export default function WorkflowPage() {
   const { user, isDarkMode } = useAuthStore();
-  const role = user?.role || 'client';
-  const canUpdate = role === 'auditor' || role === 'administrator';
+  const role = normalizeRole(user?.role);
+  const isReadOnly = role === 'document_manager' || role === 'client';
   const card = isDarkMode ? 'bg-[#111318] border-white/8' : 'bg-white border-gray-200 shadow-sm';
   const text = isDarkMode ? 'text-white' : 'text-gray-900';
   const sub = isDarkMode ? 'text-slate-500' : 'text-gray-500';
@@ -96,10 +88,7 @@ export default function WorkflowPage() {
 
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
-  const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
   const selected = items.find(item => item.id === selectedId) || null;
@@ -143,97 +132,6 @@ export default function WorkflowPage() {
     return base;
   }, [items]);
 
-  const showMsg = (message) => {
-    setMsg(message);
-    setTimeout(() => setMsg(''), 2500);
-  };
-
-  const updateSelectedInList = (id, patch) => {
-    setItems(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item));
-  };
-
-  const advance = async (item) => {
-    if (!item || busy) return;
-    setBusy(true);
-    setErr('');
-    try {
-      if (item.itemType === 'document') {
-        const next = nextDocumentStatus(item.status);
-        const note = comment.trim() || `Workflow moved document to ${next.replace(/_/g, ' ')}.`;
-        await documentAPI.updateStatus(item.documentId, { status: next, reason: note });
-        updateSelectedInList(item.id, {
-          status: next,
-          comments: [...(item.comments || []), note],
-        });
-        setComment('');
-        showMsg('Document workflow updated and owner notified.');
-      } else {
-        const next = item.status === 'pending' ? 'in_progress' : 'completed';
-        const note = comment.trim();
-        await taskAPI.updateStatus(item.taskId, next);
-        if (note) {
-          await taskAPI.update(item.taskId, { comments: [...(item.comments || []), note] });
-        }
-        updateSelectedInList(item.id, {
-          status: next,
-          comments: note ? [...(item.comments || []), note] : item.comments,
-        });
-        setComment('');
-        showMsg('Task workflow updated.');
-      }
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || 'Workflow update failed.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const requestChangesOrReject = async (item, status) => {
-    if (!item || item.itemType !== 'document' || busy) return;
-    const reason = comment.trim();
-    if (!reason) {
-      setErr('Add a reason before requesting changes or rejecting a document.');
-      return;
-    }
-    setBusy(true);
-    setErr('');
-    try {
-      await documentAPI.updateStatus(item.documentId, { status, reason });
-      updateSelectedInList(item.id, { status, comments: [...(item.comments || []), reason] });
-      setComment('');
-      showMsg(status === 'rejected' ? 'Document rejected and owner notified.' : 'Changes requested and owner notified.');
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || 'Workflow update failed.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const addComment = async (item) => {
-    const note = comment.trim();
-    if (!item || !note || busy) return;
-    setBusy(true);
-    setErr('');
-    try {
-      if (item.itemType === 'document') {
-        await documentAPI.updateStatus(item.documentId, { status: item.status || 'in_review', reason: note });
-        showMsg('Comment saved and owner notified.');
-      } else {
-        await taskAPI.update(item.taskId, { comments: [...(item.comments || []), note] });
-        showMsg('Comment saved.');
-      }
-      updateSelectedInList(item.id, { comments: [...(item.comments || []), note] });
-      setComment('');
-      await load();
-    } catch (e) {
-      setErr(e?.response?.data?.error || 'Could not save comment.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const statusLabel = status => STATUS_STYLE[status]?.label || String(status || 'Uploaded').replace(/_/g, ' ');
 
   return (
@@ -241,9 +139,9 @@ export default function WorkflowPage() {
       <div className="mb-5 flex items-center justify-between gap-3">
         <div>
           <p className={`text-sm ${sub}`}>
-            {canUpdate
-              ? 'Live audit workflow for uploaded documents and assigned tasks.'
-              : 'Track the review status, auditor notes, and decisions for your uploaded documents.'}
+            {isReadOnly
+              ? 'Read-only view of document review status, audit progress, and auditor notes.'
+              : 'Track review status, auditor notes, and audit progress for uploaded documents.'}
           </p>
         </div>
         <button onClick={load} disabled={loading}
@@ -261,7 +159,6 @@ export default function WorkflowPage() {
         ))}
       </div>
 
-      {msg && <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-400">{msg}</div>}
       {err && <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs text-red-400">{err}</div>}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -321,7 +218,7 @@ export default function WorkflowPage() {
           {!selected ? (
             <div className="flex h-64 flex-col items-center justify-center text-center">
               <GitBranch className={`mb-3 h-10 w-10 ${isDarkMode ? 'text-slate-700' : 'text-gray-300'}`} />
-              <p className={`text-sm ${sub}`}>Select a workflow item to view audit progress, notes, and actions.</p>
+              <p className={`text-sm ${sub}`}>Select a workflow item to view audit progress and notes.</p>
             </div>
           ) : (
             <div>
@@ -420,32 +317,9 @@ export default function WorkflowPage() {
                 </div>
               )}
 
-              {canUpdate && (
-                <div className="mb-4 grid gap-2 sm:grid-cols-3">
-                  {selected.status !== 'approved' && selected.status !== 'rejected' && (
-                    <button onClick={() => advance(selected)} disabled={busy}
-                      className="rounded-xl bg-indigo-500 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60">
-                      Advance
-                    </button>
-                  )}
-                  {selected.itemType === 'document' && selected.status !== 'approved' && (
-                    <button onClick={() => requestChangesOrReject(selected, 'changes_requested')} disabled={busy}
-                      className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-60">
-                      Request Changes
-                    </button>
-                  )}
-                  {selected.itemType === 'document' && selected.status !== 'rejected' && (
-                    <button onClick={() => requestChangesOrReject(selected, 'rejected')} disabled={busy}
-                      className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-sm font-semibold text-red-300 hover:bg-red-500/20 disabled:opacity-60">
-                      Reject
-                    </button>
-                  )}
-                </div>
-              )}
-
               <div>
                 <p className="mb-2 text-xs font-semibold text-slate-400">Workflow Notes</p>
-                <div className="mb-3 max-h-36 space-y-2 overflow-y-auto">
+                <div className="max-h-36 space-y-2 overflow-y-auto">
                   {selected.comments?.length === 0 && <p className={`text-xs ${sub}`}>No notes yet.</p>}
                   {selected.comments?.map((note, i) => (
                     <div key={`${note}-${i}`} className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-white/8 bg-white/3 text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
@@ -453,23 +327,12 @@ export default function WorkflowPage() {
                     </div>
                   ))}
                 </div>
-                {canUpdate ? (
-                  <div className="flex gap-2">
-                    <input value={comment} onChange={e => setComment(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && addComment(selected)}
-                      placeholder="Add reason or workflow note..."
-                      className={`flex-1 rounded-xl border px-3 py-2 text-xs outline-none focus:border-indigo-500/50 ${isDarkMode ? 'border-white/10 bg-[#0d0f14] text-white' : 'border-gray-300 bg-white text-gray-900'}`} />
-                    <button onClick={() => addComment(selected)} disabled={busy || !comment.trim()}
-                      className="rounded-xl border border-indigo-500/30 bg-indigo-500/20 px-3 py-2 text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-40">
-                      <Send className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-white/8 bg-white/3 text-slate-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
-                    <Clock className="h-3.5 w-3.5" />
-                    Auditor updates and email notifications will appear here after review.
-                  </div>
-                )}
+                <div className={`mt-3 flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-white/8 bg-white/3 text-slate-400' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+                  <Clock className="h-3.5 w-3.5" />
+                  {isReadOnly
+                    ? 'View-only mode — status updates and auditor notes appear here after review.'
+                    : 'Status updates and auditor notes appear here after review.'}
+                </div>
               </div>
             </div>
           )}

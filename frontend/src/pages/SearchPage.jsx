@@ -10,7 +10,6 @@ import useAuthStore from '../store/authStore';
 
 const DOC_STATUSES = ['uploaded', 'in_review', 'approved', 'rejected', 'changes_requested'];
 const FILE_FORMATS = ['pdf', 'docx', 'xlsx', 'png', 'jpg'];
-const DEPARTMENTS = ['Finance', 'Operations', 'Compliance', 'Logistics', 'General'];
 const REPORT_TYPES = [
   { value: '', label: 'All report types' },
   { value: 'compliance_audit', label: 'Compliance Audit' },
@@ -53,7 +52,6 @@ export default function SearchPage() {
   const [history, setHistory] = useState([]);
   const [filters, setFilters] = useState({
     fileFormat: '',
-    department: '',
     status: '',
     reportType: '',
     dateFrom: '',
@@ -91,7 +89,6 @@ export default function SearchPage() {
         res = await searchAPI.search(term, {
           filters: {
             fileFormat: filters.fileFormat || undefined,
-            department: filters.department || undefined,
             status: filters.status || undefined,
             dateFrom: filters.dateFrom || undefined,
             dateTo: filters.dateTo || undefined,
@@ -129,7 +126,7 @@ export default function SearchPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const clearFilters = () => setFilters({
-    fileFormat: '', department: '', status: '', reportType: '', dateFrom: '', dateTo: '',
+    fileFormat: '', status: '', reportType: '', dateFrom: '', dateTo: '',
   });
 
   const openResult = (item) => {
@@ -150,7 +147,7 @@ export default function SearchPage() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && runSearch()}
-              placeholder={tab === 'reports' ? 'Search audit reports by title...' : 'Search documents by title, content, department...'}
+              placeholder={tab === 'reports' ? 'Search audit reports by title...' : 'Search documents by title or content...'}
               className={`w-full rounded-xl border py-3 pl-10 pr-4 text-sm outline-none ${inputCls}`}
             />
           </div>
@@ -193,10 +190,6 @@ export default function SearchPage() {
                 <select value={filters.fileFormat} onChange={(e) => setFilters((p) => ({ ...p, fileFormat: e.target.value }))} className={`rounded-xl border px-3 py-2.5 text-sm outline-none ${inputCls}`}>
                   <option value="">All file types</option>
                   {FILE_FORMATS.map((f) => <option key={f} value={f}>{f.toUpperCase()}</option>)}
-                </select>
-                <select value={filters.department} onChange={(e) => setFilters((p) => ({ ...p, department: e.target.value }))} className={`rounded-xl border px-3 py-2.5 text-sm outline-none ${inputCls}`}>
-                  <option value="">All departments</option>
-                  {DEPARTMENTS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
                 <select value={filters.status} onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))} className={`rounded-xl border px-3 py-2.5 text-sm outline-none ${inputCls}`}>
                   <option value="">All statuses</option>
@@ -280,7 +273,7 @@ export default function SearchPage() {
               <Search className={`mb-3 h-10 w-10 ${isDarkMode ? 'text-slate-700' : 'text-gray-300'}`} />
               <p className={`text-sm font-medium ${text}`}>Search across your audit system</p>
               <p className={`mt-1 max-w-md text-center text-xs ${sub}`}>
-                Find documents by title or content, filter by department and status, or search generated audit reports.
+                Find documents by title or content, filter by status, or search generated audit reports.
               </p>
             </div>
           ) : loading ? (
@@ -318,7 +311,6 @@ export default function SearchPage() {
                             ) : (
                               <>
                                 <span>{(item.fileFormat || 'file').toUpperCase()}</span>
-                                {item.department && <span>· {item.department}</span>}
                                 {item.category && <span>· {item.category}</span>}
                               </>
                             )}

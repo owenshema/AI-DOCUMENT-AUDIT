@@ -700,24 +700,31 @@ const getAnalysisStats = async (req, res) => {
   try {
     const { Document, DocumentAnalysis } = req.app.locals.models;
     const { averageOverallScore } = require('../services/auditScoreService');
-    const options = {};
-    if (['client', 'document_manager'].includes(req.user?.role)) {
-      options.include = [{
-        model: Document,
-        attributes: [],
-        required: true,
-        where: { uploadedBy: req.user.id },
-      }];
+    const { normalizeRole } = require('../utils/roles');
+    const { documentWhereForUser } = require('../utils/ownerScope');
+    const Op = require('sequelize').Op;
+
+    const role = normalizeRole(req.user?.role);
+    const where = { status: 'completed' };
+
+    if (role === 'client') {
+      const ownedDocs = await Document.findAll({
+        where: documentWhereForUser({ id: req.user.id, role }),
+        attributes: ['id'],
+      });
+      const docIds = ownedDocs.map(d => d.id);
+      where.documentId = docIds.length ? docIds : { [Op.in]: [] };
     }
-    const all = await DocumentAnalysis.findAll(options);
+
+    const all = await DocumentAnalysis.findAll({ where });
     res.json({
-      totalAnalyzed:     all.length,
+      totalAnalyzed: all.length,
       averageConfidence: 95,
       averageOverallAuditScore: averageOverallScore(all),
       riskDistribution: {
-        high:   all.filter(a => (a.riskFactors?.level || a.results?.risk_level) === 'high').length,
+        high: all.filter(a => (a.riskFactors?.level || a.results?.risk_level) === 'high').length,
         medium: all.filter(a => (a.riskFactors?.level || a.results?.risk_level) === 'medium').length,
-        low:    all.filter(a => (a.riskFactors?.level || a.results?.risk_level || 'low') === 'low').length,
+        low: all.filter(a => (a.riskFactors?.level || a.results?.risk_level || 'low') === 'low').length,
       },
       aiEngine: process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your-openai-key'
         ? 'openai+rules' : 'rule-based-v2',

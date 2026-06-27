@@ -18,6 +18,7 @@ const QRCode   = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const emailService = require('../services/emailService');
 const { logSecurityEvent } = require('../utils/securityAudit');
+const { buildLoginContext } = require('../utils/loginContext');
 const { VALID_ROLES, DEFAULT_ROLE, normalizeRole, formatRoleLabel } = require('../utils/roles');
 
 const JWT_SECRET  = process.env.JWT_SECRET  || 'change-this-secret';
@@ -28,6 +29,24 @@ const LOCK_DURATION_MS   = 30 * 60 * 1000; // 30 min
 const OTP_EXPIRY_MS      = 10 * 60 * 1000; // 10 min
 const APPROVAL_REQUIRED_ROLES = ['auditor', 'document_manager'];
 const ALLOW_DEV_OTP = process.env.NODE_ENV !== 'production' && process.env.SMTP_SEND_REAL !== 'true';
+
+function logAuthEvent(models, req, event) {
+  const ctx = buildLoginContext(req);
+  return logSecurityEvent(models, {
+    ...event,
+    ipAddress: ctx.ipAddress,
+    userAgent: ctx.userAgent,
+    details: {
+      ...(event.details || {}),
+      host: ctx.host,
+      origin: ctx.origin,
+      referer: ctx.referer,
+      portalUrl: ctx.portalUrl,
+      serverHostname: ctx.serverHostname,
+      accessFrom: ctx.accessFrom,
+    },
+  });
+}
 
 function wasEmailDelivered(result) {
   if (!result) return false;
@@ -74,7 +93,7 @@ const schemas = {
                   .messages({
                     'string.pattern.name': 'Password must contain at least one uppercase letter and one number',
                   }),
-    department: Joi.string().min(2).max(100).required(),
+    department: Joi.string().min(2).max(100).optional().default('General'),
     role:       Joi.string().valid('client', 'viewer', 'document_manager', 'auditor', 'administrator').default('client'),
     phone:      Joi.string().max(20).optional().allow(''),
     employeeId: Joi.string().max(50).optional().allow(''),
@@ -232,13 +251,11 @@ const login = async (req, res) => {
     const user = await User.findOne({ where: { email: value.email } });
 
     if (!user) {
-      await logSecurityEvent(req.app.locals.models, {
+      await logAuthEvent(req.app.locals.models, req, {
         action: 'failed_login',
         resourceType: 'auth',
         status: 'failure',
         description: 'Login attempt for unknown email',
-        ipAddress: req.ip,
-        userAgent: req.get('user-agent'),
         details: { email: value.email },
       });
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -246,15 +263,13 @@ const login = async (req, res) => {
 
     // Account lockout check
     if (user.lockUntil && user.lockUntil > new Date()) {
-      await logSecurityEvent(req.app.locals.models, {
+      await logAuthEvent(req.app.locals.models, req, {
         userId: user.id,
         userRole: user.role,
         action: 'login_blocked',
         resourceType: 'auth',
         status: 'failure',
         description: 'Login attempt while account locked',
-        ipAddress: req.ip,
-        userAgent: req.get('user-agent'),
       });
       return res.status(423).json({ error: 'Account temporarily locked due to failed attempts. Try again later.' });
     }
@@ -277,15 +292,13 @@ const login = async (req, res) => {
         updates.lockUntil = new Date(Date.now() + LOCK_DURATION_MS);
       }
       await user.update(updates);
-      await logSecurityEvent(req.app.locals.models, {
+      await logAuthEvent(req.app.locals.models, req, {
         userId: user.id,
         userRole: user.role,
         action: attempts >= MAX_LOGIN_ATTEMPTS ? 'account_locked' : 'failed_login',
         resourceType: 'auth',
         status: 'failure',
         description: 'Invalid password on login',
-        ipAddress: req.ip,
-        userAgent: req.get('user-agent'),
         details: { attempts },
       });
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -354,15 +367,13 @@ const verifyOTP = async (req, res) => {
         updates.lockUntil = new Date(Date.now() + LOCK_DURATION_MS);
       }
       await user.update(updates);
-      await logSecurityEvent(req.app.locals.models, {
+      await logAuthEvent(req.app.locals.models, req, {
         userId: user.id,
         userRole: user.role,
         action: 'failed_otp',
         resourceType: 'auth',
         status: 'failure',
         description: 'Invalid or expired OTP',
-        ipAddress: req.ip,
-        userAgent: req.get('user-agent'),
         details: { purpose: value.purpose, attempts },
       });
       return res.status(401).json({ error: 'Invalid or expired OTP' });
@@ -374,6 +385,14 @@ const verifyOTP = async (req, res) => {
         otpExpiry: null,
         otpPurpose: null,
         lastLogin: new Date()
+      });
+      await logAuthEvent(req.app.locals.models, req, {
+        userId: user.id,
+        userRole: user.role,
+        action: 'login',
+        resourceType: 'auth',
+        status: 'success',
+        description: `Successful login for ${user.email}`,
       });
       const token = issueJWT(user);
       return res.json({
@@ -440,6 +459,14 @@ const verifyTOTP = async (req, res) => {
     if (!valid) return res.status(401).json({ error: 'Invalid authenticator code' });
 
     await user.update({ lastLogin: new Date() });
+    await logAuthEvent(req.app.locals.models, req, {
+      userId: user.id,
+      userRole: user.role,
+      action: 'login',
+      resourceType: 'auth',
+      status: 'success',
+      description: `Successful login for ${user.email}`,
+    });
     const token = issueJWT(user);
     res.json({ message: 'Login successful', token, accessToken: token, user: safeUser(user) });
   } catch (err) {
@@ -806,6 +833,161 @@ const getUserById = async (req, res) => {
   }
 };
 
+const LOGIN_ACTIVITY_ACTIONS = [
+  'login',
+  'successful_login',
+  'failed_login',
+  'failed_otp',
+  'login_blocked',
+  'account_locked',
+];
+
+const formatLoginActivityRow = (log, userMap, emailFromDetails, hostnameByIp = {}) => {
+  const when = log.createdAt ? new Date(log.createdAt) : null;
+  const user = log.userId ? userMap[log.userId] : null;
+  const email = user?.email || emailFromDetails || '—';
+  const details = log.details || {};
+  const ipAddress = log.ipAddress || details.ipAddress || '—';
+  const portalHost = details.portalUrl || details.accessFrom || details.host || details.origin || '—';
+  const serverHost = details.serverHostname || '—';
+  let clientHost = details.clientHostname || null;
+  if (!clientHost && ipAddress && ipAddress !== '—') {
+    if (ipAddress === '::1' || ipAddress === '127.0.0.1' || ipAddress.endsWith('127.0.0.1')) {
+      clientHost = 'localhost';
+    } else {
+      clientHost = hostnameByIp[ipAddress] || '—';
+    }
+  }
+  clientHost = clientHost || '—';
+
+  return {
+    id: log.id,
+    userId: log.userId,
+    userName: user?.fullName || email || 'Unknown',
+    email,
+    role: log.userRole || user?.role || '—',
+    action: log.action,
+    status: log.status || 'unknown',
+    description: log.description,
+    ipAddress,
+    portalHost,
+    serverHost,
+    clientHost,
+    accessFrom: portalHost !== '—' ? portalHost : clientHost,
+    date: when ? when.toLocaleDateString('en-GB') : '—',
+    time: when ? when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—',
+    timestamp: when ? when.toISOString() : null,
+  };
+};
+
+async function resolveHostnameMap(rows) {
+  const dns = require('dns').promises;
+  const map = {};
+  const ips = [...new Set(rows.map(r => r.ipAddress).filter(Boolean))];
+
+  await Promise.all(ips.map(async (ip) => {
+    if (ip === '::1' || ip === '127.0.0.1' || ip.startsWith('::ffff:127.')) {
+      map[ip] = 'localhost';
+      return;
+    }
+    try {
+      const names = await dns.reverse(ip);
+      map[ip] = names[0] || null;
+    } catch {
+      map[ip] = null;
+    }
+  }));
+
+  return map;
+}
+
+const getLoginActivity = async (req, res) => {
+  const { Op } = require('sequelize');
+  const { startDate, endDate, userId, format } = req.query;
+  const { AuditLog, User } = req.app.locals.models;
+
+  try {
+    const where = { action: { [Op.in]: LOGIN_ACTIVITY_ACTIONS } };
+    if (userId) where.userId = userId;
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt[Op.gte] = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt[Op.lte] = end;
+      }
+    }
+
+    const rows = await AuditLog.findAll({
+      where,
+      order: [['createdAt', 'DESC']],
+      limit: 5000,
+    });
+
+    const userIds = [...new Set(rows.map(r => r.userId).filter(Boolean))];
+    const users = userIds.length
+      ? await User.findAll({
+        where: { id: userIds },
+        attributes: ['id', 'fullName', 'email', 'role', 'lastLogin'],
+      })
+      : [];
+    const userMap = {};
+    users.forEach(u => { userMap[u.id] = u; });
+
+    const hostnameByIp = await resolveHostnameMap(rows);
+
+    const activities = rows.map(r => formatLoginActivityRow(
+      r,
+      userMap,
+      r.details?.email || null,
+      hostnameByIp
+    ));
+
+    const allUsers = await User.findAll({
+      attributes: ['id', 'fullName', 'email', 'role', 'lastLogin', 'isActive'],
+      order: [['fullName', 'ASC']],
+    });
+
+    const userSummary = allUsers.map(u => {
+      const last = u.lastLogin ? new Date(u.lastLogin) : null;
+      return {
+        userId: u.id,
+        userName: u.fullName || u.email,
+        email: u.email,
+        role: u.role,
+        isActive: u.isActive,
+        lastLoginDate: last ? last.toLocaleDateString('en-GB') : 'Never',
+        lastLoginTime: last ? last.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—',
+        lastLoginAt: last ? last.toISOString() : null,
+      };
+    });
+
+    if (format === 'csv') {
+      const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const header = 'User Name,Email,Role,Event,Status,Date,Time,IP Address,Portal Host,Server Host,Client Host,Description';
+      const lines = activities.map(a => [
+        a.userName, a.email, a.role, a.action, a.status, a.date, a.time,
+        a.ipAddress, a.portalHost, a.serverHost, a.clientHost, a.description,
+      ].map(escape).join(','));
+      const csv = [header, ...lines].join('\n');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="login_activity_report.csv"');
+      return res.send(csv);
+    }
+
+    res.json({
+      activities,
+      userSummary,
+      total: activities.length,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('getLoginActivity error:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate login activity report' });
+  }
+};
+
 module.exports = {
   register, login, logout,
   verifyOTP, verifyTOTP,
@@ -813,4 +995,5 @@ module.exports = {
   requestPasswordReset, resetPassword,
   resendOTP, testEmail,
   listUsers, getUserById, updateUserRole, updateUserStatus, deleteUser,
+  getLoginActivity,
 };

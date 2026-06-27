@@ -6,6 +6,7 @@ import {
   Mail, MapPin, Clock,
 } from 'lucide-react';
 import useAuthStore from '../store/authStore';
+import { CARD_LIFT } from '../utils/uiTheme';
 
 const SLIDES = [
   {
@@ -31,9 +32,6 @@ const SLIDES = [
 ];
 
 const NAV_LINKS = ['Home', 'About', 'Services', 'Contact'];
-
-const CARD_HOVER =
-  'relative transition-all duration-300 ease-out hover:-translate-y-2 hover:scale-[1.03] hover:shadow-xl hover:z-10';
 
 function SectionLabel({ children, dark = false }) {
   return (
@@ -115,7 +113,7 @@ export default function HomePage() {
   const closeMenu = () => setMenuOpen(false);
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 scroll-smooth">
+    <div className="card-surface min-h-screen bg-white text-gray-900 scroll-smooth">
 
       {/* ── NAVBAR ── */}
       <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 bg-[#0a1628] border-b ${
@@ -222,7 +220,7 @@ export default function HomePage() {
                 { value: '24/7', label: 'Support Available' },
               ].map(s => (
                 <div key={s.label}
-                  className={`rounded-xl border border-white/20 bg-[#0a1628]/80 backdrop-blur-md p-4 text-center ${CARD_HOVER} hover:border-indigo-400/60 hover:bg-[#0a1628]/95 hover:shadow-indigo-500/30`}>
+                  className={`rounded-xl border border-white/20 bg-[#0a1628]/80 backdrop-blur-md p-4 text-center ${CARD_LIFT} hover:border-indigo-400/60 hover:bg-[#0a1628]/95 hover:shadow-indigo-500/30`}>
                   <p className="text-xl font-bold text-white">{s.value}</p>
                   <p className="text-xs text-gray-200 mt-1 font-medium leading-snug">{s.label}</p>
                 </div>
@@ -276,7 +274,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className={`rounded-2xl border border-indigo-100 bg-white p-8 shadow-sm shadow-indigo-100/50 ${CARD_HOVER} hover:border-indigo-300 hover:shadow-indigo-200/60`}>
+            <div className={`rounded-2xl border border-indigo-100 bg-white p-8 shadow-sm shadow-indigo-100/50 ${CARD_LIFT} hover:border-indigo-300 hover:shadow-indigo-200/60`}>
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Why Choose SIFCO AE</h3>
               <ul className="space-y-4">
                 {[
@@ -317,7 +315,7 @@ export default function HomePage() {
               { icon: ShieldCheck, title: 'Compliance', desc: 'Regulatory compliance across all operations.' },
             ].map(s => (
               <div key={s.title}
-                className={`rounded-2xl border border-indigo-500/20 bg-indigo-950/30 p-6 text-left ${CARD_HOVER} hover:border-indigo-400/50 hover:bg-indigo-900/30 hover:shadow-indigo-900/50`}>
+                className={`rounded-2xl border border-indigo-500/20 bg-indigo-950/30 p-6 text-left ${CARD_LIFT} hover:border-indigo-400/50 hover:bg-indigo-900/30 hover:shadow-indigo-900/50`}>
                 <div className="h-11 w-11 rounded-xl bg-indigo-600/25 flex items-center justify-center mb-4">
                   <s.icon className="h-5 w-5 text-indigo-300" />
                 </div>
@@ -370,8 +368,8 @@ export default function HomePage() {
             ].map(c => {
               const CardWrapper = c.href ? 'a' : 'div';
               const wrapperProps = c.href
-                ? { href: c.href, className: `block rounded-2xl border border-indigo-100 bg-gray-50 p-8 text-center cursor-pointer no-underline ${CARD_HOVER} hover:border-indigo-300 hover:bg-white hover:shadow-indigo-200/60` }
-                : { className: `rounded-2xl border border-indigo-100 bg-gray-50 p-8 text-center ${CARD_HOVER} hover:border-indigo-300 hover:bg-white hover:shadow-indigo-200/60` };
+                ? { href: c.href, className: `block rounded-2xl border border-indigo-100 bg-gray-50 p-8 text-center cursor-pointer no-underline ${CARD_LIFT} hover:border-indigo-300 hover:bg-white hover:shadow-indigo-200/60` }
+                : { className: `rounded-2xl border border-indigo-100 bg-gray-50 p-8 text-center ${CARD_LIFT} hover:border-indigo-300 hover:bg-white hover:shadow-indigo-200/60` };
 
               return (
               <CardWrapper key={c.title} {...wrapperProps}>

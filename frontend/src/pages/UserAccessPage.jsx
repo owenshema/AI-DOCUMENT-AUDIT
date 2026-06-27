@@ -76,7 +76,7 @@ const UserAccessPage = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs text-slate-500">
-                  {['Name', 'Email', 'Department', 'Role', 'Status', 'Last Login', 'Actions'].map(h => (
+                  {['Name', 'Email', 'Role', 'Status', 'Last Login', 'Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
                   ))}
                 </tr>
@@ -86,7 +86,6 @@ const UserAccessPage = () => {
                   <tr key={u.id} className="border-b border-white/5 hover:bg-white/3">
                     <td className="px-4 py-3 text-sm font-medium text-white">{u.fullName}</td>
                     <td className="px-4 py-3 text-xs text-slate-400">{u.email}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400">{u.department}</td>
                     <td className="px-4 py-3">
                       <span className="rounded-full bg-[#0ea5e9]/15 px-2 py-0.5 text-[10px] font-semibold text-[#38bdf8]">{formatRoleLabel(u.role)}</span>
                     </td>

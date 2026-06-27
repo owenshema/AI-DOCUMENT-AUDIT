@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import AppShell from '../components/AppShell';
 import { Upload, FileText, X, CheckCircle2, AlertCircle, Clock, FolderOpen } from 'lucide-react';
 import { documentAPI } from '../api/auth';
-import useAuthStore from '../store/authStore';
 
 const ALLOWED_TYPES = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'png', 'jpg', 'jpeg'];
 
@@ -19,12 +18,10 @@ const STATUS_COLORS = {
 };
 
 const UploadPage = () => {
-  const { user } = useAuthStore();
   const fileInputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
   const [files, setFiles] = useState([]);
   const [category, setCategory] = useState('policy');
-  const [department, setDepartment] = useState(user?.department || 'General');
   const [uploading, setUploading] = useState(false);
   const [results, setResults] = useState([]);
 
@@ -54,7 +51,7 @@ const UploadPage = () => {
         form.append('file', file);
         form.append('title', file.name);
         form.append('category', category);
-        form.append('department', department);
+        form.append('department', 'General');
         await documentAPI.create(form);
         newResults.push({ name: file.name, status: 'success' });
       } catch {
@@ -97,7 +94,7 @@ const UploadPage = () => {
           </div>
 
           {/* Metadata */}
-          <div className="grid gap-4 sm:grid-cols-2 rounded-xl border border-white/10 bg-white/5 p-5">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-5">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-slate-400">Document Category</label>
               <select
@@ -112,21 +109,6 @@ const UploadPage = () => {
                 <option value="audit">Audit</option>
                 <option value="hr">HR</option>
                 <option value="finance">Finance</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-slate-400">Department</label>
-              <select
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-[#0d1117] px-3 py-2 text-sm text-white outline-none"
-              >
-                <option value="General">General</option>
-                <option value="Finance">Finance</option>
-                <option value="HR">HR</option>
-                <option value="IT">IT</option>
-                <option value="Operations">Operations</option>
-                <option value="Legal">Legal</option>
               </select>
             </div>
           </div>
