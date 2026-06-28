@@ -252,10 +252,10 @@ async function testAuditRulesEngine() {
     assert(r.compliance_score <= 15, 'Low score for foreign doc');
   });
 
-  await test('ML corpus has 6 references', async () => {
+  await test('ML corpus has 7 references', async () => {
     const ml = require('./services/sifcoMlTrainingService');
     const c = ml.loadCorpus();
-    assert(c.referenceCount === 6, `Expected 6 refs, got ${c.referenceCount}`);
+    assert(c.referenceCount === 7, `Expected 7 refs, got ${c.referenceCount}`);
   });
 
   await test('PDF text service loads', async () => {

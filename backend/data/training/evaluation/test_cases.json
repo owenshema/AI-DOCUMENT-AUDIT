@@ -6,7 +6,8 @@
     { "id": "pos-03", "sourceFile": "03-hbl-unique-hybrid.txt", "expectedType": "bill_of_lading", "mustAccept": true },
     { "id": "pos-04", "sourceFile": "04-freight-invoice-unique-hybrid.txt", "expectedType": "freight_invoice", "mustAccept": true },
     { "id": "pos-05", "sourceFile": "05-trucking-invoice-ecmu5567458.txt", "expectedType": "trucking_invoice", "mustAccept": true },
-    { "id": "pos-06", "sourceFile": "06-sea-freight-john.txt", "expectedType": "sea_freight_invoice", "mustAccept": true }
+    { "id": "pos-06", "sourceFile": "06-sea-freight-john.txt", "expectedType": "sea_freight_invoice", "mustAccept": true },
+    { "id": "pos-07", "sourceFile": "07-shipping-instruction-sifco-3452.txt", "expectedType": "shipping_instruction", "mustAccept": true }
   ],
   "negative_cases": [
     {

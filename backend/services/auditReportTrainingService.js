@@ -18,6 +18,7 @@ var DOC_ID_TO_SPEC = {
   '04-freight-invoice-unique-hybrid': 'freight_invoice',
   '05-trucking-invoice-ecmu5567458': 'trucking_invoice',
   '06-sea-freight-john': 'sea_freight_invoice',
+  '07-shipping-instruction-sifco-3452': 'shipping_instruction',
 };
 
 var TYPE_TO_SPEC = {
@@ -40,6 +41,9 @@ var TYPE_TO_SPEC = {
   seafreight: 'sea_freight_invoice',
   sifco_invoice: 'sea_freight_invoice',
   sifco: 'sea_freight_invoice',
+  shipping_instruction: 'shipping_instruction',
+  shippinginstruction: 'shipping_instruction',
+  instruction: 'shipping_instruction',
 };
 
 var HEADER_ALIASES = {

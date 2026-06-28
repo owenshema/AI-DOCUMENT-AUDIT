@@ -53,6 +53,7 @@ function mapSpecToDocType(specId) {
     freight_invoice: 'SIFCO_INVOICE',
     trucking_invoice: 'TRUCKING_INVOICE',
     sea_freight_invoice: 'FREIGHT_INVOICE',
+    shipping_instruction: 'SHIPPING_INSTRUCTION',
   };
   return map[specId] || specId;
 }
@@ -159,7 +160,7 @@ function auditShipmentBundle(entries) {
 
   var expectedTypes = [
     'packing_list', 'bill_of_lading', 'shipping_agreement',
-    'freight_invoice', 'trucking_invoice', 'sea_freight_invoice',
+    'freight_invoice', 'trucking_invoice', 'sea_freight_invoice', 'shipping_instruction',
   ];
   var foundTypes = docs.map(function (d) { return d.specId; }).filter(Boolean);
   var missingTypes = expectedTypes.filter(function (t) { return foundTypes.indexOf(t) < 0; });

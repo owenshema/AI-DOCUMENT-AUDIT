@@ -1,7 +1,7 @@
 {
   "modelVersion": "sifco-ml-v1",
-  "trainedAt": "2026-06-28T14:16:05.681Z",
-  "referenceCount": 6,
+  "trainedAt": "2026-06-28T21:37:01.670Z",
+  "referenceCount": 7,
   "auditReportRows": 16,
   "auditReportSource": "SIFCO_Audit_Report.xlsx",
   "notebookTrainingSource": "Untitled3.ipynb",
@@ -48,6 +48,13 @@
       "sourceFile": "06-sea-freight-john.txt",
       "referencePdf": "JOHN SEA FREIGHT.pdf",
       "tokenCount": 90
+    },
+    {
+      "id": "shipping_instruction",
+      "label": "Shipping Instruction (SIFCO)",
+      "sourceFile": "07-shipping-instruction-sifco-3452.txt",
+      "referencePdf": "07-shipping-instruction-sifco-3452.png",
+      "tokenCount": 185
     }
   ]
 }

@@ -20,20 +20,33 @@ var MAP = [
   { pdf: '04-freight-invoice-unique-hybrid.pdf', txt: '04-freight-invoice-unique-hybrid.txt' },
   { pdf: '05-trucking-invoice-ecmu5567458.pdf', txt: '05-trucking-invoice-ecmu5567458.txt' },
   { pdf: '06-sea-freight-john.pdf', txt: '06-sea-freight-john.txt' },
+  { img: '07-shipping-instruction-sifco-3452.png', txt: '07-shipping-instruction-sifco-3452.txt' },
 ];
 
 (async function () {
   for (var i = 0; i < MAP.length; i++) {
     var m = MAP[i];
-    var pdfPath = path.join(REF_DIR, m.pdf);
-    if (!fs.existsSync(pdfPath)) {
-      console.warn('Skip (missing):', m.pdf);
+    var sourceName = m.pdf || m.img;
+    var sourcePath = path.join(REF_DIR, sourceName);
+    var txtPath = path.join(TRAINING_DIR, m.txt);
+
+    if (!fs.existsSync(sourcePath)) {
+      if (fs.existsSync(txtPath)) {
+        console.log('Keep existing', m.txt, '(source missing:', sourceName + ')');
+      } else {
+        console.warn('Skip (missing source and txt):', sourceName);
+      }
       continue;
     }
-    var parser = new PDFParse({ data: fs.readFileSync(pdfPath) });
-    var result = await parser.getText();
-    fs.writeFileSync(path.join(TRAINING_DIR, m.txt), (result.text || '').trim(), 'utf8');
-    console.log('OK', m.txt, (result.text || '').length, 'chars');
+
+    if (m.pdf) {
+      var parser = new PDFParse({ data: fs.readFileSync(sourcePath) });
+      var result = await parser.getText();
+      fs.writeFileSync(txtPath, (result.text || '').trim(), 'utf8');
+      console.log('OK', m.txt, (result.text || '').length, 'chars');
+    } else if (m.img) {
+      console.log('Image reference present:', sourceName, '— using curated', m.txt);
+    }
   }
 
   console.log('\nIngesting SIFCO_Audit_Report.xlsx (if present)...');

@@ -27,6 +27,7 @@ var files = [
   ['04-freight-invoice-unique-hybrid.txt', 'freight_invoice'],
   ['05-trucking-invoice-ecmu5567458.txt', 'trucking_invoice'],
   ['06-sea-freight-john.txt', 'sea_freight_invoice'],
+  ['07-shipping-instruction-sifco-3452.txt', 'shipping_instruction'],
 ];
 
 files.forEach(function (pair) {

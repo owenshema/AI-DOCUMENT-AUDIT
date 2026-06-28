@@ -1,6 +1,6 @@
 """
 SIFCO document audit engine — ported from Untitled3.ipynb
-Rule-based classification, field extraction, and fraud checks for 6 SIFCO paper types.
+Rule-based classification, field extraction, and fraud checks for 7 SIFCO paper types.
 """
 from __future__ import annotations
 
@@ -88,6 +88,22 @@ TEMPLATES = {
         "valid_issuers": ["SUPER INTERNATIONAL FREIGHT SERVICES LLC"],
         "required_signatures": [],
     },
+    "SHIPPING_INSTRUCTION": {
+        "name": "Shipping Instruction",
+        "spec_id": "shipping_instruction",
+        "keywords": [
+            "shipping instruction", "sifco", "al shamali", "container", "roro",
+            "port of discharge", "final place of delivery", "trading conditions",
+        ],
+        "required_fields": [
+            "shipper", "consignee", "port of discharge", "final place of delivery",
+            "container no", "method of loading", "description of goods",
+            "freight", "b/l fee", "total",
+        ],
+        "valid_tins": [],
+        "valid_issuers": ["AL SHAMALI INTERNATIONAL FREIGHT SERVICES LLC"],
+        "required_signatures": ["SIGNATURE (H.O.D)", "SIGNATURE (CUSTOMER)"],
+    },
 }
 
 ALL_VALID_TINS = {
@@ -107,6 +123,7 @@ REFERENCE_PDF_MAP = {
     "04-freight-invoice-unique-hybrid.pdf": "SIFCO_INVOICE",
     "05-trucking-invoice-ecmu5567458.pdf": "TRUCKING_INVOICE",
     "06-sea-freight-john.pdf": "FREIGHT_INVOICE",
+    "07-shipping-instruction-sifco-3452.png": "SHIPPING_INSTRUCTION",
 }
 
 

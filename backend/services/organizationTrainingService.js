@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Organization audit — delegates to SIFCO ML training module only.
- * Trained on the 6 reference PDFs; no legacy rule/violation engine.
+ * Trained on the 7 SIFCO reference documents; no legacy rule/violation engine.
  */
 var ml = require('./sifcoMlTrainingService');
 

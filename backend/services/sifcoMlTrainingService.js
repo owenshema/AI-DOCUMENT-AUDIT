@@ -1,7 +1,7 @@
 'use strict';
 /**
  * SIFCO ML Training Module
- * Trained ONLY on the 6 reference PDFs provided by the organization.
+ * Trained ONLY on the 7 SIFCO reference documents provided by the organization.
  * Uses TF-IDF similarity + fingerprint markers (logos, signatures, layout phrases).
  * No generic policy rules — accept/reject is similarity to trained corpus.
  */
@@ -15,7 +15,7 @@ var notebookTraining = require('./notebookTrainingService');
 var notebookAudit = require('./sifcoNotebookAuditService');
 var calcService = require('./documentCalculationService');
 
-/** Six SIFCO daily papers — fingerprints extracted from your reference PDFs */
+/** SIFCO daily papers — fingerprints extracted from reference documents */
 var REFERENCE_SPECS = [
   {
     id: 'packing_list',
@@ -139,6 +139,28 @@ var REFERENCE_SPECS = [
     optionalMarkers: [/etd/i, /dxb\d+/i],
     filenameHints: [/sea\s+freight/i, /john/i, /freight/i],
   },
+  {
+    id: 'shipping_instruction',
+    label: 'Shipping Instruction (SIFCO)',
+    sourceFile: '07-shipping-instruction-sifco-3452.txt',
+    referencePdf: '07-shipping-instruction-sifco-3452.png',
+    purpose: 'Official SIFCO shipping instruction for container/RoRo/air with marks, charges, and delivery terms.',
+    titlePatterns: [/shipping\s+instruction/i],
+    brandMarkers: [/al\s+shamali/i, /\bsifco\b/i, /sifcoae/i, /freight\s+solution\s+to\s+africa/i],
+    signatureMarkers: [/signature\s*\(?\s*h\.?o\.?d/i, /signature\s*\(?\s*customer/i, /signature\s*\(?\s*sales/i],
+    requiredMarkers: [
+      /shipping\s+instruction/i,
+      /(?:al\s+shamali|\bsifco\b)/i,
+      /(?:shipper|consignee)/i,
+      /(?:port\s+of\s+discharge|final\s+place\s+of\s+delivery)/i,
+      /(?:container|[a-z]{4}\d{7})/i,
+      /(?:method\s+of\s+loading|lcl|fcl)/i,
+      /(?:freight|b\/l\s+fee|wrc|ecs)/i,
+      /(?:mark|description\s+of\s+goods)/i,
+    ],
+    optionalMarkers: [/trading\s+conditions/i, /serial\s+no/i, /mombasa|kgl|kigali|drc|bkv/i, /temu/i],
+    filenameHints: [/shipping\s+instruction/i, /sifco/i, /instruction/i],
+  },
 ];
 
 var corpusCacheByKey = {};
@@ -249,7 +271,7 @@ var REJECTED_COMPLIANCE_SCORE = 0;
 
 var NOT_COMPANY_MESSAGE =
   'Document not from our company. This file does not match any SIFCO trained reference document ' +
-  '(packing list, HBL, shipping agreement, freight invoice, trucking invoice, or sea freight invoice).';
+  '(packing list, HBL, shipping agreement, shipping instruction, freight invoice, trucking invoice, or sea freight invoice).';
 
 function specForId(id) {
   for (var i = 0; i < REFERENCE_SPECS.length; i++) {
@@ -265,6 +287,7 @@ var SPEC_TO_NOTEBOOK_TYPE = {
   freight_invoice: 'SIFCO_INVOICE',
   trucking_invoice: 'TRUCKING_INVOICE',
   sea_freight_invoice: 'FREIGHT_INVOICE',
+  shipping_instruction: 'SHIPPING_INSTRUCTION',
 };
 
 function specIdToNotebookType(specId) {
@@ -381,6 +404,12 @@ function passesCompanyCriteria(best, normalizedText) {
 
   if (best.id === 'shipping_agreement') {
     if (!/\bsifco\b/i.test(normalizedText) && !/super\s+international/i.test(normalizedText)) {
+      return false;
+    }
+  }
+
+  if (best.id === 'shipping_instruction') {
+    if (!/\bsifco\b/i.test(normalizedText) && !/al\s+shamali/i.test(normalizedText)) {
       return false;
     }
   }

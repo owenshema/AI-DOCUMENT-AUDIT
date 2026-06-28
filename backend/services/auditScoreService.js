@@ -27,7 +27,7 @@ function isSifcoDocumentType(documentType) {
   if (!documentType || documentType === 'unknown') return false;
   return [
     'packing_list', 'bill_of_lading', 'shipping_agreement', 'freight_invoice',
-    'trucking_invoice', 'sea_freight_invoice',
+    'trucking_invoice', 'sea_freight_invoice', 'shipping_instruction',
   ].indexOf(documentType) >= 0;
 }
 

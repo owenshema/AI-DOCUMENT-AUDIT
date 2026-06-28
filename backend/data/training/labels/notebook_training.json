@@ -12,12 +12,22 @@
         "bill of loading"
       ],
       "required_fields": [
-        "shipping agreement",
-        "sifco",
+        "consignee",
+        "model",
+        "chs",
+        "color",
         "sea freight",
+        "road freight",
+        "b/l fee",
+        "local charges",
         "total",
+        "method of loading",
+        "weight",
         "bill of loading",
-        "final destination"
+        "final destination",
+        "name of vessel",
+        "voyage number",
+        "etd"
       ],
       "valid_tins": [
         "121348946"
@@ -28,21 +38,7 @@
       "required_signatures": [
         "SIFCO SIGNATURE",
         "CLIENT'S SIGNATURE"
-      ],
-      "field_checks": {
-        "tin": "required",
-        "bl": "warn",
-        "container": "off",
-        "vessel": "warn",
-        "voyage": "warn",
-        "etd": "warn",
-        "final_destination": "warn",
-        "ports": "warn",
-        "invoice_no": "off",
-        "issuer": "warn",
-        "date": "warn",
-        "signatures": "warn"
-      }
+      ]
     },
     "FREIGHT_INVOICE": {
       "name": "Sea Freight Invoice",
@@ -50,41 +46,28 @@
       "keywords": [
         "freight invoice",
         "freight invoce",
-        "sea freight",
-        "port of loading",
-        "super international",
         "ganador",
-        "consignee"
+        "sea freight",
+        "port of loading"
       ],
       "required_fields": [
         "consignee",
+        "date",
         "sea freight",
         "total",
         "port of loading",
         "port of discharge",
-        "bl number"
+        "bl number",
+        "final destination",
+        "name of vessel",
+        "voyage number",
+        "etd"
       ],
       "valid_tins": [],
       "valid_issuers": [
-        "GANADOR GENERAL TRADING",
-        "SUPER INTERNATIONAL FREIGHT SERVICES LLC",
-        "SUPER INTERNATIONAL FREIGHT"
+        "GANADOR GENERAL TRADING"
       ],
-      "required_signatures": [],
-      "field_checks": {
-        "tin": "off",
-        "bl": "required",
-        "container": "off",
-        "vessel": "warn",
-        "voyage": "warn",
-        "etd": "warn",
-        "final_destination": "warn",
-        "ports": "required",
-        "invoice_no": "off",
-        "issuer": "off",
-        "date": "warn",
-        "signatures": "off"
-      }
+      "required_signatures": []
     },
     "PACKING_LIST": {
       "name": "Packing List",
@@ -93,39 +76,26 @@
         "packing list",
         "packages",
         "qty",
-        "total packages",
-        "consigne",
-        "container number"
+        "total packages"
       ],
       "required_fields": [
-        "packing list",
         "consigne",
+        "date",
+        "total",
+        "method of loading",
         "weight",
         "container number",
         "bill of loading",
-        "final destination"
+        "final destination",
+        "name of vessel",
+        "voyage number",
+        "etd"
       ],
       "valid_tins": [],
       "valid_issuers": [
-        "GANADOR GENERAL TRADING",
-        "SUPER INTERNATIONAL FREIGHT SERVICES LLC",
-        "SUPER INTERNATIONAL FREIGHT"
+        "GANADOR GENERAL TRADING"
       ],
-      "required_signatures": [],
-      "field_checks": {
-        "tin": "warn",
-        "bl": "required",
-        "container": "required",
-        "vessel": "warn",
-        "voyage": "warn",
-        "etd": "warn",
-        "final_destination": "required",
-        "ports": "off",
-        "invoice_no": "off",
-        "issuer": "off",
-        "date": "warn",
-        "signatures": "off"
-      }
+      "required_signatures": []
     },
     "HBL": {
       "name": "House Bill of Lading",
@@ -139,33 +109,27 @@
         "vessel voyage"
       ],
       "required_fields": [
-        "bill of lading",
         "shipper",
         "consignee",
+        "notify party",
+        "bill of lading no",
+        "place of receipt",
         "port of loading",
         "port of discharge",
-        "container no"
+        "gross weight",
+        "container no",
+        "seal"
       ],
-      "valid_tins": [],
+      "valid_tins": [
+        "121348946"
+      ],
       "valid_issuers": [
         "AL SHAMALI INTERNATIONAL",
         "SUPER INTERNATIONAL FREIGHT"
       ],
       "required_signatures": [
         "authorised signatory"
-      ],
-      "field_checks": {
-        "tin": "off",
-        "bl": "required",
-        "container": "required",
-        "vessel": "warn",
-        "voyage": "off",
-        "ports": "required",
-        "invoice_no": "off",
-        "issuer": "warn",
-        "date": "warn",
-        "signatures": "warn"
-      }
+      ]
     },
     "TRUCKING_INVOICE": {
       "name": "Trucking Invoice",
@@ -177,9 +141,14 @@
         "plate number"
       ],
       "required_fields": [
-        "trucking invoice",
-        "inland transport",
+        "invoice no",
+        "date",
+        "currency",
+        "plate number",
+        "origin",
+        "destination",
         "container no",
+        "rate",
         "total amount"
       ],
       "valid_tins": [
@@ -188,20 +157,7 @@
       "valid_issuers": [
         "TOP SIFCO"
       ],
-      "required_signatures": [],
-      "field_checks": {
-        "tin": "required",
-        "bl": "off",
-        "container": "required",
-        "plate": "warn",
-        "vessel": "off",
-        "voyage": "off",
-        "invoice_no": "required",
-        "ports": "off",
-        "issuer": "warn",
-        "date": "warn",
-        "signatures": "off"
-      }
+      "required_signatures": []
     },
     "SIFCO_INVOICE": {
       "name": "SIFCO Freight Invoice",
@@ -215,7 +171,12 @@
         "war cost"
       ],
       "required_fields": [
-        "invoice",
+        "invoice no",
+        "date",
+        "currency",
+        "origin",
+        "destination",
+        "container no",
         "freight charges",
         "bl fee",
         "local charges",
@@ -227,19 +188,41 @@
       "valid_issuers": [
         "SUPER INTERNATIONAL FREIGHT SERVICES LLC"
       ],
-      "required_signatures": [],
-      "field_checks": {
-        "tin": "warn",
-        "bl": "off",
-        "container": "warn",
-        "vessel": "off",
-        "voyage": "off",
-        "invoice_no": "required",
-        "ports": "off",
-        "issuer": "warn",
-        "date": "warn",
-        "signatures": "off"
-      }
+      "required_signatures": []
+    },
+    "SHIPPING_INSTRUCTION": {
+      "name": "Shipping Instruction",
+      "spec_id": "shipping_instruction",
+      "keywords": [
+        "shipping instruction",
+        "sifco",
+        "al shamali",
+        "container",
+        "roro",
+        "port of discharge",
+        "final place of delivery",
+        "trading conditions"
+      ],
+      "required_fields": [
+        "shipper",
+        "consignee",
+        "port of discharge",
+        "final place of delivery",
+        "container no",
+        "method of loading",
+        "description of goods",
+        "freight",
+        "b/l fee",
+        "total"
+      ],
+      "valid_tins": [],
+      "valid_issuers": [
+        "AL SHAMALI INTERNATIONAL FREIGHT SERVICES LLC"
+      ],
+      "required_signatures": [
+        "SIGNATURE (H.O.D)",
+        "SIGNATURE (CUSTOMER)"
+      ]
     }
   },
   "known_values": {
@@ -282,8 +265,8 @@
         "consignee": "UNIQUE HYBRID &EV SPARE PARTS DATE: 15/02/2026",
         "invoice_no": null,
         "dates": [
-          "18/02/2026",
-          "15/02/2026"
+          "15/02/2026",
+          "18/02/2026"
         ],
         "total": 37.0,
         "origin": null,
