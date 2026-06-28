@@ -17,6 +17,7 @@ router.get('/stats/overview',  ctrl.getAnalysisStats);
 router.get('/evaluation/metrics', ctrl.getEvaluationMetrics);
 
 // Document-based analysis
+router.get('/:documentId/export',   ctrl.exportDocumentAnalysis);
 router.post('/:documentId/analyze',   ctrl.analyzeDocument);
 router.get('/:documentId/insights',   ctrl.getDocumentInsights);
 router.get('/:documentId/status',     ctrl.getAnalysisStatus);

@@ -1,2 +1,11 @@
-// CRA 5 detects tailwind.config.js and enables Tailwind via PostCSS automatically.
-module.exports = {};
+/**
+ * CRACO config — keeps Tailwind wired through postcss.config.js.
+ * Do not override PostCSS plugins here; that breaks Tailwind compilation.
+ */
+module.exports = {
+  style: {
+    postcss: {
+      mode: 'file',
+    },
+  },
+};

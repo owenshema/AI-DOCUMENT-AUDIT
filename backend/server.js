@@ -46,9 +46,17 @@ const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000,http:
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const isLocalDevOrigin = (origin) =>
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+
 app.use(cors({
   origin(origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    // React may use 3001, 3002, etc. when 3000 is already taken
+    if (process.env.NODE_ENV !== 'production' && isLocalDevOrigin(origin)) {
       callback(null, true);
       return;
     }

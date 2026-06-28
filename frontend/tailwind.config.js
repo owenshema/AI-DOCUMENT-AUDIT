@@ -1,4 +1,5 @@
 /** @type {import('tailwindcss').Config} */
+/** Keep this filename as tailwind.config.js — CRA 5 will not pick up .cjs reliably. */
 module.exports = {
   content: [
     './public/index.html',

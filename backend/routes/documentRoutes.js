@@ -35,16 +35,25 @@ const upload = multer({
   }
 });
 
+router.post('/client-request', documentController.createClientDocumentRequest);
+router.get('/clients/assignable', documentController.getAssignableClients);
 router.get('/management', documentController.getDocumentManagement);
 router.get('/', documentController.getAllDocuments);
 router.post('/', upload.single('file'), documentController.uploadDocument);
 router.post('/bulk/upload', upload.array('files', 20), documentController.bulkUpload);
 router.get('/:id', documentController.getDocumentById);
 router.put('/:id', documentController.updateDocument);
+router.post('/:id/submit-correction', upload.single('file'), documentController.reuploadDocument);
+router.post('/:id/fulfill-request', upload.single('file'), documentController.fulfillClientDocumentRequest);
+router.post('/:id/assign', documentController.assignDocumentToClients);
+router.post('/:id/request-magerwa', documentController.requestMagerwaPresentation);
+router.post('/:id/request-document', documentController.requestMagerwaPresentation);
 router.post('/:id/request-audit', documentController.requestDocumentAudit);
 router.post('/:id/reupload', upload.single('file'), documentController.reuploadDocument);
 router.patch('/:id/status', documentController.updateDocumentStatus);
 router.delete('/:id', documentController.deleteDocument);
+router.get('/:id/marked-view', documentController.getMarkedDocumentView);
+router.get('/:id/marked-download', documentController.downloadMarkedDocument);
 router.get('/:id/download', documentController.downloadDocument);
 router.get('/:id/preview-text', documentController.previewDocumentText);
 router.post('/:id/share', documentController.shareDocument);

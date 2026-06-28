@@ -13,6 +13,9 @@ const reportLayout = require('../services/reportLayout');
 const shipmentConsistency = require('../services/sifcoShipmentConsistencyService');
 const notebookAudit = require('../services/sifcoNotebookAuditService');
 const { resolveNeedsAuditNotifications } = require('./documentController');
+const { userOwnsDocument } = require('../utils/ownerScope');
+const { isExportFormatAllowed, allowedExportFormats, normalizeRole } = require('../utils/roles');
+const { streamDocumentAnalysisPdf } = require('../services/documentAnalysisReportService');
 const { extractTextFromFile, resolveExistingPath, isImageFile } = require('../services/pdfTextService');
 
 /**
@@ -476,12 +479,16 @@ const parseDocumentText = async (req, res) => {
 
 const getDocumentInsights = async (req, res) => {
   try {
+    const role = normalizeRole(req.user?.role);
+    if (role === 'client') {
+      return res.status(403).json({ error: 'Analysis reports are not available to client accounts.' });
+    }
+
     const { documentId } = req.params;
     const { Document, DocumentAnalysis } = req.app.locals.models;
     const document = await Document.findByPk(documentId);
     if (!document) return res.status(404).json({ error: 'Document not found' });
-    const isOwner = document.uploadedBy === req.user?.id;
-    if (!['administrator', 'auditor'].includes(req.user?.role) && !isOwner) {
+    if (!userOwnsDocument(document, req.user?.id, req.user?.role)) {
       return res.status(403).json({ error: 'Access denied to this document analysis' });
     }
     const analysis = await DocumentAnalysis.findOne({ where: { documentId } });
@@ -649,8 +656,7 @@ const getAnalysisStatus = async (req, res) => {
     const { Document, DocumentAnalysis } = req.app.locals.models;
     const document = await Document.findByPk(documentId);
     if (!document) return res.status(404).json({ error: 'Document not found' });
-    const isOwner = document.uploadedBy === req.user?.id;
-    if (!['administrator', 'auditor'].includes(req.user?.role) && !isOwner) {
+    if (!userOwnsDocument(document, req.user?.id, req.user?.role)) {
       return res.status(403).json({ error: 'Access denied to this document analysis' });
     }
     const analysis = await DocumentAnalysis.findOne({ where: { documentId } });
@@ -772,11 +778,101 @@ const getEvaluationMetrics = async (req, res) => {
   }
 };
 
+// ── GET /api/analysis/:documentId/export — download audit analysis report (PDF) ─
+
+const exportDocumentAnalysis = async (req, res) => {
+  try {
+    const role = normalizeRole(req.user?.role);
+    if (role === 'client') {
+      return res.status(403).json({ error: 'Analysis reports are not available to client accounts.' });
+    }
+
+    const { documentId } = req.params;
+    const { format = 'PDF' } = req.query;
+    const { Document, DocumentAnalysis, User } = req.app.locals.models;
+
+    const document = await Document.findByPk(documentId);
+    if (!document) return res.status(404).json({ error: 'Document not found' });
+    if (!userOwnsDocument(document, req.user?.id, req.user?.role)) {
+      return res.status(403).json({ error: 'Access denied to this document analysis' });
+    }
+
+    const analysis = await DocumentAnalysis.findOne({ where: { documentId } });
+    if (!analysis) {
+      return res.status(404).json({ error: 'No audit analysis found. The document must be audited first.' });
+    }
+
+    const roleNorm = normalizeRole(req.user?.role);
+    const fmtUpper = String(format).toUpperCase();
+    const annotated = fmtUpper === 'ANNOTATED';
+    const formatKey = annotated ? 'pdf'
+      : fmtUpper === 'PDF' ? 'pdf'
+      : fmtUpper === 'EXCEL' || fmtUpper === 'XLSX' ? 'excel'
+      : fmtUpper.toLowerCase();
+    if (!isExportFormatAllowed(roleNorm, formatKey)) {
+      return res.status(403).json({
+        error: `Your role can only export reports as: ${allowedExportFormats(roleNorm).join(', ')}`,
+      });
+    }
+
+    const meta = document.metadata || {};
+    const auditorId = analysis.performedBy || meta.latestAuditDecision?.updatedBy || null;
+    const auditorUser = auditorId ? await User.findByPk(auditorId, { attributes: ['id', 'fullName', 'email'] }) : null;
+    const preparedBy = req.user?.fullName
+      ? `${req.user.fullName} (${req.user.role})`
+      : req.user?.email || 'System';
+
+    if (formatKey !== 'pdf') {
+      const results = analysis.results || {};
+      const lines = [
+        '='.repeat(60),
+        'SIFCO — SUPER INTERNATIONAL FREIGHT',
+        'DocAudit AI  ·  DOCUMENT AUDIT ANALYSIS',
+        '='.repeat(60),
+        '',
+        `Document    : ${document.title || document.fileName}`,
+        `Status      : ${document.status}`,
+        `Compliance  : ${results.compliance_score ?? meta.latestComplianceScore ?? '—'}%`,
+        `Overall     : ${results.overall_audit_score ?? meta.latestOverallAuditScore ?? '—'}%`,
+        `Risk        : ${results.risk_level || analysis.riskFactors?.level || '—'}`,
+        `Prepared By : ${preparedBy}`,
+        `Generated   : ${new Date().toLocaleString()}`,
+        '',
+        '='.repeat(60),
+        'SUMMARY',
+        '='.repeat(60),
+        '',
+        analysis.summary || meta.latestAuditSummary || 'No summary available.',
+        '',
+        '='.repeat(60),
+        `Super International Freight / SIFCO — DocAudit AI  |  Exported ${new Date().toLocaleString()}`,
+      ];
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="audit_analysis_${documentId.slice(0, 8)}.txt"`);
+      return res.send(lines.join('\n'));
+    }
+
+    streamDocumentAnalysisPdf(res, {
+      document: document.toJSON ? document.toJSON() : document,
+      analysis: analysis.toJSON ? analysis.toJSON() : analysis,
+      preparedBy,
+      auditorUser: auditorUser?.toJSON ? auditorUser.toJSON() : auditorUser,
+      annotated,
+    });
+  } catch (error) {
+    console.error('Export document analysis error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message || 'Export failed' });
+    }
+  }
+};
+
 module.exports = {
   analyzeDocument,
   analyzeText,
   parseDocumentText,
   getDocumentInsights,
+  exportDocumentAnalysis,
   bulkAnalyze,
   getAnalysisStatus,
   getAnalysisTrend,

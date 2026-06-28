@@ -1,16 +1,33 @@
 'use strict';
 
+const { Op, literal } = require('sequelize');
 const { OWNER_ROLES, normalizeRole } = require('./roles');
 
 function isOwnerRole(role) {
   return OWNER_ROLES.includes(normalizeRole(role));
 }
 
-/** Documents visible to client: only their own uploads. Managers/auditors/admins see all. */
+function getAssignedClientIds(document) {
+  const ids = document?.metadata?.assignedClientIds;
+  return Array.isArray(ids) ? ids.filter(Boolean) : [];
+}
+
+function isDocumentAssignedToUser(document, userId) {
+  if (!userId) return false;
+  return getAssignedClientIds(document).includes(userId);
+}
+
+/** Documents visible to client: own uploads + documents assigned by document manager. */
 function documentWhereForUser(user) {
   if (!user?.id) return {};
   if (normalizeRole(user.role) === 'client') {
-    return { uploadedBy: user.id };
+    const safeId = String(user.id).replace(/'/g, "''");
+    return {
+      [Op.or]: [
+        { uploadedBy: user.id },
+        literal(`COALESCE(metadata->'assignedClientIds', '[]'::jsonb) @> '["${safeId}"]'::jsonb`),
+      ],
+    };
   }
   return {};
 }
@@ -20,12 +37,16 @@ function userOwnsDocument(document, userId, role) {
   if (normalized === 'administrator' || normalized === 'auditor' || normalized === 'document_manager') {
     return true;
   }
-  return document?.uploadedBy === userId;
+  if (document?.uploadedBy === userId) return true;
+  if (normalized === 'client' && isDocumentAssignedToUser(document, userId)) return true;
+  return false;
 }
 
 module.exports = {
   OWNER_ROLES,
   isOwnerRole,
+  getAssignedClientIds,
+  isDocumentAssignedToUser,
   documentWhereForUser,
   userOwnsDocument,
 };

@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Upload, RefreshCw, Download, Trash2, Eye, Bot, X, FileText, Edit2 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Upload, RefreshCw, Download, Trash2, Eye, Bot, X, FileText, Edit2, Ship, Package, Send } from 'lucide-react';
 import AppShell from '../components/AppShell';
 import { documentAPI, analysisAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
@@ -72,7 +73,7 @@ function DocumentViewer({ doc, onClose }) {
 
   const handleDownload = async () => {
     try {
-      const res = await documentAPI.download(doc.id);
+      const res = await documentAPI.download(doc.id, { attachment: true });
       const url = URL.createObjectURL(res.data);
       const a = document.createElement('a');
       a.href = url; a.download = doc.fileName || doc.title || 'document';
@@ -155,6 +156,7 @@ const getMainScrollEl = () => document.querySelector('main');
 
 export default function DocumentsPage() {
   const { user } = useAuthStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const dropRef = useRef(null);
   const [docs, setDocs]           = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -170,6 +172,16 @@ export default function DocumentsPage() {
   const [expanded, setExpanded]   = useState(null);
   const [viewerDoc, setViewerDoc] = useState(null);
   const [auditFilter, setAuditFilter] = useState('needs_audit');
+  const [clientSourceFilter, setClientSourceFilter] = useState('all');
+  const [exportingReportId, setExportingReportId] = useState(null);
+  const [downloadingFileId, setDownloadingFileId] = useState(null);
+  const [requestDoc, setRequestDoc] = useState(null);
+  const [requestForm, setRequestForm] = useState({ port: '', note: '' });
+  const [requestingDocId, setRequestingDocId] = useState(null);
+  const [requestMsg, setRequestMsg] = useState({});
+  const [showNewRequest, setShowNewRequest] = useState(false);
+  const [newRequestForm, setNewRequestForm] = useState({ title: '', description: '', category: 'other', port: '', note: '' });
+  const [submittingNewRequest, setSubmittingNewRequest] = useState(false);
 
   const isAuditorView = user?.role === 'auditor' || user?.role === 'administrator';
 
@@ -177,17 +189,20 @@ export default function DocumentsPage() {
     const silent = opts.silent === true;
     if (!silent) setLoading(true);
     try {
-      const params = { limit: 30 };
+      const params = { limit: 50 };
       const r = user?.role;
       if ((r === 'auditor' || r === 'administrator') && auditFilter !== 'all') {
         params.auditState = auditFilter;
+      }
+      if (r === 'client' && clientSourceFilter !== 'all' && clientSourceFilter !== 'requests') {
+        params.source = clientSourceFilter;
       }
       const res = await documentAPI.getAll(params);
       const d = res?.documents || res?.data || res || [];
       setDocs(Array.isArray(d) ? d : []);
     } catch { setDocs([]); }
     if (!silent) setLoading(false);
-  }, [user, auditFilter]);
+  }, [user, auditFilter, clientSourceFilter]);
 
   const refreshDocument = useCallback(async (docId) => {
     try {
@@ -226,9 +241,12 @@ export default function DocumentsPage() {
         upload.files.forEach(file => form.append('files', file));
         await documentAPI.bulkUpload(form);
       }
-      setUpload({ files: [], title: '', category: 'policy', priority: 'normal', busy: false, error: '', success: 'Uploaded!' });
+      setUpload({ files: [], title: '', category: 'policy', priority: 'normal', busy: false, error: '', success: '' });
       setShowUpload(false);
       load();
+      if (role === 'client') {
+        alert('Document uploaded. An auditor will review it, then your document manager will assign it back to you when ready for port clearance.');
+      }
     } catch (e) {
       setUpload(p => ({ ...p, busy: false, error: e?.response?.data?.error || 'Upload failed.' }));
     }
@@ -281,7 +299,7 @@ export default function DocumentsPage() {
   const toggleExpanded = (doc) => {
     const next = expanded === doc.id ? null : doc.id;
     setExpanded(next);
-    if (next && auditResults[doc.id] === undefined) loadAuditResult(doc.id);
+    if (next && !isClient && auditResults[doc.id] === undefined) loadAuditResult(doc.id);
   };
 
   const handleAnalyze = async (doc) => {
@@ -321,14 +339,186 @@ export default function DocumentsPage() {
     }
   };
 
+  const hasAuditComplete = (doc) => Boolean(
+    doc.metadata?.latestAuditDecision?.updatedBy
+    || doc.metadata?.latestComplianceScore != null
+    || ['reviewed', 'changes_requested', 'approved', 'rejected'].includes(doc.status)
+  );
+
+  const handleDownloadReport = async (doc) => {
+    setExportingReportId(doc.id);
+    try {
+      const res = await analysisAPI.exportReport(doc.id, 'PDF');
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `audit_analysis_${(doc.title || doc.fileName || 'document').replace(/[^a-z0-9_-]+/gi, '_')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e?.response?.data?.error || 'Could not download analysis report.');
+    } finally {
+      setExportingReportId(null);
+    }
+  };
+
+  const handleCreateDocumentRequest = async () => {
+    if (!newRequestForm.title.trim()) {
+      alert('Please enter a title for your document request.');
+      return;
+    }
+    setSubmittingNewRequest(true);
+    try {
+      const res = await documentAPI.createClientDocumentRequest({
+        title: newRequestForm.title.trim(),
+        description: newRequestForm.description.trim() || null,
+        category: newRequestForm.category,
+        port: newRequestForm.port.trim() || null,
+        note: newRequestForm.note.trim() || null,
+      });
+      setShowNewRequest(false);
+      setNewRequestForm({ title: '', description: '', category: 'other', port: '', note: '' });
+      setClientSourceFilter('requests');
+      alert(res?.message || 'Document request submitted.');
+      load();
+    } catch (e) {
+      alert(e?.response?.data?.error || 'Could not submit document request.');
+    } finally {
+      setSubmittingNewRequest(false);
+    }
+  };
+
+  const openDocumentRequest = (doc) => {
+    setRequestDoc(doc);
+    setRequestForm({
+      port: doc.magerwaRequestPort || doc.cargoPort || doc.arrivalPort || '',
+      note: '',
+    });
+  };
+
+  const handleDocumentRequest = async () => {
+    if (!requestDoc) return;
+    setRequestingDocId(requestDoc.id);
+    try {
+      const res = await documentAPI.requestDocument(requestDoc.id, {
+        port: requestForm.port.trim() || null,
+        note: requestForm.note.trim() || null,
+      });
+      setRequestMsg(p => ({ ...p, [requestDoc.id]: res?.message || 'Document request sent.' }));
+      setRequestDoc(null);
+      load();
+    } catch (e) {
+      alert(e?.response?.data?.error || 'Could not submit document request.');
+    } finally {
+      setRequestingDocId(null);
+    }
+  };
+
+  const handleDownloadFile = async (doc) => {
+    setDownloadingFileId(doc.id);
+    try {
+      const res = await documentAPI.download(doc.id, { attachment: true });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.fileName || doc.title || 'document';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(e?.response?.data?.error || 'Could not download document.');
+    } finally {
+      setDownloadingFileId(null);
+    }
+  };
+
   const role = normalizeRole(user?.role);
   const isOwnerPortal = isOwnerRole(role);
   const isDocumentManager = role === 'document_manager';
-  const pageTitle = isOwnerPortal ? 'My Documents' : 'Document Hub';
+  const isClient = role === 'client';
+  const isAssignedCargoDoc = (doc) => doc.documentSource === 'assigned' || (doc.isAssignedToMe && !doc.isOwnUpload);
+  const isClientOwnUpload = (doc) => isClient && (doc.documentSource === 'own' || doc.isOwnUpload) && !isAssignedCargoDoc(doc);
+  const canRequestDocument = (doc) =>
+    isClientOwnUpload(doc) && !doc.clientReleasedAt && doc.magerwaRequestStatus !== 'fulfilled';
+  const clientCanDownload = (doc) =>
+    !isClient || (isAssignedCargoDoc(doc) && doc.clientReleasedAt);
+  const clientCanEdit = (doc) => !isClient || doc.documentSource !== 'assigned';
+  const requestOnlyStatusLabel = (doc) => {
+    if (isAssignedCargoDoc(doc) && doc.clientReleasedAt) {
+      return { title: 'Document request — ready for cargo', detail: 'Your document has been assigned. Download from Assigned for cargo.', badge: 'Ready', tone: 'emerald' };
+    }
+    if (doc.needsManagerPreparation) {
+      return { title: 'Document request — awaiting preparation', detail: 'Your document manager will prepare this document, send it to the auditor, and assign it to you when approved.', badge: 'Pending prep', tone: 'amber' };
+    }
+    if (doc.auditState === 'needs_audit' || doc.status === 'in_review') {
+      return { title: 'Document request — under audit', detail: 'Your document manager prepared the file and sent it to the auditor. You will be notified when it is assigned to you.', badge: 'Auditing', tone: 'indigo' };
+    }
+    if (doc.awaitingClientAssignment || doc.managerReviewStatus === 'ready_for_client') {
+      return { title: 'Document request — awaiting assignment', detail: 'Audit is complete. Your document manager will assign it to you shortly.', badge: 'Almost ready', tone: 'violet' };
+    }
+    return { title: 'Document request — in progress', detail: 'Your request is being processed by the document manager and auditor.', badge: 'In progress', tone: 'amber' };
+  };
+  const assignedCount = docs.filter(isAssignedCargoDoc).length;
+  const requestCount = docs.filter(d => d.isRequestOnly || d.status === 'requested' || (d.magerwaRequested && !d.clientReleasedAt)).length;
+  const displayDocs = isClient && clientSourceFilter === 'requests'
+    ? docs.filter(d => d.isRequestOnly || d.status === 'requested' || (d.magerwaRequested && d.documentSource === 'own'))
+    : isClient && clientSourceFilter === 'own'
+    ? docs.filter(d => d.documentSource === 'own' && !d.isRequestOnly)
+    : docs;
+  const pageTitle = isClient ? 'My Documents & Cargo' : isOwnerPortal ? 'My Documents' : 'Document Hub';
+
+  useEffect(() => {
+    const documentId = searchParams.get('documentId');
+    if (!documentId || loading) return;
+    const match = docs.find(d => d.id === documentId);
+    if (match) {
+      setExpanded(match.id);
+      if (match.documentSource === 'assigned' || (match.isAssignedToMe && !match.isOwnUpload)) {
+        setClientSourceFilter('assigned');
+      }
+      const next = new URLSearchParams(searchParams);
+      next.delete('documentId');
+      setSearchParams(next, { replace: true });
+    }
+  }, [docs, loading, searchParams, setSearchParams]);
 
   return (
     <AppShell title={pageTitle}>
-      {isOwnerPortal && (
+      {isClient && (
+        <div className="mb-4 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-amber-200">Need a document?</p>
+              <p className="mt-1 text-xs text-amber-100/80">
+                Request a document without uploading. Your document manager will prepare it, send it to the auditor, and assign it to you when ready.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowNewRequest(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600"
+            >
+              <Send className="h-4 w-4" /> Request Document
+            </button>
+          </div>
+        </div>
+      )}
+      {isClient && (
+        <div className="mb-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-5 py-4">
+          <div className="flex items-start gap-3">
+            <Package className="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-400" />
+            <div>
+              <p className="text-sm font-semibold text-emerald-200">How your documents move through the system</p>
+              <ol className="mt-2 list-decimal space-y-1 pl-4 text-xs text-emerald-100/80">
+                <li>Click <strong>Request Document</strong> (no upload required)</li>
+                <li>Document manager prepares your document and sends it to the auditor</li>
+                <li>Auditor returns it to the document manager</li>
+                <li>Manager assigns it to you — download from <strong>Assigned for cargo</strong></li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
+      {isOwnerPortal && !isClient && (
         <p className="mb-4 text-xs text-slate-500">
           Showing only documents you uploaded. Other users&apos; files are not visible here.
         </p>
@@ -347,6 +537,29 @@ export default function DocumentsPage() {
         <p className="text-sm font-medium text-slate-300">Drag & drop files here, or click to upload</p>
         <p className="text-xs text-slate-600 mt-1">PDF, DOCX, XLSX, images â€” auto metadata extraction</p>
       </div>
+
+      {/* Client cargo tabs */}
+      {isClient && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          {[
+            { key: 'all', label: 'All documents' },
+            { key: 'requests', label: `My requests${requestCount ? ` (${requestCount})` : ''}` },
+            { key: 'assigned', label: `Assigned for cargo${assignedCount ? ` (${assignedCount})` : ''}` },
+            { key: 'own', label: 'My uploads' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setClientSourceFilter(tab.key)}
+              className={`rounded-lg px-4 py-2 text-xs font-semibold transition-colors ${
+                clientSourceFilter === tab.key
+                  ? 'bg-emerald-500 text-white'
+                  : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+              }`}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Auditor queue tabs */}
       {isAuditorView && (
@@ -374,7 +587,7 @@ export default function DocumentsPage() {
       <div className="rounded-2xl border border-white/8 bg-[#111318] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
           <h2 className="text-sm font-semibold text-white">
-            {isAuditorView && auditFilter === 'needs_audit' ? 'Documents needing audit' : isAuditorView && auditFilter === 'audited' ? 'Audited documents' : 'Documents'} ({docs.length})
+            {isAuditorView && auditFilter === 'needs_audit' ? 'Documents needing audit' : isAuditorView && auditFilter === 'audited' ? 'Audited documents' : 'Documents'} ({displayDocs.length})
           </h2>
           <button onClick={load} className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-slate-400 hover:text-white">
             <RefreshCw className="h-3.5 w-3.5" />
@@ -383,31 +596,145 @@ export default function DocumentsPage() {
 
         {loading ? (
           <div className="p-10 text-center text-slate-500 text-sm">Loading...</div>
-        ) : docs.length === 0 ? (
+        ) : displayDocs.length === 0 ? (
           <div className="p-10 text-center">
             <FileText className="mx-auto mb-3 h-10 w-10 text-slate-700" />
             <p className="text-sm text-slate-500">
-              {isAuditorView && auditFilter === 'needs_audit'
+              {isClient && clientSourceFilter === 'requests'
+                ? 'No document requests yet. Click Request Document above — no upload needed.'
+                : isAuditorView && auditFilter === 'needs_audit'
                 ? 'No documents need audit right now.'
                 : isAuditorView && auditFilter === 'audited'
                 ? 'No audited documents yet.'
+                : isClient && clientSourceFilter === 'assigned'
+                ? 'No cargo documents assigned yet. Your document manager will send audited documents here when ready for port clearance.'
                 : 'No documents yet. Upload your first file above.'}
             </p>
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-            {docs.map(doc => (
+            {displayDocs.map(doc => (
               <div key={doc.id}>
+                {doc.isRequestOnly && !isAssignedCargoDoc(doc) && (() => {
+                  const st = requestOnlyStatusLabel(doc);
+                  const border = st.tone === 'indigo' ? 'border-indigo-500/20 bg-indigo-500/5' : st.tone === 'violet' ? 'border-violet-500/20 bg-violet-500/5' : 'border-amber-500/20 bg-amber-500/5';
+                  const titleCls = st.tone === 'indigo' ? 'text-indigo-300' : st.tone === 'violet' ? 'text-violet-300' : 'text-amber-300';
+                  const badgeCls = st.tone === 'indigo' ? 'bg-indigo-500/20 text-indigo-200' : st.tone === 'violet' ? 'bg-violet-500/20 text-violet-200' : 'bg-amber-500/20 text-amber-200';
+                  return (
+                  <div className={`border-b px-5 py-3 ${border}`}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className={`text-xs font-semibold ${titleCls}`}>{st.title}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-400">{st.detail}</p>
+                        {doc.magerwaRequestPort && (
+                          <p className="mt-1 text-[10px] text-slate-500">Port: {doc.magerwaRequestPort}</p>
+                        )}
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-[10px] font-semibold ${badgeCls}`}>{st.badge}</span>
+                    </div>
+                  </div>
+                  );
+                })()}
+                {isClientOwnUpload(doc) && !doc.isRequestOnly && (
+                  <div className="border-b border-amber-500/20 bg-amber-500/5 px-5 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-amber-300">Your upload — request your document</p>
+                        <p className="mt-0.5 text-[11px] text-slate-400">
+                          {doc.magerwaRequestStatus === 'pending'
+                            ? 'Your document request is pending. The auditor and document manager will process it and assign it to you.'
+                            : doc.magerwaRequestStatus === 'fulfilled' || doc.clientReleasedAt
+                            ? 'Your document is ready. Open Assigned for cargo to download.'
+                            : 'Click Request Document to ask for the audited and approved file. You cannot download until it is assigned to you.'}
+                        </p>
+                      </div>
+                      {canRequestDocument(doc) && (
+                        <button
+                          onClick={() => openDocumentRequest(doc)}
+                          disabled={requestingDocId === doc.id || doc.magerwaRequestStatus === 'pending'}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
+                        >
+                          <Send className="h-3.5 w-3.5" />
+                          {requestingDocId === doc.id
+                            ? 'Sending…'
+                            : doc.magerwaRequestStatus === 'pending'
+                            ? 'Request pending'
+                            : 'Request Document'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {isAssignedCargoDoc(doc) && (
+                  <div className="border-b border-emerald-500/20 bg-emerald-500/5 px-5 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-emerald-300">Assigned for cargo clearance</p>
+                        <p className="mt-0.5 text-[11px] text-slate-400">
+                          {doc.cargoPort || doc.arrivalPort
+                            ? <>Present at <span className="text-emerald-200">{doc.cargoPort || doc.arrivalPort}</span> to receive cargo</>
+                            : 'Download and take this document to Magerwa or the port to receive your cargo'}
+                        </p>
+                        {doc.assignmentNote && (
+                          <p className="mt-1 text-[10px] text-slate-500">Note: {doc.assignmentNote}</p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => handleDownloadFile(doc)}
+                          disabled={downloadingFileId === doc.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          {downloadingFileId === doc.id ? 'Downloading…' : 'Download for port'}
+                        </button>
+                        {hasAuditComplete(doc) && !isClient && (
+                          <button
+                            onClick={() => handleDownloadReport(doc)}
+                            disabled={exportingReportId === doc.id}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-white/10 disabled:opacity-60"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            {exportingReportId === doc.id ? 'Generating…' : 'Audit report'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-3 px-5 py-3.5 hover:bg-white/2 transition-colors">
                   <div className="h-9 w-9 rounded-lg bg-indigo-500/15 border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
                     <FileText className="h-4 w-4 text-indigo-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{doc.title || doc.fileName}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-white truncate">{doc.title || doc.fileName}</p>
+                      {doc.isRequestOnly && (
+                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">Request</span>
+                      )}
+                      {isAssignedCargoDoc(doc) && (
+                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Cargo</span>
+                      )}
+                      {doc.magerwaRequested && doc.magerwaRequestStatus === 'pending' && (
+                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">Requested</span>
+                      )}
+                      {doc.magerwaRequestStatus === 'fulfilled' && (
+                        <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Assigned</span>
+                      )}
+                      {(doc.cargoPort || doc.arrivalPort) && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/15 px-2 py-0.5 text-[10px] font-medium text-indigo-300">
+                          <Ship className="h-3 w-3" /> {doc.cargoPort || doc.arrivalPort}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500">
                       {doc.category}
                       {doc.createdAt ? ` · ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
+                      {isAssignedCargoDoc(doc) && doc.assignedAt ? ` · Assigned ${new Date(doc.assignedAt).toLocaleDateString()}` : ''}
                     </p>
+                    {requestMsg[doc.id] && (
+                      <p className="text-[10px] text-amber-400 mt-0.5">{requestMsg[doc.id]}</p>
+                    )}
                     {analysisMsg[doc.id] && (
                       <p className="text-[10px] text-indigo-400 mt-0.5">{analysisMsg[doc.id]}</p>
                     )}
@@ -416,20 +743,55 @@ export default function DocumentsPage() {
                     {doc.status || 'uploaded'}
                   </span>
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    {!doc.isRequestOnly && (
                     <button onClick={() => setViewerDoc(doc)}
                       className="rounded-lg p-1.5 text-slate-500 hover:text-white hover:bg-white/5" title="View Document">
                       <Eye className="h-3.5 w-3.5" />
                     </button>
+                    )}
                     <button onClick={() => toggleExpanded(doc)}
                       className="rounded-lg p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10" title="Details">
                       <FileText className="h-3.5 w-3.5" />
                     </button>
+                    {canRequestDocument(doc) && (
+                      <button
+                        onClick={() => openDocumentRequest(doc)}
+                        disabled={requestingDocId === doc.id || doc.magerwaRequestStatus === 'pending'}
+                        className="inline-flex items-center gap-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                        title="Request Document"
+                      >
+                        <Send className="h-3 w-3" />
+                        {doc.magerwaRequestStatus === 'pending' ? 'Requested' : 'Request Document'}
+                      </button>
+                    )}
                     {role === 'auditor' && (
                     <button onClick={() => handleAnalyze(doc)}
                       className="rounded-lg p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10" title="AI Analyze">
                       <Bot className="h-3.5 w-3.5" />
                     </button>
                     )}
+                    {clientCanDownload(doc) && (
+                    <button
+                      onClick={() => handleDownloadFile(doc)}
+                      disabled={downloadingFileId === doc.id}
+                      className="rounded-lg p-1.5 text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50"
+                      title="Download document file"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </button>
+                    )}
+                    {hasAuditComplete(doc) && !isClient && (
+                    <button
+                      onClick={() => handleDownloadReport(doc)}
+                      disabled={exportingReportId === doc.id}
+                      className="rounded-lg p-1.5 text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 disabled:opacity-50"
+                      title="Download audit analysis report"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                    </button>
+                    )}
+                    {clientCanEdit(doc) && (
+                    <>
                     <button onClick={() => setEditDraft(p => ({ ...p, [doc.id]: { editing: true, title: doc.title || '', category: doc.category || 'policy', description: doc.description || '' } }))}
                       className="rounded-lg p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10" title="Edit">
                       <Edit2 className="h-3.5 w-3.5" />
@@ -438,6 +800,8 @@ export default function DocumentsPage() {
                       className="rounded-lg p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10" title="Delete">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
+                    </>
+                    )}
                   </div>
                 </div>
                 {/* Expanded metadata */}
@@ -445,11 +809,13 @@ export default function DocumentsPage() {
                   <div className="px-5 pb-3 bg-white/2 border-t border-white/5">
                     <div className="grid grid-cols-2 gap-2 pt-3 text-xs sm:grid-cols-4">
                       {[
-                        ['File', doc.fileName || 'â€”'],
-                        ['Format', doc.fileFormat || 'â€”'],
-                        ['Size', doc.fileSize ? `${Math.round(doc.fileSize / 1024)} KB` : 'â€”'],
+                        ['File', doc.fileName || '—'],
+                        ['Format', doc.fileFormat || '—'],
+                        ['Size', doc.fileSize ? `${Math.round(doc.fileSize / 1024)} KB` : '—'],
                         ['Text extraction', getProcessingStatus(doc)],
                         ['Uploader', getUploaderLabel(doc)],
+                        ...(doc.cargoPort || doc.arrivalPort ? [['Port / Magerwa', doc.cargoPort || doc.arrivalPort]] : []),
+                        ...(isAssignedCargoDoc(doc) && doc.assignedAt ? [['Assigned', new Date(doc.assignedAt).toLocaleString()]] : []),
                       ].map(([k, v]) => (
                         <div key={k} className="rounded-lg bg-white/3 border border-white/5 p-2">
                           <p className="text-slate-500 mb-0.5">{k}</p>
@@ -486,10 +852,10 @@ export default function DocumentsPage() {
                           className="w-full rounded-lg border border-amber-500/20 bg-[#0d0f14] px-2 py-2 text-xs text-slate-300 file:mr-3 file:rounded file:border-0 file:bg-amber-500/20 file:px-2 file:py-1 file:text-amber-200" />
                       </div>
                     )}
-                    {doc.metadata?.statusReason && (
+                    {doc.metadata?.statusReason && !isClient && (
                       <p className="mt-2 text-xs text-amber-300 bg-amber-500/10 rounded-lg p-2 border border-amber-500/20">Auditor note: {doc.metadata.statusReason}</p>
                     )}
-                    {(doc.metadata?.latestComplianceScore != null || doc.metadata?.latestAiGeneratedPercentage != null) && (
+                    {!isClient && (doc.metadata?.latestComplianceScore != null || doc.metadata?.latestAiGeneratedPercentage != null) && (
                       <div className="mt-2 grid gap-2 text-xs sm:grid-cols-3">
                         <div className="rounded-lg border border-white/5 bg-white/3 p-2">
                           <p className="mb-0.5 text-slate-500">Audit score</p>
@@ -507,6 +873,7 @@ export default function DocumentsPage() {
                         </div>
                       </div>
                     )}
+                    {!isClient && (
                     <div className="mt-3 rounded-lg border border-white/5 bg-white/3 p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <p className="text-xs font-semibold text-slate-200">Audit results</p>
@@ -573,6 +940,7 @@ export default function DocumentsPage() {
                         <p className="text-xs text-slate-500">No audit result is available yet.</p>
                       )}
                     </div>
+                    )}
                     {role === 'auditor' && (
                       <div className="mt-3 rounded-lg border border-white/5 bg-white/3 p-3">
                         <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -612,6 +980,137 @@ export default function DocumentsPage() {
           </div>
         )}
       </div>
+
+      {/* New document request (no upload) */}
+      {showNewRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-amber-500/20 bg-[#1a1d24] p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-white">Request Document</h3>
+                <p className="mt-1 text-xs text-slate-400">No upload needed — describe what you need</p>
+              </div>
+              <button onClick={() => setShowNewRequest(false)}><X className="h-5 w-5 text-slate-400" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Document title *</label>
+                <input
+                  value={newRequestForm.title}
+                  onChange={e => setNewRequestForm(p => ({ ...p, title: e.target.value }))}
+                  placeholder="e.g. Bill of Lading for Container ABC123"
+                  className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Category</label>
+                <select
+                  value={newRequestForm.category}
+                  onChange={e => setNewRequestForm(p => ({ ...p, category: e.target.value }))}
+                  className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none"
+                >
+                  {CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Description (optional)</label>
+                <textarea
+                  value={newRequestForm.description}
+                  onChange={e => setNewRequestForm(p => ({ ...p, description: e.target.value }))}
+                  rows={2}
+                  placeholder="What document do you need?"
+                  className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Port / location (optional)</label>
+                <input
+                  value={newRequestForm.port}
+                  onChange={e => setNewRequestForm(p => ({ ...p, port: e.target.value }))}
+                  placeholder="e.g. Magerwa, Mombasa Port"
+                  className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Note (optional)</label>
+                <textarea
+                  value={newRequestForm.note}
+                  onChange={e => setNewRequestForm(p => ({ ...p, note: e.target.value }))}
+                  rows={2}
+                  placeholder="Container number, cargo details, urgency…"
+                  className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500/50"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleCreateDocumentRequest}
+                  disabled={submittingNewRequest}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
+                >
+                  <Send className="h-4 w-4" />
+                  {submittingNewRequest ? 'Submitting…' : 'Submit Request'}
+                </button>
+                <button onClick={() => setShowNewRequest(false)} className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-400">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Request Document modal (for uploaded doc) */}
+      {requestDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-amber-500/20 bg-[#1a1d24] p-6 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-white">Request Document</h3>
+                <p className="mt-1 text-xs text-slate-400">{requestDoc.title || requestDoc.fileName}</p>
+              </div>
+              <button onClick={() => setRequestDoc(null)}><X className="h-5 w-5 text-slate-400" /></button>
+            </div>
+            <p className="mb-4 text-xs text-amber-200/80">
+              Submit a request for this document. The auditor will review it and the document manager will assign the approved file to you when ready.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Port / location (optional)</label>
+                <input
+                  value={requestForm.port}
+                  onChange={e => setRequestForm(p => ({ ...p, port: e.target.value }))}
+                  placeholder="e.g. Magerwa, Mombasa Port"
+                  className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500/50"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs text-slate-400">Note (optional)</label>
+                <textarea
+                  value={requestForm.note}
+                  onChange={e => setRequestForm(p => ({ ...p, note: e.target.value }))}
+                  rows={3}
+                  placeholder="Any details for the document manager"
+                  className="w-full rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white outline-none focus:border-amber-500/50"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleDocumentRequest}
+                  disabled={requestingDocId === requestDoc.id}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-60"
+                >
+                  <Send className="h-4 w-4" />
+                  {requestingDocId === requestDoc.id ? 'Sending…' : 'Request Document'}
+                </button>
+                <button
+                  onClick={() => setRequestDoc(null)}
+                  className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-slate-400"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upload modal */}
       {showUpload && (

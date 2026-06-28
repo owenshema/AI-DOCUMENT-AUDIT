@@ -54,7 +54,7 @@ router.get('/me', verifyToken, (req, res) => {
 
 // ── Admin / Auditor ───────────────────────────────────────────────────────────
 router.get('/users',
-  verifyToken, verifyRole(['administrator']), ctrl.listUsers);
+  verifyToken, verifyRole(['administrator', 'document_manager']), ctrl.listUsers);
 router.get('/users/:userId',
   verifyToken, verifyRole(['administrator']), ctrl.getUserById);
 router.patch('/users/:userId/role',

@@ -97,6 +97,24 @@ const schemas = {
     role:       Joi.string().valid('client', 'viewer', 'document_manager', 'auditor', 'administrator').default('client'),
     phone:      Joi.string().max(20).optional().allow(''),
     employeeId: Joi.string().max(50).optional().allow(''),
+  }).custom((value, helpers) => {
+    const role = normalizeRole(value.role || DEFAULT_ROLE);
+    if (role !== 'client') return value;
+
+    const phone = String(value.phone || '').trim();
+    if (!phone || phone.length < 7) {
+      return helpers.error('any.custom', { message: 'Phone number is required for client accounts (at least 7 digits).' });
+    }
+    if (!/^[\d+\s\-().]+$/.test(phone)) {
+      return helpers.error('any.custom', { message: 'Phone number contains invalid characters.' });
+    }
+
+    const dept = String(value.department || '').trim();
+    if (!dept || dept.length < 2 || dept.toLowerCase() === 'general') {
+      return helpers.error('any.custom', { message: 'Company or organization name is required for client accounts.' });
+    }
+
+    return { ...value, phone, department: dept };
   }),
 
   login: Joi.object({

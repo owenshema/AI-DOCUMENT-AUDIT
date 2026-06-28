@@ -12,11 +12,13 @@
     "zustand": "^4.3.9"
   },
   "scripts": {
-    "dev": "craco start",
-    "start": "craco start",
-    "build": "craco build",
+    "dev": "npm run verify:css && craco start",
+    "start": "npm run verify:css && craco start",
+    "build": "npm run verify:css && craco build",
     "test": "craco test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "verify:css": "node scripts/verify-css-setup.js",
+    "fix:css": "node scripts/clear-webpack-cache.js && npm run verify:css"
   },
   "eslintConfig": {
     "extends": [

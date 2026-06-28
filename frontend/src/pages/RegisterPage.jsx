@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { User, Mail, Lock, AlertCircle, Loader, ShieldCheck, Eye, EyeOff, RefreshCw } from 'lucide-react';
+import { User, Mail, Lock, AlertCircle, Loader, ShieldCheck, Eye, EyeOff, RefreshCw, Phone, Building2 } from 'lucide-react';
 import { authAPI } from '../api/auth';
 import useAuthStore from '../store/authStore';
 
@@ -57,7 +57,7 @@ export default function RegisterPage() {
   const [otp, setOtp]       = useState('');
   const [showPw, setShowPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
-  const [form, setForm]     = useState({ fullName: '', email: '', password: '', confirmPassword: '', role: 'client', phone: '' });
+  const [form, setForm]     = useState({ fullName: '', email: '', password: '', confirmPassword: '', role: 'client', phone: '', department: '' });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -74,9 +74,26 @@ export default function RegisterPage() {
     if (form.password.length < 8) return setError('Password must be at least 8 characters');
     if (!/[A-Z]/.test(form.password)) return setError('Password must contain at least one uppercase letter');
     if (!/[0-9]/.test(form.password)) return setError('Password must contain at least one number');
+    if (form.role === 'client') {
+      const phone = form.phone.trim();
+      if (!phone || phone.replace(/\D/g, '').length < 7) {
+        return setError('Phone number is required (at least 7 digits).');
+      }
+      if (!form.department.trim() || form.department.trim().length < 2) {
+        return setError('Company or organization name is required.');
+      }
+    }
     setLoading(true);
     try {
-      const res = await authAPI.register({ fullName: form.fullName, email: form.email, password: form.password, role: form.role, phone: form.phone });
+      const payload = {
+        fullName: form.fullName,
+        email: form.email,
+        password: form.password,
+        role: form.role,
+        phone: form.phone.trim() || undefined,
+        department: form.role === 'client' ? form.department.trim() : 'General',
+      };
+      const res = await authAPI.register(payload);
       setUserId(res.userId);
       if (res.devOTP) setOtp(res.devOTP);
       setStep('verify');
@@ -172,6 +189,27 @@ export default function RegisterPage() {
                     <p className="mt-1 text-[10px] text-amber-200/80">This role requires administrator approval before sign-in.</p>
                   )}
                 </div>
+                {form.role === 'client' && (
+                  <>
+                    <div>
+                      <label className="block text-xs text-white/60 mb-1.5">Phone Number *</label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                        <input name="phone" type="tel" value={form.phone} onChange={handleChange} required
+                          className={inputCls} placeholder="+250 788 123 456" />
+                      </div>
+                      <p className="mt-1 text-[10px] text-white/40">Required so document managers can reach you when cargo is assigned.</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-white/60 mb-1.5">Company / Organization *</label>
+                      <div className="relative">
+                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                        <input name="department" value={form.department} onChange={handleChange} required
+                          className={inputCls} placeholder="Your company or business name" />
+                      </div>
+                    </div>
+                  </>
+                )}
                 <div>
                   <label className="block text-xs text-white/60 mb-1.5">Password *</label>
                   <div className="relative">

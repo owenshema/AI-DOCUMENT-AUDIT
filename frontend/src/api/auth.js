@@ -116,8 +116,18 @@ export const documentAPI = {
     return response.data;
   },
 
-  download: async (id) => {
-    return apiClient.get(`/documents/${id}/download`, { responseType: 'blob' });
+  download: async (id, options = {}) => {
+    const params = options.attachment ? { attachment: '1' } : {};
+    return apiClient.get(`/documents/${id}/download`, { params, responseType: 'blob' });
+  },
+
+  getMarkedView: async (id) => {
+    const response = await apiClient.get(`/documents/${id}/marked-view`);
+    return response.data;
+  },
+
+  downloadMarked: async (id) => {
+    return apiClient.get(`/documents/${id}/marked-download`, { responseType: 'blob' });
   },
 
   previewText: async (id) => {
@@ -130,8 +140,47 @@ export const documentAPI = {
     return response.data;
   },
 
+  createClientDocumentRequest: async (data) => {
+    const response = await apiClient.post('/documents/client-request', data);
+    return response.data;
+  },
+
+  fulfillClientRequest: async (id, formData) => {
+    const response = await apiClient.post(`/documents/${id}/fulfill-request`, formData, {
+      timeout: 120000,
+    });
+    return response.data;
+  },
+
+  getAssignableClients: async () => {
+    const response = await apiClient.get('/documents/clients/assignable');
+    return response.data;
+  },
+
   requestAudit: async (id, data) => {
     const response = await apiClient.post(`/documents/${id}/request-audit`, data);
+    return response.data;
+  },
+
+  assignToClients: async (id, data) => {
+    const response = await apiClient.post(`/documents/${id}/assign`, data);
+    return response.data;
+  },
+
+  requestMagerwaPresentation: async (id, data) => {
+    const response = await apiClient.post(`/documents/${id}/request-document`, data);
+    return response.data;
+  },
+
+  requestDocument: async (id, data) => {
+    const response = await apiClient.post(`/documents/${id}/request-document`, data);
+    return response.data;
+  },
+
+  submitCorrection: async (id, formData) => {
+    const response = await apiClient.post(`/documents/${id}/submit-correction`, formData, {
+      timeout: 120000,
+    });
     return response.data;
   },
 
@@ -184,6 +233,13 @@ export const analysisAPI = {
   getInsights: async (documentId) => {
     const response = await apiClient.get(`/analysis/${documentId}/insights`);
     return response.data;
+  },
+
+  exportReport: async (documentId, format = 'PDF') => {
+    return apiClient.get(`/analysis/${documentId}/export`, {
+      params: { format },
+      responseType: 'blob',
+    });
   },
 
   getStatus: async (documentId) => {

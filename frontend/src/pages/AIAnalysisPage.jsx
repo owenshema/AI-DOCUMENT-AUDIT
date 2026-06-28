@@ -465,7 +465,7 @@ export default function AIAnalysisPage() {
         status: statusDraft.status,
         reason: statusDraft.reason || '',
       });
-      setStatusMsg(`Status updated to "${statusDraft.status.replace(/_/g, ' ')}" — owner notified.`);
+      setStatusMsg(`Returned to document manager — they will assign the approved document to the client for cargo clearance.`);
       if (showPicker) loadExistingDocs(auditFilter);
     } catch (e) {
       setStatusMsg(e?.response?.data?.error || 'Status update failed.');
@@ -706,7 +706,7 @@ export default function AIAnalysisPage() {
                 <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-indigo-500/25 bg-indigo-500/5' : 'border-indigo-200 bg-indigo-50'}`}>
                   <p className={`text-xs font-semibold mb-1 ${text}`}>Auditor decision</p>
                   <p className={`text-[11px] mb-3 ${sub}`}>
-                    Review the analysis and set the document status.
+                    Review the analysis, set status, and return to the document manager. They will assign the approved document back to the uploading client for Magerwa/port clearance.
                     {overallScore >= 60
                       ? ' This document scored 60% or above — you may approve it or request changes.'
                       : ' Scores below 60% may warrant changes requested or rejection.'}
@@ -730,7 +730,7 @@ export default function AIAnalysisPage() {
                       onClick={handleStatusUpdate}
                       disabled={statusSaving}
                       className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-600 disabled:opacity-40">
-                      {statusSaving ? 'Saving...' : 'Save & notify owner'}
+                      {statusSaving ? 'Saving...' : 'Return to document manager'}
                     </button>
                   </div>
                   {statusMsg && (
