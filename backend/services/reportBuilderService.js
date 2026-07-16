@@ -408,7 +408,7 @@ function formatReportAsText(structured) {
   });
 
   lines.push('═'.repeat(72));
-  lines.push('Super International Freight / SIFCO — DocAudit AI');
+  lines.push('Super International Freight / SIFCO — Confidential');
   lines.push('End of Report');
   return lines.join('\n');
 }

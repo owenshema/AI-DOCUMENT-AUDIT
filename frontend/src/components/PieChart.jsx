@@ -153,7 +153,7 @@ export default function PieChart({
           <span className={`text-3xl font-bold tabular-nums ${titleCls}`}>{total}</span>
           <span className={`text-[11px] font-medium uppercase tracking-wider ${subCls}`}>Documents</span>
           {rotating && (
-            <span className={`mt-1 text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-indigo-400/80' : 'text-indigo-500'}`}>
+            <span className={`mt-1 text-[9px] font-semibold uppercase tracking-widest ${isDarkMode ? 'text-blue-400/80' : 'text-indigo-500'}`}>
               Live
             </span>
           )}
@@ -173,7 +173,7 @@ export default function PieChart({
             onBlur={() => setActiveIndex(null)}
             className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left transition-colors ${
               activeIndex === index
-                ? isDarkMode ? 'bg-white/5' : 'bg-indigo-50'
+                ? isDarkMode ? 'bg-white/5' : 'bg-blue-50'
                 : 'bg-transparent'
             }`}
           >

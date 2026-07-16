@@ -24,7 +24,7 @@ export default function AnnotatedDocumentPreview({ documentId, isDarkMode, compa
 
   const text = isDarkMode ? 'text-white' : 'text-gray-900';
   const sub = isDarkMode ? 'text-slate-500' : 'text-gray-500';
-  const box = isDarkMode ? 'bg-[#0d0f14] border-white/10' : 'bg-gray-50 border-gray-200';
+  const box = isDarkMode ? 'bg-[#0b1a2e] border-white/10' : 'bg-gray-50 border-gray-200';
 
   if (loading) {
     return <p className={`text-xs ${sub}`}>Loading document with red marks…</p>;

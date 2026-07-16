@@ -20,7 +20,7 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
 
   if (!hasRole) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0d0f14]">
+      <div className="min-h-screen flex items-center justify-center bg-[#0b1a2e]">
         <div className="text-center max-w-sm">
           <div className="h-16 w-16 rounded-2xl bg-red-500/15 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
             <ShieldOff className="h-8 w-8 text-red-400" />
@@ -31,7 +31,7 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
           </p>
           <p className="text-xs text-slate-600 mb-6">Required: {allowed?.join(' or ')}</p>
           <Link to="/dashboard"
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600">
             <ArrowLeft className="h-4 w-4" /> Back to Dashboard
           </Link>
         </div>

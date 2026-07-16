@@ -15,20 +15,60 @@ const ACTION_LABELS = {
 };
 
 const STATUS_PILL = {
-  success: 'bg-emerald-500/15 text-emerald-400',
+  success: 'bg-blue-600/15 text-blue-400',
   failure: 'bg-red-500/15 text-red-400',
 };
+
+function ymdLocal(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 function defaultStartDate() {
   const d = new Date();
   d.setDate(d.getDate() - 30);
-  return d.toISOString().slice(0, 10);
+  return ymdLocal(d);
+}
+
+function yesterdayYmd() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return ymdLocal(d);
 }
 
 export default function LoginActivityPage() {
   const { isDarkMode } = useAuthStore();
   const [startDate, setStartDate] = useState(defaultStartDate);
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [endDate, setEndDate] = useState(() => ymdLocal(new Date()));
+
+  const applyPreset = (preset) => {
+    if (preset === 'yesterday') {
+      const y = yesterdayYmd();
+      setStartDate(y);
+      setEndDate(y);
+      return;
+    }
+    if (preset === 'today') {
+      const t = ymdLocal(new Date());
+      setStartDate(t);
+      setEndDate(t);
+      return;
+    }
+    if (preset === 'last7') {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 6);
+      setStartDate(ymdLocal(start));
+      setEndDate(ymdLocal(end));
+      return;
+    }
+    if (preset === 'last30') {
+      setStartDate(defaultStartDate());
+      setEndDate(ymdLocal(new Date()));
+    }
+  };
   const [activities, setActivities] = useState([]);
   const [userSummary, setUserSummary] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,12 +76,12 @@ export default function LoginActivityPage() {
   const [err, setErr] = useState('');
   const [generatedAt, setGeneratedAt] = useState(null);
 
-  const card = isDarkMode ? 'bg-[#111318] border-white/8' : 'bg-white border-gray-200 shadow-sm';
+  const card = isDarkMode ? 'bg-[#122a45] border-white/8' : 'bg-white border-gray-200 shadow-sm';
   const text = isDarkMode ? 'text-white' : 'text-gray-900';
   const sub = isDarkMode ? 'text-slate-500' : 'text-gray-500';
   const divider = isDarkMode ? 'divide-white/5' : 'divide-gray-100';
   const inputCls = isDarkMode
-    ? 'border-white/10 bg-[#0d0f14] text-white outline-none'
+    ? 'border-white/10 bg-[#0b1a2e] text-white outline-none'
     : 'border-gray-300 bg-white text-gray-900 outline-none';
 
   const load = useCallback(async () => {
@@ -90,6 +130,27 @@ export default function LoginActivityPage() {
       </p>
 
       <div className={`mb-5 rounded-2xl border p-5 ${card}`}>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {[
+            { id: 'yesterday', label: 'Yesterday' },
+            { id: 'today', label: 'Today' },
+            { id: 'last7', label: 'Last 7 days' },
+            { id: 'last30', label: 'Last 30 days' },
+          ].map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => applyPreset(p.id)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                isDarkMode
+                  ? 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+                  : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap items-end gap-4">
           <div>
             <label className={`mb-1.5 block text-xs font-medium ${sub}`}>From date</label>
@@ -112,7 +173,7 @@ export default function LoginActivityPage() {
           <button
             onClick={load}
             disabled={loading}
-            className="inline-flex items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             Generate report
@@ -141,8 +202,8 @@ export default function LoginActivityPage() {
 
       <div className="mb-5 grid gap-3 sm:grid-cols-3">
         {[
-          { label: 'Total events', value: activities.length, icon: LogIn, tone: 'text-indigo-400' },
-          { label: 'Successful logins', value: successCount, icon: Shield, tone: 'text-emerald-400' },
+          { label: 'Total events', value: activities.length, icon: LogIn, tone: 'text-blue-400' },
+          { label: 'Successful logins', value: successCount, icon: Shield, tone: 'text-blue-400' },
           { label: 'Failed attempts', value: failedCount, icon: Users, tone: 'text-red-400' },
         ].map(item => (
           <div key={item.label} className={`rounded-2xl border p-4 ${card}`}>
@@ -182,7 +243,7 @@ export default function LoginActivityPage() {
                   </td>
                   <td className="px-4 py-3">
                     {u.isActive
-                      ? <span className="text-xs text-emerald-400">Active</span>
+                      ? <span className="text-xs text-blue-400">Active</span>
                       : <span className="text-xs text-red-400">Inactive</span>}
                   </td>
                   <td className={`px-4 py-3 text-xs ${text}`}>{u.lastLoginDate}</td>

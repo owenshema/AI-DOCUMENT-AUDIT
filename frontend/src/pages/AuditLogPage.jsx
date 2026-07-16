@@ -16,8 +16,8 @@ const ACTION_COLORS = {
   login:    'bg-blue-500/15 text-blue-400',
   view:     'bg-slate-500/15 text-slate-400',
   download: 'bg-purple-500/15 text-purple-400',
-  upload:   'bg-emerald-500/15 text-emerald-400',
-  modify:   'bg-amber-500/15 text-amber-400',
+  upload:   'bg-blue-600/15 text-blue-400',
+  modify:   'bg-blue-600/15 text-blue-400',
   delete:   'bg-red-500/15 text-red-400',
   share:    'bg-cyan-500/15 text-cyan-400',
 };
@@ -36,8 +36,8 @@ const MOCK_LOGS = [
 ];
 
 const STATUS_COLORS = {
-  success: 'bg-emerald-500/15 text-emerald-400',
-  blocked: 'bg-amber-500/15 text-amber-400',
+  success: 'bg-blue-600/15 text-blue-400',
+  blocked: 'bg-blue-600/15 text-blue-400',
   failed:  'bg-red-500/15 text-red-400',
 };
 
@@ -61,8 +61,8 @@ const AuditLogPage = () => {
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
           { label: 'Total Events', value: MOCK_LOGS.length, color: 'text-blue-400' },
-          { label: 'Successful', value: MOCK_LOGS.filter((l) => l.status === 'success').length, color: 'text-emerald-400' },
-          { label: 'Blocked', value: MOCK_LOGS.filter((l) => l.status === 'blocked').length, color: 'text-amber-400' },
+          { label: 'Successful', value: MOCK_LOGS.filter((l) => l.status === 'success').length, color: 'text-blue-400' },
+          { label: 'Blocked', value: MOCK_LOGS.filter((l) => l.status === 'blocked').length, color: 'text-blue-400' },
           { label: 'Failed / Anomalies', value: MOCK_LOGS.filter((l) => l.status === 'failed').length, color: 'text-red-400' },
         ].map((c) => (
           <div key={c.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
@@ -74,10 +74,10 @@ const AuditLogPage = () => {
 
       {/* Anomaly alerts */}
       {anomalies.length > 0 && (
-        <div className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+        <div className="mb-6 rounded-xl border border-blue-400/30 bg-blue-600/5 p-4">
           <div className="mb-3 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-400" />
-            <h3 className="text-sm font-semibold text-amber-400">Anomaly Detection — {anomalies.length} Alert{anomalies.length > 1 ? 's' : ''}</h3>
+            <AlertTriangle className="h-4 w-4 text-blue-400" />
+            <h3 className="text-sm font-semibold text-blue-400">Anomaly Detection — {anomalies.length} Alert{anomalies.length > 1 ? 's' : ''}</h3>
           </div>
           <div className="space-y-2">
             {anomalies.map((a) => (

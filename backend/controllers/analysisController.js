@@ -827,7 +827,7 @@ const exportDocumentAnalysis = async (req, res) => {
       const lines = [
         '='.repeat(60),
         'SIFCO — SUPER INTERNATIONAL FREIGHT',
-        'DocAudit AI  ·  DOCUMENT AUDIT ANALYSIS',
+        'DOCUMENT AUDIT ANALYSIS',
         '='.repeat(60),
         '',
         `Document    : ${document.title || document.fileName}`,
@@ -835,7 +835,6 @@ const exportDocumentAnalysis = async (req, res) => {
         `Compliance  : ${results.compliance_score ?? meta.latestComplianceScore ?? '—'}%`,
         `Overall     : ${results.overall_audit_score ?? meta.latestOverallAuditScore ?? '—'}%`,
         `Risk        : ${results.risk_level || analysis.riskFactors?.level || '—'}`,
-        `Prepared By : ${preparedBy}`,
         `Generated   : ${new Date().toLocaleString()}`,
         '',
         '='.repeat(60),
@@ -845,7 +844,7 @@ const exportDocumentAnalysis = async (req, res) => {
         analysis.summary || meta.latestAuditSummary || 'No summary available.',
         '',
         '='.repeat(60),
-        `Super International Freight / SIFCO — DocAudit AI  |  Exported ${new Date().toLocaleString()}`,
+        `Super International Freight / SIFCO — Confidential  |  Exported ${new Date().toLocaleString()}`,
       ];
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="audit_analysis_${documentId.slice(0, 8)}.txt"`);

@@ -24,7 +24,7 @@ const OTPInput = ({ value, onChange }) => {
       {digits.map((d, i) => (
         <input key={i} ref={refs[i]} type="text" inputMode="numeric" maxLength={1}
           value={d} onChange={() => {}} onKeyDown={e => handleKey(i, e)}
-          className="h-11 w-9 rounded-xl border border-white/15 bg-[#0d0f14] text-center text-base font-bold text-white outline-none focus:border-indigo-500 transition-colors" />
+          className="h-11 w-9 rounded-xl border border-white/15 bg-[#0b1a2e] text-center text-base font-bold text-white outline-none focus:border-indigo-500 transition-colors" />
       ))}
     </div>
   );
@@ -106,14 +106,14 @@ export default function TwoFactorPage() {
         {/* Status card */}
         <div className={`mb-5 rounded-2xl border p-5 flex items-center gap-4 ${
           user?.mfaEnabled
-            ? 'border-emerald-500/20 bg-emerald-500/5'
-            : 'border-white/8 bg-[#111318]'
+            ? 'border-blue-400/30 bg-blue-600/5'
+            : 'border-white/8 bg-[#122a45]'
         }`}>
           <div className={`h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-            user?.mfaEnabled ? 'bg-emerald-500/20' : 'bg-white/5'
+            user?.mfaEnabled ? 'bg-blue-600/20' : 'bg-white/5'
           }`}>
             {user?.mfaEnabled
-              ? <ShieldCheck className="h-6 w-6 text-emerald-400" />
+              ? <ShieldCheck className="h-6 w-6 text-blue-400" />
               : <ShieldOff className="h-6 w-6 text-slate-500" />}
           </div>
           <div>
@@ -129,9 +129,9 @@ export default function TwoFactorPage() {
         </div>
 
         {success && (
-          <div className="mb-4 flex gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
-            <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-emerald-400">{success}</p>
+          <div className="mb-4 flex gap-2 rounded-xl border border-blue-400/30 bg-blue-600/10 p-3">
+            <CheckCircle2 className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-400">{success}</p>
           </div>
         )}
         {error && (
@@ -143,7 +143,7 @@ export default function TwoFactorPage() {
 
         {/* ── Idle state ── */}
         {step === 'idle' && (
-          <div className="rounded-2xl border border-white/8 bg-[#111318] p-5 space-y-3">
+          <div className="rounded-2xl border border-white/8 bg-[#122a45] p-5 space-y-3">
             {!user?.mfaEnabled ? (
               <>
                 <h2 className="text-sm font-semibold text-white">Enable Authenticator App (TOTP)</h2>
@@ -151,7 +151,7 @@ export default function TwoFactorPage() {
                   Use Google Authenticator, Authy, or any TOTP app. After setup, you'll need your app code every time you log in.
                 </p>
                 <button onClick={handleSetup} disabled={loading}
-                  className="flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60">
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60">
                   {loading ? <Loader className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
                   Set up 2FA
                 </button>
@@ -173,20 +173,20 @@ export default function TwoFactorPage() {
 
         {/* ── Setup: show QR ── */}
         {step === 'setup' && (
-          <div className="rounded-2xl border border-white/8 bg-[#111318] p-5">
+          <div className="rounded-2xl border border-white/8 bg-[#122a45] p-5">
             <h2 className="text-sm font-semibold text-white mb-3">Scan with your authenticator app</h2>
             <div className="flex justify-center mb-4">
               <img src={qrCode} alt="QR Code" className="h-44 w-44 rounded-xl border border-white/10 bg-white p-2" />
             </div>
             <p className="text-xs text-slate-500 mb-1">Or enter this secret manually:</p>
-            <code className="block rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-indigo-300 font-mono break-all mb-4">
+            <code className="block rounded-lg bg-white/5 border border-white/10 px-3 py-2 text-xs text-blue-300 font-mono break-all mb-4">
               {secret}
             </code>
             <p className="text-xs text-slate-400 mb-2">After scanning, enter the 6-digit code from your app:</p>
             <OTPInput value={token} onChange={setToken} />
             <div className="flex gap-2">
               <button onClick={handleConfirm} disabled={loading || token.length !== 6}
-                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60">
+                className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60">
                 {loading ? <Loader className="h-4 w-4 animate-spin" /> : 'Confirm & Enable'}
               </button>
               <button onClick={() => { setStep('idle'); setToken(''); setError(''); }}
@@ -199,9 +199,9 @@ export default function TwoFactorPage() {
 
         {/* ── Email SMTP Test (admin only) ── */}
         {user?.role === 'administrator' && (
-          <div className="mt-5 rounded-2xl border border-white/8 bg-[#111318] p-5">
+          <div className="mt-5 rounded-2xl border border-white/8 bg-[#122a45] p-5">
             <div className="flex items-center gap-2 mb-3">
-              <Mail className="h-4 w-4 text-indigo-400" />
+              <Mail className="h-4 w-4 text-blue-400" />
               <h2 className="text-sm font-semibold text-white">Email / SMTP Configuration Test</h2>
             </div>
             <p className="text-xs text-slate-500 mb-4 leading-relaxed">
@@ -210,14 +210,14 @@ export default function TwoFactorPage() {
             </p>
 
             {/* Gmail App Password guide */}
-            <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-slate-400 leading-relaxed">
-              <p className="font-semibold text-amber-300 mb-1">📧 Gmail setup for olliverdusabe@gmail.com:</p>
+            <div className="mb-4 rounded-xl border border-blue-400/30 bg-blue-600/5 p-3 text-xs text-slate-400 leading-relaxed">
+              <p className="font-semibold text-blue-300 mb-1">📧 Gmail setup for olliverdusabe@gmail.com:</p>
               <ol className="list-decimal list-inside space-y-1">
                 <li>Sign in as <span className="text-white">olliverdusabe@gmail.com</span></li>
-                <li>Go to <span className="text-amber-300">myaccount.google.com/security</span> → enable <strong className="text-white">2-Step Verification</strong></li>
-                <li>Go to <span className="text-amber-300">myaccount.google.com/apppasswords</span></li>
+                <li>Go to <span className="text-blue-300">myaccount.google.com/security</span> → enable <strong className="text-white">2-Step Verification</strong></li>
+                <li>Go to <span className="text-blue-300">myaccount.google.com/apppasswords</span></li>
                 <li>App: <strong className="text-white">Mail</strong> → Device: <strong className="text-white">Windows Computer</strong> → <strong className="text-white">Generate</strong></li>
-                <li>Copy the 16-character password and paste it in <code className="bg-white/5 px-1 rounded">backend/.env</code> as <code className="bg-white/5 px-1 rounded text-emerald-300">SMTP_PASSWORD=xxxx xxxx xxxx xxxx</code></li>
+                <li>Copy the 16-character password and paste it in <code className="bg-white/5 px-1 rounded">backend/.env</code> as <code className="bg-white/5 px-1 rounded text-blue-300">SMTP_PASSWORD=xxxx xxxx xxxx xxxx</code></li>
                 <li>Restart the backend server</li>
               </ol>
             </div>
@@ -228,12 +228,12 @@ export default function TwoFactorPage() {
                 value={testEmail}
                 onChange={e => setTestEmail(e.target.value)}
                 placeholder="Send test OTP to this email..."
-                className="flex-1 rounded-xl border border-white/10 bg-[#0d0f14] px-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-indigo-500/60"
+                className="flex-1 rounded-xl border border-white/10 bg-[#0b1a2e] px-3 py-2.5 text-sm text-white placeholder-slate-600 outline-none focus:border-blue-400/30"
               />
               <button
                 onClick={handleTestEmail}
                 disabled={testLoading || !testEmail}
-                className="flex items-center gap-2 rounded-xl bg-indigo-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60 flex-shrink-0"
+                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60 flex-shrink-0"
               >
                 {testLoading ? <Loader className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 {testLoading ? 'Sending...' : 'Send Test'}
@@ -243,15 +243,15 @@ export default function TwoFactorPage() {
             {testResult && (
               <div className={`mt-3 rounded-xl border p-3 ${
                 testResult.ok
-                  ? 'border-emerald-500/20 bg-emerald-500/10'
+                  ? 'border-blue-400/30 bg-blue-600/10'
                   : 'border-red-500/20 bg-red-500/10'
               }`}>
                 <div className="flex items-start gap-2">
                   {testResult.ok
-                    ? <CheckCircle2 className="h-4 w-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    ? <CheckCircle2 className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
                     : <AlertCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />}
                   <div>
-                    <p className={`text-xs font-semibold ${testResult.ok ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <p className={`text-xs font-semibold ${testResult.ok ? 'text-blue-400' : 'text-red-400'}`}>
                       {testResult.message}
                     </p>
                     {testResult.mode && (
@@ -261,7 +261,7 @@ export default function TwoFactorPage() {
                       </p>
                     )}
                     {testResult.hint && (
-                      <p className="text-[10px] text-amber-400 mt-1">{testResult.hint}</p>
+                      <p className="text-[10px] text-blue-400 mt-1">{testResult.hint}</p>
                     )}
                   </div>
                 </div>

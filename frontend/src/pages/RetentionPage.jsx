@@ -25,7 +25,7 @@ const ARCHIVED = [
 
 const STATUS_COLORS = {
   critical:  'bg-red-500/15 text-red-400 border-red-500/20',
-  expiring:  'bg-amber-500/15 text-amber-400 border-amber-500/20',
+  expiring:  'bg-blue-600/15 text-blue-400 border-blue-400/30',
   scheduled: 'bg-blue-500/15 text-blue-400 border-blue-500/20',
 };
 
@@ -43,9 +43,9 @@ const RetentionPage = () => {
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[
           { label: 'Active Policies', value: RETENTION_POLICIES.length, icon: Archive, color: 'text-blue-400' },
-          { label: 'Expiring Soon', value: EXPIRING_DOCS.filter((d) => d.status !== 'scheduled').length, icon: AlertTriangle, color: 'text-amber-400' },
+          { label: 'Expiring Soon', value: EXPIRING_DOCS.filter((d) => d.status !== 'scheduled').length, icon: AlertTriangle, color: 'text-blue-400' },
           { label: 'On Legal Hold', value: RETENTION_POLICIES.filter((p) => p.legalHold).length, icon: Lock, color: 'text-red-400' },
-          { label: 'Archived Docs', value: ARCHIVED.length, icon: CheckCircle2, color: 'text-emerald-400' },
+          { label: 'Archived Docs', value: ARCHIVED.length, icon: CheckCircle2, color: 'text-blue-400' },
         ].map((c) => (
           <div key={c.label} className="rounded-xl border border-white/10 bg-white/5 p-4">
             <c.icon className={`mb-2 h-4 w-4 ${c.color}`} />
@@ -56,7 +56,7 @@ const RetentionPage = () => {
       </div>
 
       {actionMsg && (
-        <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-400">
+        <div className="mb-4 rounded-lg border border-blue-400/30 bg-blue-600/10 px-4 py-2 text-sm text-blue-400">
           {actionMsg}
         </div>
       )}

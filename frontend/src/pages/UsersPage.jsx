@@ -8,10 +8,10 @@ import { formatRoleLabel } from '../config/roles';
 const ROLES = ['administrator', 'auditor', 'document_manager', 'client'];
 
 const ROLE_COLORS = {
-  administrator:    'bg-indigo-500/15 text-indigo-400',
-  auditor:          'bg-blue-500/15 text-blue-400',
-  document_manager: 'bg-emerald-500/15 text-emerald-400',
-  client: 'bg-slate-500/15 text-slate-400',
+  administrator:    'bg-blue-600/15 text-blue-400',
+  auditor:          'bg-blue-600/15 text-blue-400',
+  document_manager: 'bg-blue-600/15 text-blue-400',
+  client:           'bg-blue-600/15 text-blue-400',
 };
 
 const PERMISSIONS = {
@@ -32,14 +32,14 @@ export default function UsersPage() {
   const [msg, setMsg]             = useState('');
   const [showPerms, setShowPerms] = useState(true);
 
-  const card    = isDarkMode ? 'bg-[#111318] border-white/8'  : 'bg-white border-gray-200 shadow-sm';
+  const card    = isDarkMode ? 'bg-[#122a45] border-white/8'  : 'bg-white border-gray-200 shadow-sm';
   const text    = isDarkMode ? 'text-white'    : 'text-gray-900';
   const sub     = isDarkMode ? 'text-slate-500': 'text-gray-500';
   const divider = isDarkMode ? 'divide-white/5': 'divide-gray-100';
   const inputCls = isDarkMode
-    ? 'border-white/10 bg-[#0d0f14] text-white outline-none'
+    ? 'border-white/10 bg-[#0b1a2e] text-white outline-none'
     : 'border-gray-300 bg-white text-gray-900 outline-none';
-  const modalBg = isDarkMode ? 'bg-[#1a1d24] border-white/10' : 'bg-white border-gray-200';
+  const modalBg = isDarkMode ? 'bg-[#122a45] border-white/10' : 'bg-white border-gray-200';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,7 +94,7 @@ export default function UsersPage() {
       <div className={`mb-5 rounded-2xl border ${card}`}>
         <div className={`flex items-center justify-between px-5 py-4 border-b ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
           <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-indigo-400" />
+            <Shield className="h-4 w-4 text-blue-400" />
             <h2 className={`text-sm font-semibold ${text}`}>Role Permissions</h2>
           </div>
           <button onClick={() => setShowPerms(p => !p)} className={`text-xs ${sub} hover:${text}`}>
@@ -131,7 +131,7 @@ export default function UsersPage() {
         </div>
 
         {msg && (
-          <div className="mx-5 mt-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20 px-3 py-2 text-xs text-indigo-400">
+          <div className="mx-5 mt-3 rounded-lg bg-blue-600/10 border border-blue-400/30 px-3 py-2 text-xs text-blue-400">
             {msg}
           </div>
         )}
@@ -155,7 +155,7 @@ export default function UsersPage() {
                   <tr key={u.id} className={`transition-colors ${isDarkMode ? 'hover:bg-white/2' : 'hover:bg-gray-50'}`}>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className="h-7 w-7 rounded-full bg-indigo-500/20 flex items-center justify-center text-[10px] font-bold text-indigo-400 flex-shrink-0">
+                        <div className="h-7 w-7 rounded-full bg-blue-600/20 flex items-center justify-center text-[10px] font-bold text-blue-400 flex-shrink-0">
                           {(u.fullName || 'U').split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
                         <span className={`font-medium ${text}`}>{u.fullName}</span>
@@ -169,14 +169,14 @@ export default function UsersPage() {
                     </td>
                     <td className="px-5 py-3">
                       {u.isActive
-                        ? <span className="flex items-center gap-1 text-xs text-emerald-400"><CheckCircle2 className="h-3 w-3" /> Active</span>
+                        ? <span className="flex items-center gap-1 text-xs text-blue-400"><CheckCircle2 className="h-3 w-3" /> Active</span>
                         : <span className="flex items-center gap-1 text-xs text-red-400"><XCircle className="h-3 w-3" /> Inactive</span>}
                     </td>
                     <td className="px-5 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                        u.approvalStatus === 'pending' ? 'bg-amber-500/15 text-amber-400'
+                        u.approvalStatus === 'pending' ? 'bg-blue-600/15 text-blue-400'
                         : u.approvalStatus === 'rejected' ? 'bg-red-500/15 text-red-400'
-                        : 'bg-emerald-500/15 text-emerald-400'
+                        : 'bg-blue-600/15 text-blue-400'
                       }`}>
                         {u.approvalStatus || 'approved'}
                       </span>
@@ -199,7 +199,7 @@ export default function UsersPage() {
                           <button onClick={() => handleToggle(u)}
                             className={`rounded-lg px-2 py-1 text-[10px] font-medium border transition-colors ${u.isActive
                               ? 'bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500/20'
-                              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20'}`}>
+                              : 'bg-blue-600/10 border-blue-400/30 text-blue-400 hover:bg-blue-600/20'}`}>
                             {u.isActive ? 'Deactivate' : u.approvalStatus === 'pending' ? 'Approve' : 'Activate'}
                           </button>
                           {u.id !== me?.id && u.role !== 'administrator' && (
@@ -228,7 +228,7 @@ export default function UsersPage() {
                 <Trash2 className="h-5 w-5 text-red-400" />
               </div>
               <div>
-                <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDarkMode ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                <p className={`text-[10px] font-semibold uppercase tracking-wider ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                   AI Audit Document System
                 </p>
                 <h3 className={`text-base font-semibold ${text}`}>Delete User</h3>
@@ -276,7 +276,7 @@ export default function UsersPage() {
               {ROLES.map(r => <option key={r} value={r}>{formatRoleLabel(r)}</option>)}
             </select>
             <div className="flex gap-2">
-              <button onClick={handleUpdateRole} className="flex-1 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">Update</button>
+              <button onClick={handleUpdateRole} className="flex-1 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-600">Update</button>
               <button onClick={() => setEditUser(null)} className={`flex-1 rounded-xl border py-2.5 text-sm transition-colors ${isDarkMode ? 'border-white/10 bg-white/5 text-slate-400 hover:text-white' : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'}`}>Cancel</button>
             </div>
           </div>

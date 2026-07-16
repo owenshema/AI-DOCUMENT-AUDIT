@@ -3,9 +3,9 @@ import AppShell from '../components/AppShell';
 import { Lock, Shield, Eye, AlertTriangle, CheckCircle2, Users, Key, FileText } from 'lucide-react';
 
 const CLASSIFICATION_LEVELS = [
-  { label: 'Public', color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20', count: 24 },
+  { label: 'Public', color: 'bg-blue-600/15 text-blue-400 border-blue-400/30', count: 24 },
   { label: 'Internal', color: 'bg-blue-500/15 text-blue-400 border-blue-500/20', count: 87 },
-  { label: 'Confidential', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20', count: 43 },
+  { label: 'Confidential', color: 'bg-blue-600/15 text-blue-400 border-blue-400/30', count: 43 },
   { label: 'Restricted', color: 'bg-red-500/15 text-red-400 border-red-500/20', count: 12 },
 ];
 
@@ -24,7 +24,7 @@ const DLP_ALERTS = [
 
 const SEVERITY_COLORS = {
   high:   'bg-red-500/15 text-red-400 border-red-500/20',
-  medium: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+  medium: 'bg-blue-600/15 text-blue-400 border-blue-400/30',
   low:    'bg-blue-500/15 text-blue-400 border-blue-500/20',
 };
 
@@ -80,12 +80,12 @@ const SecurityPage = () => {
                         </td>
                         <td className="px-4 py-3 text-center">
                           {doc.encrypted
-                            ? <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-400" />
+                            ? <CheckCircle2 className="mx-auto h-4 w-4 text-blue-400" />
                             : <span className="text-xs text-slate-600">—</span>}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {doc.watermark
-                            ? <CheckCircle2 className="mx-auto h-4 w-4 text-emerald-400" />
+                            ? <CheckCircle2 className="mx-auto h-4 w-4 text-blue-400" />
                             : <span className="text-xs text-slate-600">—</span>}
                         </td>
                         <td className="px-4 py-3 text-xs text-slate-400">{doc.downloads}</td>
@@ -108,7 +108,7 @@ const SecurityPage = () => {
               { label: 'Encrypted Documents', value: '55 / 166', icon: Key, color: 'text-[#38bdf8]' },
               { label: 'Watermarked', value: '12 / 166', icon: Eye, color: 'text-purple-400' },
               { label: 'Restricted Access', value: '12 docs', icon: Lock, color: 'text-red-400' },
-              { label: 'Active DLP Alerts', value: '3', icon: AlertTriangle, color: 'text-amber-400' },
+              { label: 'Active DLP Alerts', value: '3', icon: AlertTriangle, color: 'text-blue-400' },
             ].map((item) => (
               <div key={item.label} className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">

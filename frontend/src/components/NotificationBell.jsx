@@ -56,7 +56,7 @@ export default function NotificationBell({ isDarkMode }) {
     ? 'text-slate-400 hover:bg-white/[0.06] hover:text-white'
     : 'text-gray-500 hover:bg-gray-100';
   const panelClass = isDarkMode
-    ? 'bg-[#212121] shadow-2xl shadow-black/40'
+    ? 'bg-[#122a45] shadow-2xl shadow-black/40'
     : 'border border-gray-200 bg-white shadow-xl';
   const textClass = isDarkMode ? 'text-white' : 'text-gray-900';
   const subtextClass = isDarkMode ? 'text-slate-400' : 'text-gray-500';
@@ -70,7 +70,7 @@ export default function NotificationBell({ isDarkMode }) {
       >
         <Bell className="h-4 w-4" />
         {unreadCount > 0 && (
-          <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-indigo-500 px-0.5 text-[9px] font-bold text-white">
+          <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-600 px-0.5 text-[9px] font-bold text-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -81,7 +81,7 @@ export default function NotificationBell({ isDarkMode }) {
           <div className={`flex items-center justify-between px-4 py-3 ${isDarkMode ? '' : 'border-b border-gray-100'}`}>
             <p className={`text-sm font-semibold ${textClass}`}>Notifications</p>
             {unreadCount > 0 && (
-              <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-[10px] font-semibold text-indigo-400">
+              <span className="rounded-full bg-blue-600/20 px-2 py-0.5 text-[10px] font-semibold text-blue-400">
                 {unreadCount} unread
               </span>
             )}
@@ -102,9 +102,9 @@ export default function NotificationBell({ isDarkMode }) {
                   onClick={() => handleClick(n)}
                   className={`flex w-full items-start gap-3 px-4 py-3 text-left transition-colors ${
                     isDarkMode ? 'hover:bg-white/[0.05]' : 'border-b border-gray-50 hover:bg-gray-50 last:border-0'
-                  } ${n.status === 'unread' ? (isDarkMode ? 'bg-white/[0.04]' : 'bg-indigo-50/50') : ''}`}
+                  } ${n.status === 'unread' ? (isDarkMode ? 'bg-white/[0.04]' : 'bg-blue-50/50') : ''}`}
                 >
-                  <div className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${n.status === 'unread' ? 'bg-indigo-500' : 'bg-transparent'}`} />
+                  <div className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${n.status === 'unread' ? 'bg-blue-600' : 'bg-transparent'}`} />
                   <div className="min-w-0 flex-1">
                     <p className={`truncate text-xs font-semibold ${textClass}`}>{n.subject}</p>
                     <p className={`mt-0.5 line-clamp-2 text-xs ${subtextClass}`}>{n.message}</p>

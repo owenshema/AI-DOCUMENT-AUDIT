@@ -117,7 +117,7 @@ export default function ForgotPasswordPage() {
                     className={inputCls} placeholder="you@sifco.local" />
                 </div>
                 <button type="submit" disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors">
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors">
                   {loading ? <><Loader className="h-4 w-4 animate-spin" /> Sending...</> : 'Send Reset Code'}
                 </button>
               </form>
@@ -127,12 +127,12 @@ export default function ForgotPasswordPage() {
           {step === 'otp' && (
             <>
               <div className="text-center mb-4">
-                <ShieldCheck className="mx-auto h-8 w-8 text-indigo-300 mb-2" />
+                <ShieldCheck className="mx-auto h-8 w-8 text-blue-300 mb-2" />
                 <p className="text-sm text-white/80">Enter the 6-digit code sent to <span className="text-white">{email}</span></p>
               </div>
               <OTPInput value={otp} onChange={setOtp} />
               <button onClick={handleVerifyOTP} disabled={loading || otp.length !== 6}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors">
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors">
                 {loading ? <><Loader className="h-4 w-4 animate-spin" /> Verifying...</> : 'Verify Code'}
               </button>
             </>
@@ -156,7 +156,7 @@ export default function ForgotPasswordPage() {
                   </button>
                 </div>
                 <button type="submit" disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors">
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors">
                   {loading ? <><Loader className="h-4 w-4 animate-spin" /> Resetting...</> : 'Reset Password'}
                 </button>
               </form>

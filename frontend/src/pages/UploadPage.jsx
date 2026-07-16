@@ -12,8 +12,8 @@ const UPLOAD_HISTORY = [
 ];
 
 const STATUS_COLORS = {
-  indexed:    'bg-emerald-500/15 text-emerald-400',
-  processing: 'bg-amber-500/15 text-amber-400',
+  indexed:    'bg-blue-600/15 text-blue-400',
+  processing: 'bg-blue-600/15 text-blue-400',
   failed:     'bg-red-500/15 text-red-400',
 };
 
@@ -149,9 +149,9 @@ const UploadPage = () => {
                 {results.map((r, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs">
                     {r.status === 'success'
-                      ? <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      ? <CheckCircle2 className="h-4 w-4 text-blue-400" />
                       : <AlertCircle className="h-4 w-4 text-red-400" />}
-                    <span className={r.status === 'success' ? 'text-emerald-400' : 'text-red-400'}>{r.name}</span>
+                    <span className={r.status === 'success' ? 'text-blue-400' : 'text-red-400'}>{r.name}</span>
                     <span className="text-slate-500">{r.status === 'success' ? '— indexed successfully' : '— upload failed'}</span>
                   </div>
                 ))}

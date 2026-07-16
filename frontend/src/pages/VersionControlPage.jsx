@@ -21,9 +21,9 @@ const MOCK_VERSIONS = [
 ];
 
 const STATUS_COLORS = {
-  approved: 'bg-emerald-500/15 text-emerald-400',
+  approved: 'bg-blue-600/15 text-blue-400',
   reviewed: 'bg-blue-500/15 text-blue-400',
-  draft:    'bg-amber-500/15 text-amber-400',
+  draft:    'bg-blue-600/15 text-blue-400',
 };
 
 const VersionControlPage = () => {
@@ -65,7 +65,7 @@ const VersionControlPage = () => {
         {/* Version timeline */}
         <div className="lg:col-span-2">
           {actionMsg && (
-            <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-400">
+            <div className="mb-4 rounded-lg border border-blue-400/30 bg-blue-600/10 px-4 py-2 text-sm text-blue-400">
               {actionMsg}
             </div>
           )}
@@ -112,7 +112,7 @@ const VersionControlPage = () => {
                       <p>— Section 4.2 compliance clause missing</p>
                       <p>— Annexure not included</p>
                     </div>
-                    <div className="rounded bg-emerald-500/10 p-3 text-emerald-400">
+                    <div className="rounded bg-blue-600/10 p-3 text-blue-400">
                       <p className="mb-1 font-medium">v{compareB} (newer)</p>
                       <p>+ Section 4.2 compliance clause added</p>
                       <p>+ Annexure A appended</p>
@@ -162,13 +162,13 @@ const VersionControlPage = () => {
                       {idx !== 0 && (
                         <button
                           onClick={() => handleRestore(ver.v)}
-                          className="flex items-center gap-1 rounded px-2 py-1 text-[10px] bg-amber-500/15 text-amber-400 hover:bg-amber-500/25"
+                          className="flex items-center gap-1 rounded px-2 py-1 text-[10px] bg-blue-600/15 text-blue-400 hover:bg-blue-600/25"
                         >
                           <RotateCcw className="h-3 w-3" /> Restore
                         </button>
                       )}
                       {idx === 0 && (
-                        <span className="flex items-center gap-1 rounded px-2 py-1 text-[10px] bg-emerald-500/15 text-emerald-400">
+                        <span className="flex items-center gap-1 rounded px-2 py-1 text-[10px] bg-blue-600/15 text-blue-400">
                           <CheckCircle2 className="h-3 w-3" /> Current
                         </span>
                       )}

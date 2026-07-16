@@ -9,7 +9,9 @@ const getRoleReport = async (req, res) => {
     var reportId = req.params.reportId;
     var role = normalizeRole(req.user?.role);
 
-    if (!roleReportService.canAccessReport(reportId, role)) {
+    // Activity report is personal — every authenticated user may open their own
+    var allowed = reportId === 'activity_report' || roleReportService.canAccessReport(reportId, role);
+    if (!allowed) {
       return res.status(403).json({ error: 'You do not have access to this report.' });
     }
 
@@ -32,7 +34,8 @@ const exportRoleReport = async (req, res) => {
     var reportId = req.params.reportId;
     var role = normalizeRole(req.user?.role);
 
-    if (!roleReportService.canAccessReport(reportId, role)) {
+    var allowed = reportId === 'activity_report' || roleReportService.canAccessReport(reportId, role);
+    if (!allowed) {
       return res.status(403).json({ error: 'You do not have access to this report.' });
     }
 

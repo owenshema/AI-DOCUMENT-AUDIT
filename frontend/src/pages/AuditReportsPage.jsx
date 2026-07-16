@@ -12,7 +12,7 @@ import { exportHintForRole } from '../config/reportExports';
 
 function ReportCard({ report, isDarkMode, onClick }) {
   const card = isDarkMode
-    ? 'bg-[#111318] border-white/8 hover:border-white/20 hover:bg-white/[0.03]'
+    ? 'bg-[#122a45] border-white/8 hover:border-white/20 hover:bg-white/[0.03]'
     : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md';
 
   return (
@@ -33,7 +33,7 @@ function ReportCard({ report, isDarkMode, onClick }) {
 function RoleSection({ section, isDarkMode, onSelectReport }) {
   const reports = reportsForSection(section.id);
   const headerBg = isDarkMode ? section.headerClass : section.headerLight;
-  const headerText = isDarkMode ? 'text-white' : section.id === 'client' ? 'text-blue-800' : section.id === 'document_manager' ? 'text-emerald-800' : section.id === 'auditor' ? 'text-orange-800' : 'text-violet-800';
+  const headerText = isDarkMode ? 'text-white' : 'text-blue-800';
   const tagBg = isDarkMode ? 'bg-white/15 text-white/90' : 'bg-black/5 text-gray-700';
 
   return (
@@ -49,7 +49,7 @@ function RoleSection({ section, isDarkMode, onSelectReport }) {
           {section.scope}
         </p>
       </div>
-      <div className={`grid gap-3 p-4 sm:grid-cols-2 ${isDarkMode ? 'bg-[#0d0f14]' : 'bg-gray-50/80'}`}>
+      <div className={`grid gap-3 p-4 sm:grid-cols-2 ${isDarkMode ? 'bg-[#0b1a2e]' : 'bg-gray-50/80'}`}>
         {reports.map(function (report) {
           return (
             <ReportCard
@@ -80,14 +80,14 @@ export default function AuditReportsPage() {
   const scopeLabel = isPersonalReportRole
     ? 'View your uploaded documents and their audit status. You can download this report as PDF only.'
     : role === 'auditor'
-      ? 'Your assigned audit queue and personal completion rate. Export as PDF or Excel.'
-      : 'User activity history, all registered users, and every document upload status. Export reports as PDF only.';
+      ? 'Your audit queue, completion rate, and activity report. Export as PDF or Excel.'
+      : 'Activity report, user history, all users, and document upload status. Export reports as PDF only.';
 
   return (
     <AppShell title={isOwnerRole(role) ? 'My Reports' : 'Audit Reports'}>
-      <div className={`mb-6 rounded-2xl border px-5 py-4 ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/25' : 'bg-indigo-50 border-indigo-100'}`}>
+      <div className={`mb-6 rounded-2xl border px-5 py-4 ${isDarkMode ? 'bg-blue-600/10 border-blue-400/30' : 'bg-blue-50 border-blue-100'}`}>
         <div className="flex flex-wrap items-center gap-3">
-          <Shield className="h-4 w-4 text-indigo-400" />
+          <Shield className="h-4 w-4 text-blue-400" />
           <span className={`text-sm font-semibold ${text}`}>Reports by role</span>
           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${isDarkMode ? 'bg-white/10 text-slate-300' : 'bg-white text-gray-600 border border-gray-200'}`}>
             {ROLE_LABELS[role] || role}

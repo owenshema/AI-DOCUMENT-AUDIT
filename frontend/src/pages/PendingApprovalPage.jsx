@@ -15,12 +15,12 @@ export default function PendingApprovalPage() {
   };
 
   return (
-    <div className="card-surface min-h-screen bg-[#0d0f14] flex items-center justify-center p-4">
+    <div className="card-surface min-h-screen bg-[#0b1a2e] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
-            <div className="h-8 w-8 rounded-lg bg-indigo-500 flex items-center justify-center">
+            <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center">
               <span className="text-white font-bold text-sm">S</span>
             </div>
             <span className="text-white font-bold text-lg">DocAudit AI</span>
@@ -29,9 +29,9 @@ export default function PendingApprovalPage() {
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-white/8 bg-[#111318] p-8 text-center shadow-2xl">
-          <div className="mx-auto mb-5 h-16 w-16 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
-            <Clock className="h-8 w-8 text-amber-400" />
+        <div className="rounded-2xl border border-white/8 bg-[#122a45] p-8 text-center shadow-2xl">
+          <div className="mx-auto mb-5 h-16 w-16 rounded-full bg-blue-600/15 border border-blue-400/30 flex items-center justify-center">
+            <Clock className="h-8 w-8 text-blue-400" />
           </div>
 
           <h1 className="text-xl font-bold text-white mb-2">Account Pending Approval</h1>
@@ -42,14 +42,14 @@ export default function PendingApprovalPage() {
 
           <div className="rounded-xl border border-white/8 bg-white/3 p-4 mb-6 text-left space-y-3">
             <div className="flex items-start gap-3">
-              <div className="h-5 w-5 rounded-full bg-indigo-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-indigo-400 text-[10px] font-bold">1</span>
+              <div className="h-5 w-5 rounded-full bg-blue-600/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-blue-400 text-[10px] font-bold">1</span>
               </div>
               <p className="text-xs text-slate-400">Your email has been verified successfully.</p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="h-5 w-5 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-amber-400 text-[10px] font-bold">2</span>
+              <div className="h-5 w-5 rounded-full bg-blue-600/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-blue-400 text-[10px] font-bold">2</span>
               </div>
               <p className="text-xs text-slate-400">Waiting for administrator to review and approve your account.</p>
             </div>
@@ -61,8 +61,8 @@ export default function PendingApprovalPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3 mb-6 flex items-start gap-2">
-            <Mail className="h-4 w-4 text-indigo-400 flex-shrink-0 mt-0.5" />
+          <div className="rounded-xl border border-blue-400/30 bg-blue-600/5 p-3 mb-6 flex items-start gap-2">
+            <Mail className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-slate-300 text-left">
               You'll receive an email at <span className="text-white font-medium">{user?.email}</span> when your account is approved.
             </p>

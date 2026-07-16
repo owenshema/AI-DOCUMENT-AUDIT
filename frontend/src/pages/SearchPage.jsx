@@ -19,20 +19,20 @@ const REPORT_TYPES = [
 ];
 
 const STATUS_PILL = {
-  approved: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
+  approved: 'bg-blue-600/15 text-blue-400 border-blue-400/30',
   rejected: 'bg-red-500/15 text-red-400 border-red-500/20',
-  in_review: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+  in_review: 'bg-blue-600/15 text-blue-400 border-blue-400/30',
   uploaded: 'bg-slate-500/15 text-slate-400 border-slate-500/20',
-  published: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
+  published: 'bg-blue-600/15 text-blue-400 border-blue-400/30',
   draft: 'bg-slate-500/15 text-slate-400 border-slate-500/20',
-  archived: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+  archived: 'bg-blue-600/15 text-blue-400 border-blue-400/30',
 };
 
 function scoreColor(score) {
   if (score == null) return 'text-slate-400';
-  if (score >= 85) return 'text-emerald-400';
-  if (score >= 70) return 'text-indigo-400';
-  if (score >= 50) return 'text-amber-400';
+  if (score >= 85) return 'text-blue-400';
+  if (score >= 70) return 'text-blue-400';
+  if (score >= 50) return 'text-blue-400';
   return 'text-red-400';
 }
 
@@ -58,11 +58,11 @@ export default function SearchPage() {
     dateTo: '',
   });
 
-  const card = isDarkMode ? 'bg-[#111318] border-white/8' : 'bg-white border-gray-200 shadow-sm';
+  const card = isDarkMode ? 'bg-[#122a45] border-white/8' : 'bg-white border-gray-200 shadow-sm';
   const text = isDarkMode ? 'text-white' : 'text-gray-900';
   const sub = isDarkMode ? 'text-slate-500' : 'text-gray-500';
   const inputCls = isDarkMode
-    ? 'border-white/10 bg-[#0d0f14] text-white placeholder-slate-600 focus:border-indigo-500/60'
+    ? 'border-white/10 bg-[#0b1a2e] text-white placeholder-slate-600 focus:border-blue-400/30'
     : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:border-indigo-400';
 
   const activeFilterCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
@@ -159,12 +159,12 @@ export default function SearchPage() {
               <SlidersHorizontal className="h-4 w-4" />
               Filters
               {activeFilterCount > 0 && (
-                <span className="rounded-full bg-indigo-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{activeFilterCount}</span>
+                <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">{activeFilterCount}</span>
               )}
             </button>
             <button
               onClick={() => runSearch()}
-              className="rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600"
+              className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600"
             >
               Search
             </button>
@@ -176,7 +176,7 @@ export default function SearchPage() {
             <button
               key={t}
               onClick={() => { setTab(t); if (searched) runSearch({ tab: t }); }}
-              className={`rounded-xl px-4 py-2 text-xs font-semibold capitalize ${tab === t ? 'bg-indigo-500 text-white' : isDarkMode ? 'bg-white/5 text-slate-400' : 'bg-gray-100 text-gray-600'}`}
+              className={`rounded-xl px-4 py-2 text-xs font-semibold capitalize ${tab === t ? 'bg-blue-600 text-white' : isDarkMode ? 'bg-white/5 text-slate-400' : 'bg-gray-100 text-gray-600'}`}
             >
               {t}
             </button>
@@ -224,7 +224,7 @@ export default function SearchPage() {
         <aside className="space-y-4 lg:col-span-1">
           <div className={`rounded-2xl border p-4 ${card}`}>
             <h3 className={`mb-3 flex items-center gap-2 text-sm font-semibold ${text}`}>
-              <Bookmark className="h-4 w-4 text-indigo-400" /> Saved searches
+              <Bookmark className="h-4 w-4 text-blue-400" /> Saved searches
             </h3>
             {savedSearches.length === 0 ? (
               <p className={`text-xs ${sub}`}>No saved searches yet.</p>
@@ -246,7 +246,7 @@ export default function SearchPage() {
 
           <div className={`rounded-2xl border p-4 ${card}`}>
             <h3 className={`mb-3 flex items-center gap-2 text-sm font-semibold ${text}`}>
-              <Clock className="h-4 w-4 text-indigo-400" /> Recent
+              <Clock className="h-4 w-4 text-blue-400" /> Recent
             </h3>
             {history.length === 0 ? (
               <p className={`text-xs ${sub}`}>Your recent searches appear here.</p>
@@ -294,11 +294,11 @@ export default function SearchPage() {
                 const Icon = isReport ? FileBarChart2 : FileText;
                 const health = item.overallAuditScore ?? item.complianceScore;
                 return (
-                  <div key={item.id} className={`rounded-2xl border p-4 transition-colors hover:border-indigo-500/30 ${card}`}>
+                  <div key={item.id} className={`rounded-2xl border p-4 transition-colors hover:border-blue-400/30 ${card}`}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${isDarkMode ? 'bg-indigo-500/15' : 'bg-indigo-50'}`}>
-                          <Icon className="h-5 w-5 text-indigo-400" />
+                        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${isDarkMode ? 'bg-blue-600/15' : 'bg-blue-50'}`}>
+                          <Icon className="h-5 w-5 text-blue-400" />
                         </div>
                         <div className="min-w-0">
                           <p className={`truncate font-semibold ${text}`}>{item.title}</p>

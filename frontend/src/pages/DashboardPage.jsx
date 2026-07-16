@@ -22,14 +22,14 @@ const STATUS_LABEL = {
 };
 
 const STATUS_COLORS = {
-  uploaded: '#64748b',
-  in_review: '#f59e0b',
+  uploaded: '#93c5fd',
+  in_review: '#60a5fa',
   in_progress: '#3b82f6',
-  submitted: '#6366f1',
-  reviewed: '#a855f7',
-  approved: '#10b981',
-  rejected: '#ef4444',
-  changes_requested: '#f97316',
+  submitted: '#2563eb',
+  reviewed: '#1d4ed8',
+  approved: '#1e40af',
+  rejected: '#1e3a8a',
+  changes_requested: '#0284c7',
 };
 
 const STATUS_ORDER = ['uploaded', 'in_review', 'in_progress', 'changes_requested', 'approved', 'rejected'];
@@ -37,58 +37,58 @@ const STATUS_ORDER = ['uploaded', 'in_review', 'in_progress', 'changes_requested
 function useDashboardStyles() {
   const { isDarkMode } = useAuthStore();
   const card = isDarkMode
-    ? 'rounded-2xl border border-white/8 bg-[#111318]'
-    : 'rounded-2xl border border-gray-200 bg-white shadow-sm';
+    ? 'rounded-2xl border border-blue-400/25 bg-[#122a45]'
+    : 'rounded-2xl border border-blue-200 bg-white shadow-sm';
   const section = isDarkMode
-    ? 'overflow-hidden rounded-2xl border border-white/8 bg-[#111318]'
-    : 'overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm';
+    ? 'overflow-hidden rounded-2xl border border-blue-400/25 bg-[#122a45]'
+    : 'overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm';
   return {
     isDarkMode,
     card,
     section,
-    text: isDarkMode ? 'text-white' : 'text-gray-900',
-    sub: isDarkMode ? 'text-slate-500' : 'text-gray-500',
-    label: isDarkMode ? 'text-slate-400' : 'text-gray-600',
-    divider: isDarkMode ? 'divide-white/5' : 'divide-gray-100',
-    headerBorder: isDarkMode ? 'border-white/8' : 'border-gray-200',
-    barTrack: isDarkMode ? 'bg-white/10' : 'bg-gray-100',
-    riskTrack: isDarkMode ? 'bg-white/10' : 'bg-gray-100',
+    text: isDarkMode ? 'text-white' : 'text-slate-900',
+    sub: isDarkMode ? 'text-blue-200/70' : 'text-slate-600',
+    label: isDarkMode ? 'text-blue-200/70' : 'text-slate-600',
+    divider: isDarkMode ? 'divide-blue-400/15' : 'divide-blue-100',
+    headerBorder: isDarkMode ? 'border-blue-400/20' : 'border-blue-200',
+    barTrack: isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100',
+    riskTrack: isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100',
     pill: isDarkMode
-      ? 'rounded-full border border-white/10 bg-white/10 px-2 py-0.5 text-[10px] font-semibold capitalize text-slate-300'
-      : 'rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold capitalize text-indigo-700',
-    iconWrap: isDarkMode ? 'bg-white/5' : 'bg-gray-100',
-    docIcon: isDarkMode ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-100 text-indigo-600',
+      ? 'rounded-full border border-blue-400/25 bg-blue-500/20 px-2 py-0.5 text-[10px] font-semibold capitalize text-blue-100'
+      : 'rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-semibold capitalize text-blue-800',
+    iconWrap: isDarkMode ? 'bg-blue-500/20' : 'bg-blue-100',
+    docIcon: isDarkMode ? 'bg-blue-500/20 text-blue-200' : 'bg-blue-100 text-blue-700',
     quickAction: isDarkMode
-      ? 'rounded-xl border border-white/8 bg-white/5 hover:bg-white/8'
-      : 'rounded-xl border border-gray-200 bg-gray-50 hover:bg-white',
-    quickActionIcon: isDarkMode ? 'bg-indigo-500/15 text-indigo-400' : 'bg-indigo-100 text-indigo-600',
-    link: isDarkMode ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-500',
+      ? 'rounded-xl border border-blue-400/25 bg-blue-500/10 hover:bg-blue-500/20'
+      : 'rounded-xl border border-blue-200 bg-blue-50 hover:bg-white',
+    quickActionIcon: isDarkMode ? 'bg-blue-500/20 text-blue-200' : 'bg-blue-100 text-blue-700',
+    link: isDarkMode ? 'text-blue-300 hover:text-blue-100' : 'text-blue-700 hover:text-blue-900',
     aiColors: {
-      indigo: isDarkMode ? 'text-indigo-400' : 'text-indigo-600',
-      red: isDarkMode ? 'text-red-400' : 'text-red-600',
-      amber: isDarkMode ? 'text-amber-400' : 'text-amber-600',
-      emerald: isDarkMode ? 'text-emerald-400' : 'text-emerald-600',
+      indigo: isDarkMode ? 'text-blue-300' : 'text-blue-700',
+      red: isDarkMode ? 'text-blue-200' : 'text-blue-900',
+      amber: isDarkMode ? 'text-blue-300' : 'text-blue-700',
+      emerald: isDarkMode ? 'text-blue-300' : 'text-blue-700',
     },
     statusPill: (status) => {
       const dark = {
-        uploaded: 'bg-slate-500/15 text-slate-400',
-        in_review: 'bg-amber-500/15 text-amber-400',
-        in_progress: 'bg-blue-500/15 text-blue-400',
-        submitted: 'bg-indigo-500/15 text-indigo-400',
-        reviewed: 'bg-purple-500/15 text-purple-400',
-        approved: 'bg-emerald-500/15 text-emerald-400',
-        rejected: 'bg-red-500/15 text-red-400',
-        changes_requested: 'bg-orange-500/15 text-orange-400',
+        uploaded: 'bg-blue-500/20 text-blue-200',
+        in_review: 'bg-blue-500/25 text-blue-100',
+        in_progress: 'bg-blue-500/25 text-blue-100',
+        submitted: 'bg-blue-500/25 text-blue-100',
+        reviewed: 'bg-blue-500/30 text-blue-50',
+        approved: 'bg-blue-600/40 text-blue-50',
+        rejected: 'bg-blue-900/50 text-blue-100',
+        changes_requested: 'bg-blue-500/30 text-blue-100',
       };
       const light = {
-        uploaded: 'bg-slate-100 text-slate-600',
-        in_review: 'bg-amber-100 text-amber-700',
-        in_progress: 'bg-blue-100 text-blue-700',
-        submitted: 'bg-indigo-100 text-indigo-700',
-        reviewed: 'bg-purple-100 text-purple-700',
-        approved: 'bg-emerald-100 text-emerald-700',
-        rejected: 'bg-red-100 text-red-700',
-        changes_requested: 'bg-orange-100 text-orange-700',
+        uploaded: 'bg-blue-50 text-blue-700',
+        in_review: 'bg-blue-100 text-blue-800',
+        in_progress: 'bg-blue-100 text-blue-800',
+        submitted: 'bg-blue-100 text-blue-800',
+        reviewed: 'bg-blue-200 text-blue-900',
+        approved: 'bg-blue-600 text-white',
+        rejected: 'bg-blue-900 text-white',
+        changes_requested: 'bg-blue-100 text-blue-900',
       };
       const map = isDarkMode ? dark : light;
       return map[status] || map.uploaded;
@@ -103,10 +103,10 @@ function roleLabel(role) {
 function StatCard({ label, value, icon: Icon, tone = 'indigo', loading }) {
   const s = useDashboardStyles();
   const iconBg = {
-    indigo: 'bg-indigo-600',
-    amber: 'bg-amber-500',
-    emerald: 'bg-emerald-600',
-    red: 'bg-red-500',
+    indigo: 'bg-blue-600',
+    amber: 'bg-blue-600',
+    emerald: 'bg-blue-600',
+    red: 'bg-blue-800',
     blue: 'bg-blue-600',
   };
 
@@ -133,7 +133,7 @@ function StatusPieChart({ docs, statusCounts, title = 'Document Status' }) {
     <div className={`${s.card} p-5`}>
       <div className="mb-2 flex items-center justify-between">
         <h2 className={`text-sm font-semibold ${s.text}`}>{title}</h2>
-        <span className={`text-[10px] font-medium uppercase tracking-wider ${s.isDarkMode ? 'text-indigo-400/70' : 'text-indigo-500'}`}>
+        <span className={`text-[10px] font-medium uppercase tracking-wider ${s.isDarkMode ? 'text-blue-400/70' : 'text-indigo-500'}`}>
           Rotating live
         </span>
       </div>
@@ -189,7 +189,7 @@ function DocumentRow({ doc }) {
           {doc.createdAt ? ` - ${new Date(doc.createdAt).toLocaleDateString()}` : ''}
         </p>
         {doc.metadata?.statusReason && (
-          <p className={`mt-0.5 truncate text-[11px] ${s.isDarkMode ? 'text-amber-300' : 'text-amber-600'}`}>
+          <p className={`mt-0.5 truncate text-[11px] ${s.isDarkMode ? 'text-blue-300' : 'text-amber-600'}`}>
             Auditor note: {doc.metadata.statusReason}
           </p>
         )}
@@ -267,7 +267,7 @@ function OwnerDashboard({ user }) {
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
         <button onClick={() => navigate('/documents')} className={`flex items-center gap-4 ${s.card} p-5 text-left`}>
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 shadow-sm">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-blue-600 shadow-sm">
             <Upload className="h-5 w-5 text-white" />
           </div>
           <div>
@@ -300,9 +300,9 @@ function OwnerDashboard({ user }) {
             {recentActivity.map((item, index) => (
               <div key={`${item.time}-${index}`} className="flex items-start gap-3 px-5 py-3.5">
                 <div className={`mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg ${s.iconWrap}`}>
-                  {item.type === 'upload' ? <Upload className="h-3.5 w-3.5 text-indigo-400" />
-                    : item.type === 'analysis' ? <Bot className="h-3.5 w-3.5 text-emerald-400" />
-                    : item.type === 'report' ? <BarChart2 className="h-3.5 w-3.5 text-amber-400" />
+                  {item.type === 'upload' ? <Upload className="h-3.5 w-3.5 text-blue-400" />
+                    : item.type === 'analysis' ? <Bot className="h-3.5 w-3.5 text-blue-400" />
+                    : item.type === 'report' ? <BarChart2 className="h-3.5 w-3.5 text-blue-400" />
                     : <Activity className="h-3.5 w-3.5 text-slate-400" />}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -330,7 +330,7 @@ function OwnerDashboard({ user }) {
           <div className="p-8 text-center">
             <FileText className={`mx-auto mb-3 h-10 w-10 ${s.isDarkMode ? 'text-slate-700' : 'text-gray-300'}`} />
             <p className={`mb-3 text-sm ${s.sub}`}>No documents uploaded yet.</p>
-            <button onClick={() => navigate('/documents')} className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-600">
+            <button onClick={() => navigate('/documents')} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600">
               Upload Your First Document
             </button>
           </div>
@@ -342,7 +342,7 @@ function OwnerDashboard({ user }) {
       </div>
 
       <div className={`mt-4 flex items-start gap-3 ${s.card} p-4`}>
-        <Bell className="mt-0.5 h-4 w-4 flex-shrink-0 text-indigo-400" />
+        <Bell className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-400" />
         <p className={`text-xs ${s.sub}`}>
           Audit completion emails are sent to <span className={`font-semibold ${s.isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{user?.email}</span>. Log in after the email to view document status, auditor notes, and available reports.
         </p>
@@ -484,7 +484,7 @@ function StaffDashboard({ user }) {
               ['Total documents', totalDocuments],
             ].map(([label, value]) => (
               <div key={label} className="flex items-center gap-3">
-                <div className="h-2 w-2 flex-shrink-0 rounded-full bg-indigo-500" />
+                <div className="h-2 w-2 flex-shrink-0 rounded-full bg-blue-600" />
                 <span className={`flex-1 text-xs ${s.sub}`}>{label}</span>
                 <span className={`text-sm font-bold ${s.text}`}>{value}</span>
               </div>

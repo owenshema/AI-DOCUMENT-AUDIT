@@ -19,12 +19,12 @@ export default function GlobalSearchBar({ compact = true }) {
   };
 
   const shell = isDarkMode
-    ? 'bg-white/[0.08] text-white placeholder-slate-500 focus-within:bg-white/[0.1]'
-    : 'border border-gray-200/80 bg-gray-50 text-gray-900 placeholder-gray-400 focus-within:border-indigo-400';
+    ? 'border border-blue-400/30 bg-blue-500/15 text-white placeholder-blue-200/60 focus-within:bg-blue-500/25'
+    : 'border border-blue-200 bg-white text-slate-900 placeholder-slate-400 focus-within:border-blue-500';
 
   return (
     <form onSubmit={submit} className={`flex items-center gap-2 rounded-full px-4 transition-colors ${shell} ${compact ? 'w-full max-w-md' : 'w-full'}`}>
-      <Search className={`h-4 w-4 flex-shrink-0 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`} />
+      <Search className={`h-4 w-4 flex-shrink-0 ${isDarkMode ? 'text-blue-200' : 'text-blue-600'}`} />
       <input
         type="search"
         value={query}

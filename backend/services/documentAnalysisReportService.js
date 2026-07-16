@@ -237,14 +237,13 @@ function streamDocumentAnalysisPdf(res, ctx) {
     ['Report Type', annotated ? 'Annotated Audit (mistakes marked)' : 'Document Audit Analysis'],
     ['Document', document.title || document.fileName],
     ['Status', (document.status || '—').replace(/_/g, ' ')],
-    ['Prepared By', preparedBy],
     ['Date Generated', layout.fmtDate(analyzedAt)],
   ], reportTitle);
   y = layout.drawCenteredTitle(pdf, y, `${reportTitle} – ${layout.monthYear(analyzedAt)}`);
 
   y = renderAnnotatedPdfBody(pdf, { ...ctx, annotated }, y);
 
-  layout.drawSignatureBlock(pdf, y, preparedBy);
+  layout.drawSignatureBlock(pdf, y);
   layout.drawFooter(pdf);
   pdf.end();
 }

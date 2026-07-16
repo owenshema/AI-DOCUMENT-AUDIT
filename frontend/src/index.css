@@ -13,8 +13,13 @@ html {
 }
 
 body {
-  background: #ffffff;
+  background: #f0f7ff;
   color: #0f172a;
+}
+
+html.dark body {
+  background: #0b1a2e;
+  color: #f8fafc;
 }
 
 .container-main {
@@ -141,6 +146,14 @@ body {
     box-shadow:
       0 22px 44px -14px rgba(79, 70, 229, 0.32),
       0 12px 28px -12px rgba(15, 23, 42, 0.16);
+  }
+
+  /* Modals / overlays: never scale — hover lift made Export menus look huge */
+  .card-surface .no-card-lift,
+  .card-surface .no-card-lift:hover,
+  .card-surface .no-card-lift :where(div, a, article, section),
+  .card-surface .no-card-lift :where(div, a, article, section):hover {
+    transform: none !important;
   }
 
   /* Keep grids from clipping lifted cards */

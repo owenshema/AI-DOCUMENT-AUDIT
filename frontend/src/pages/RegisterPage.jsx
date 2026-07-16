@@ -12,9 +12,9 @@ function passwordStrength(pw) {
   if (/[0-9]/.test(pw)) score++;
   if (/[^A-Za-z0-9]/.test(pw)) score++;
   if (score <= 1) return { label: 'Weak',        color: 'bg-red-500',     width: '20%' };
-  if (score <= 2) return { label: 'Fair',        color: 'bg-amber-500',   width: '40%' };
+  if (score <= 2) return { label: 'Fair',        color: 'bg-blue-600',   width: '40%' };
   if (score <= 3) return { label: 'Good',        color: 'bg-yellow-400',  width: '60%' };
-  if (score <= 4) return { label: 'Strong',      color: 'bg-emerald-500', width: '80%' };
+  if (score <= 4) return { label: 'Strong',      color: 'bg-blue-600', width: '80%' };
   return               { label: 'Very Strong',  color: 'bg-emerald-400', width: '100%' };
 }
 
@@ -186,7 +186,7 @@ export default function RegisterPage() {
                     <option value="auditor" className="bg-[#0d2044]">Auditor</option>
                   </select>
                   {form.role !== 'client' && (
-                    <p className="mt-1 text-[10px] text-amber-200/80">This role requires administrator approval before sign-in.</p>
+                    <p className="mt-1 text-[10px] text-blue-200/80">This role requires administrator approval before sign-in.</p>
                   )}
                 </div>
                 {form.role === 'client' && (
@@ -253,12 +253,12 @@ export default function RegisterPage() {
                   </div>
                 </div>
                 <button type="submit" disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors mt-1">
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors mt-1">
                   {loading ? <><Loader className="h-4 w-4 animate-spin" /> Creating account...</> : 'Create Account'}
                 </button>
               </form>
               <p className="mt-5 text-center text-xs text-white/40">
-                Already have an account? <Link to="/login" className="text-indigo-300 hover:text-white transition-colors">Sign in</Link>
+                Already have an account? <Link to="/login" className="text-blue-300 hover:text-white transition-colors">Sign in</Link>
               </p>
             </>
           )}
@@ -267,8 +267,8 @@ export default function RegisterPage() {
           {step === 'verify' && (
             <>
               <div className="text-center mb-5">
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/25 border border-emerald-400/30 mb-3">
-                  <ShieldCheck className="h-6 w-6 text-emerald-300" />
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600/25 border border-emerald-400/30 mb-3">
+                  <ShieldCheck className="h-6 w-6 text-blue-300" />
                 </div>
                 <h2 className="text-base font-semibold text-white">Verify your email</h2>
                 <p className="text-xs text-white/50 mt-1">
@@ -283,14 +283,14 @@ export default function RegisterPage() {
               )}
               <OTPInput value={otp} onChange={setOtp} />
               <button onClick={handleVerify} disabled={loading || otp.length !== 6}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors">
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors">
                 {loading ? <><Loader className="h-4 w-4 animate-spin" /> Verifying...</> : 'Verify & Continue'}
               </button>
               <div className="flex items-center justify-between mt-4">
                 <button onClick={() => { setStep('form'); setOtp(''); setError(''); }}
                   className="text-xs text-white/40 hover:text-white/70 transition-colors">← Back</button>
                 <button onClick={handleResend} disabled={resending}
-                  className="flex items-center gap-1 text-xs text-indigo-300 hover:text-white disabled:opacity-50 transition-colors">
+                  className="flex items-center gap-1 text-xs text-blue-300 hover:text-white disabled:opacity-50 transition-colors">
                   <RefreshCw className={`h-3 w-3 ${resending ? 'animate-spin' : ''}`} />
                   {resending ? 'Sending...' : 'Resend code'}
                 </button>

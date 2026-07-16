@@ -23,9 +23,9 @@ function formatRoleLabel(role) {
   return ROLE_LABELS[key] || key.replace(/_/g, ' ');
 }
 
-/** Report export formats allowed per role (auditor may also export Excel). Clients cannot export analysis reports. */
+/** Role-report export formats (PDF for all roles; auditor may also export Excel). */
 const EXPORT_FORMATS_BY_ROLE = {
-  client: [],
+  client: ['pdf'],
   document_manager: ['pdf'],
   administrator: ['pdf'],
   auditor: ['pdf', 'excel'],

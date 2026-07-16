@@ -100,9 +100,9 @@ const CompliancePage = () => {
             {result && (
               <div className="mt-4 rounded-lg border border-white/10 bg-white/3 p-4">
                 <div className="mb-3 flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-full ${result.complianceCheck?.complianceScore >= 70 ? 'bg-emerald-500/20' : 'bg-red-500/20'}`}>
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full ${result.complianceCheck?.complianceScore >= 70 ? 'bg-blue-600/20' : 'bg-red-500/20'}`}>
                     {result.complianceCheck?.complianceScore >= 70
-                      ? <CheckCircle className="h-5 w-5 text-emerald-400" />
+                      ? <CheckCircle className="h-5 w-5 text-blue-400" />
                       : <XCircle className="h-5 w-5 text-red-400" />}
                   </div>
                   <div>
@@ -114,11 +114,11 @@ const CompliancePage = () => {
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-slate-400">Findings:</p>
                     {result.findings.map((f, i) => (
-                      <div key={i} className={`rounded-lg p-3 text-xs ${f.compliant ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                      <div key={i} className={`rounded-lg p-3 text-xs ${f.compliant ? 'bg-blue-600/10 border border-blue-400/30' : 'bg-red-500/10 border border-red-500/20'}`}>
                         <div className="flex items-center gap-2">
-                          {f.compliant ? <CheckCircle className="h-4 w-4 text-emerald-400" /> : <AlertTriangle className="h-4 w-4 text-red-400" />}
-                          <span className={`font-medium ${f.compliant ? 'text-emerald-300' : 'text-red-300'}`}>{f.policyName}</span>
-                          <span className={`ml-auto font-semibold ${f.compliant ? 'text-emerald-400' : 'text-red-400'}`}>{f.compliant ? 'PASSED' : 'FAILED'}</span>
+                          {f.compliant ? <CheckCircle className="h-4 w-4 text-blue-400" /> : <AlertTriangle className="h-4 w-4 text-red-400" />}
+                          <span className={`font-medium ${f.compliant ? 'text-blue-300' : 'text-red-300'}`}>{f.policyName}</span>
+                          <span className={`ml-auto font-semibold ${f.compliant ? 'text-blue-400' : 'text-red-400'}`}>{f.compliant ? 'PASSED' : 'FAILED'}</span>
                         </div>
                         {!f.compliant && f.findings?.length > 0 && (
                           <ul className="mt-1 list-disc list-inside text-slate-400">
@@ -154,7 +154,7 @@ const CompliancePage = () => {
                       <p className="text-xs text-slate-500">{p.description}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <span className="rounded-full bg-[#0ea5e9]/15 px-2 py-0.5 text-[10px] text-[#38bdf8]">{p.policyType}</span>
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${p.status === 'active' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/15 text-slate-400'}`}>{p.status}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${p.status === 'active' ? 'bg-blue-600/15 text-blue-400' : 'bg-slate-500/15 text-slate-400'}`}>{p.status}</span>
                         {p.regulatoryFrameworks?.map(f => (
                           <span key={f} className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[10px] text-purple-400">{f}</span>
                         ))}

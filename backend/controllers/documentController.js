@@ -114,6 +114,11 @@ const enrichDocumentManagement = (document, userId = null) => {
   const assignedClientIds = getAssignedClientIds(plain);
   const isAssignedToMe = userId ? assignedClientIds.includes(userId) : false;
   const isOwnUpload = userId ? plain.uploadedBy === userId : false;
+  const requestFulfilled = meta.magerwaRequestStatus === 'fulfilled'
+    || meta.documentRequestStatus === 'fulfilled'
+    || meta.requestStatus === 'fulfilled'
+    || Boolean(meta.requestClearedAt);
+  const releasedToMe = Boolean(meta.clientReleasedAt) && isAssignedToMe;
   return {
     ...plain,
     auditState: isRequestOnlyDocument(plain)
@@ -134,7 +139,14 @@ const enrichDocumentManagement = (document, userId = null) => {
     assignmentNote: meta.assignmentNote || null,
     isAssignedToMe,
     isOwnUpload,
-    documentSource: isAssignedToMe && !isOwnUpload ? 'assigned' : isOwnUpload ? 'own' : 'other',
+    // Once assigned/released to the client, show under Assigned for cargo (even if they originally requested it)
+    documentSource: releasedToMe
+      ? 'assigned'
+      : (isAssignedToMe && !isOwnUpload)
+        ? 'assigned'
+        : isOwnUpload
+          ? 'own'
+          : 'other',
     auditMarkup: meta.auditMarkup || [],
     managerReviewStatus: meta.managerReviewStatus || null,
     needsCorrection: meta.managerReviewStatus === 'needs_correction',
@@ -144,15 +156,16 @@ const enrichDocumentManagement = (document, userId = null) => {
     isClientUpload: Boolean(meta.clientUpload),
     returnedToManagerAt: meta.returnedToManagerAt || null,
     awaitingClientAssignment: meta.managerReviewStatus === 'ready_for_client' && !meta.clientReleasedAt,
-    magerwaRequested: Boolean(meta.magerwaRequested || meta.documentRequested),
+    magerwaRequested: Boolean(meta.magerwaRequested || meta.documentRequested) && !requestFulfilled,
     magerwaRequestStatus: meta.magerwaRequestStatus || meta.documentRequestStatus || null,
     magerwaRequestedAt: meta.magerwaRequestedAt || null,
     magerwaRequestPort: meta.magerwaRequestPort || null,
     magerwaRequestNote: meta.magerwaRequestNote || null,
-    isRequestOnly: isRequestOnlyDocument(plain),
-    needsManagerPreparation: Boolean(meta.requestOnly && !meta.preparedAt),
+    isRequestOnly: isRequestOnlyDocument(plain) && !requestFulfilled,
+    needsManagerPreparation: Boolean(meta.requestOnly && !meta.preparedAt) && !requestFulfilled,
     hasDocumentFile: hasDocumentFile(plain),
     requestStatus: meta.requestStatus || null,
+    requestFulfilled,
   };
 };
 
@@ -1110,6 +1123,9 @@ const updateDocumentStatus = async (req, res) => {
       metadata.clientReleasePath = document.filePath;
       metadata.clientReleaseFileName = document.fileName;
       metadata.clientReleaseStoredName = document.metadata?.storedFileName || null;
+      // Clear previous release so manager can re-assign after a new audit return
+      delete metadata.clientReleasedAt;
+      metadata.awaitingManagerAssignment = true;
     }
 
     await document.update({
@@ -1350,20 +1366,21 @@ const bulkUpload = async (req, res) => {
 
 const getAssignableClients = async (req, res) => {
   try {
-    const role = req.user?.role || 'client';
+    const role = normalizeRole(req.user?.role || 'client');
     if (!['document_manager', 'administrator'].includes(role)) {
       return res.status(403).json({ error: 'Only document managers can list clients for assignment.' });
     }
 
     const { User } = req.app.locals.models;
+    const { Op } = require('sequelize');
+    // Document managers see every active client account for assignment
     const clients = await User.findAll({
       where: {
-        role: 'client',
+        role: { [Op.in]: ['client', 'viewer'] },
         isActive: true,
-        approvalStatus: 'approved',
       },
-      attributes: ['id', 'fullName', 'email', 'phone', 'department'],
-      order: [['fullName', 'ASC']],
+      attributes: ['id', 'fullName', 'email', 'phone', 'department', 'approvalStatus', 'isActive'],
+      order: [['fullName', 'ASC'], ['email', 'ASC']],
     });
 
     res.json({
@@ -1372,7 +1389,8 @@ const getAssignableClients = async (req, res) => {
         fullName: c.fullName,
         email: c.email,
         phone: c.phone || null,
-        department: c.department,
+        department: c.department || null,
+        approvalStatus: c.approvalStatus || 'approved',
       })),
       total: clients.length,
     });
@@ -1433,11 +1451,15 @@ const getDocumentManagement = async (req, res) => {
       documents = documents.filter(doc => doc.isClientUpload);
     } else if (filter === 'magerwa_requests') {
       documents = documents.filter(doc =>
-        doc.needsManagerPreparation
-        || (doc.magerwaRequested && doc.magerwaRequestStatus === 'pending' && !doc.clientReleasedAt)
+        !doc.requestFulfilled
+        && !doc.clientReleasedAt
+        && (
+          doc.needsManagerPreparation
+          || (doc.magerwaRequested && doc.magerwaRequestStatus === 'pending')
+        )
       );
     } else if (filter === 'needs_preparation') {
-      documents = documents.filter(doc => doc.needsManagerPreparation);
+      documents = documents.filter(doc => doc.needsManagerPreparation && !doc.requestFulfilled);
     } else if (filter === 'needs_correction') {
       documents = documents.filter(doc => doc.needsCorrection || doc.managerReviewStatus === 'needs_correction');
     } else if (filter === 'ready_for_client') {
@@ -1576,8 +1598,13 @@ const assignDocumentToClients = async (req, res) => {
       });
     }
 
+    const { Op } = require('sequelize');
     const clients = await User.findAll({
-      where: { id: clientIds, role: 'client', isActive: true, approvalStatus: 'approved' },
+      where: {
+        id: clientIds,
+        role: { [Op.in]: ['client', 'viewer'] },
+        isActive: true,
+      },
       attributes: ['id', 'fullName', 'email', 'phone'],
     });
     if (!clients.length) {
@@ -1587,6 +1614,13 @@ const assignDocumentToClients = async (req, res) => {
     const validIds = clients.map(c => c.id);
     const resolvedPort = port || document.metadata?.arrivalPort || document.metadata?.cargoPort || null;
     const releasePath = document.metadata?.clientReleasePath || document.filePath;
+    const wasClientRequest = Boolean(
+      plain.metadata?.magerwaRequested
+      || plain.metadata?.documentRequested
+      || plain.metadata?.clientDocumentRequest
+      || plain.metadata?.requestOnly
+      || plain.status === 'requested'
+    );
     const metadata = {
       ...(document.metadata || {}),
       assignedClientIds: validIds,
@@ -1598,10 +1632,26 @@ const assignDocumentToClients = async (req, res) => {
       clientReleasedAt: new Date(),
       clientReleasePath: releasePath,
       managerReviewStatus: 'released_to_client',
-      magerwaRequestStatus: plain.metadata?.magerwaRequested ? 'fulfilled' : plain.metadata?.magerwaRequestStatus,
+      // Assignment fulfills/clears the client's open request for this document
+      magerwaRequestStatus: 'fulfilled',
+      documentRequestStatus: 'fulfilled',
+      requestStatus: 'fulfilled',
+      requestClearedAt: new Date(),
+      requestClearedBy: req.user.id,
+      awaitingManagerAssignment: false,
     };
+    if (wasClientRequest) {
+      metadata.magerwaRequested = false;
+      metadata.documentRequested = false;
+      metadata.clientDocumentRequest = false;
+    }
 
-    await document.update({ metadata });
+    const updates = { metadata };
+    if (document.status === 'requested') {
+      updates.status = 'approved';
+    }
+
+    await document.update(updates);
 
     const notifyResult = await notifyAssignedClients(
       req.app.locals.models,

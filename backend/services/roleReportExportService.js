@@ -45,12 +45,12 @@ function toTxt(report) {
   const out = [];
   out.push('='.repeat(64));
   out.push('SIFCO - SUPER INTERNATIONAL FREIGHT');
-  out.push('DocAudit AI  -  ' + (report.title || 'Report'));
+  out.push(report.title || 'Report');
   out.push('='.repeat(64));
   out.push('');
   if (report.scopeLabel) out.push('Scope     : ' + report.scopeLabel);
-  if (report.periodDays) out.push('Period    : Last ' + report.periodDays + ' days');
-  out.push('Prepared By: ' + (report.preparedBy || 'System'));
+  if (report.periodLabel) out.push('Period    : ' + report.periodLabel);
+  else if (report.periodDays) out.push('Period    : Last ' + report.periodDays + ' days');
   out.push('Generated : ' + new Date(report.generatedAt || Date.now()).toLocaleString());
   out.push('Rows      : ' + ((report.rows || []).length));
   out.push('');
@@ -94,7 +94,7 @@ function toXlsxBuffer(report) {
     ['SIFCO - Super International Freight'],
     ['Report', report.title || ''],
     ['Scope', report.scopeLabel || ''],
-    ['Period', report.periodDays ? 'Last ' + report.periodDays + ' days' : ''],
+    ['Period', report.periodLabel || (report.periodDays ? 'Last ' + report.periodDays + ' days' : '')],
     ['Generated', new Date(report.generatedAt || Date.now()).toLocaleString()],
     [],
   ];
@@ -132,7 +132,6 @@ function toWordHtml(report) {
   const logo = logoDataUri();
   const entries = summaryEntries(report);
   const B = layout.BRAND;
-  const preparedBy = report.preparedBy || 'System';
   const period = reportPeriodLabel(report);
   const dateGenerated = layout.fmtDate(report.generatedAt || Date.now());
   const centeredTitle = (report.title || 'Report') + ' &ndash; ' + layout.monthYear(report.generatedAt);
@@ -192,7 +191,6 @@ function toWordHtml(report) {
     + '<div class="l">'
     + (logo ? '<img src="' + logo + '"/>' : '')
     + '<div class="co">' + esc(B.company) + '</div>'
-    + '<div class="brand">' + esc(B.name) + '</div>'
     + '<div class="tag">' + esc(B.taglines[0]) + '</div>'
     + '<div class="tag">' + esc(B.taglines[1]) + '</div>'
     + '</div>'
@@ -203,14 +201,12 @@ function toWordHtml(report) {
     + '<div class="rname">' + esc(report.title || 'Report') + '</div>'
     + detailRow('Report Period', period)
     + (report.scopeLabel ? detailRow('Scope', report.scopeLabel) : '')
-    + detailRow('Prepared By', preparedBy)
     + detailRow('Date Generated', dateGenerated)
     + '<div class="rule-green"></div>'
     + '<div class="title">' + centeredTitle + '</div>'
     + summaryHtml
     + '<table>' + head + body + '</table>'
     + '<div class="sign">'
-    + '<div><b>Prepared By:</b> ' + esc(preparedBy) + '</div>'
     + '<div><b>Signature:</b> _______________________________________</div>'
     + '<div><b>Date:</b> ' + esc(dateGenerated) + '</div>'
     + '</div>'
@@ -220,6 +216,10 @@ function toWordHtml(report) {
 
 // ── PDF (branded — shared DocAudit AI layout) ───────────────────────────────
 function reportPeriodLabel(report) {
+  if (report.periodLabel) return report.periodLabel;
+  if (report.periodStart && report.periodEnd) {
+    return layout.fmtDate(report.periodStart) + ' - ' + layout.fmtDate(report.periodEnd);
+  }
   const end = new Date(report.generatedAt || Date.now());
   if (report.periodDays) {
     const start = new Date(end.getTime() - report.periodDays * 86400000);
@@ -248,7 +248,6 @@ function writePdf(report, res) {
   ];
   if (report.scopeLabel) detailPairs.push(['Scope', report.scopeLabel]);
   detailPairs.push(['Records', String((report.rows || []).length)]);
-  detailPairs.push(['Prepared By', report.preparedBy || 'System']);
   detailPairs.push(['Date Generated', layout.fmtDate(report.generatedAt || Date.now())]);
   y = layout.drawReportDetails(doc, y, detailPairs, report.title);
 
@@ -328,7 +327,7 @@ function writePdf(report, res) {
   }
 
   // 5. Signature block + 6. Footer
-  layout.drawSignatureBlock(doc, y, report.preparedBy || 'System');
+  layout.drawSignatureBlock(doc, y);
   layout.drawFooter(doc);
 
   doc.end();

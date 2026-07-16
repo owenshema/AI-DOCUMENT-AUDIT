@@ -20,6 +20,7 @@ const REPORT_META = {
   common_findings: { title: 'Common findings', description: 'Recurring issues flagged, grouped by category' },
   audit_trail_log: { title: 'Audit trail log', description: 'Full log of every action taken on each audited document' },
   workload_history: { title: 'Workload history', description: 'Personal throughput over time — useful for productivity review' },
+  activity_report: { title: 'Activity report', description: 'User actions with date and time for the selected period — logins, uploads, audits, and more' },
   user_activity: { title: 'User activity', description: 'Logins, uploads, audits, and actions per user over time' },
   role_access_log: { title: 'Role & access log', description: 'History of role assignments, changes, and permission events' },
   system_audit_summary: { title: 'System audit summary', description: 'Org-wide audit completion stats, SLA adherence, and backlogs' },
@@ -53,7 +54,7 @@ async function scopedDocumentIds(models, user) {
 }
 
 async function analysisWhere(models, user, ctx) {
-  var where = { createdAt: { [Op.gte]: ctx.since } };
+  var where = fieldInPeriod('createdAt', ctx);
   var docIds = await scopedDocumentIds(models, user);
   if (docIds) {
     where.documentId = { [Op.in]: docIds.length ? docIds : ['00000000-0000-0000-0000-000000000000'] };
@@ -62,7 +63,7 @@ async function analysisWhere(models, user, ctx) {
 }
 
 function logWhere(user, ctx) {
-  var where = { createdAt: { [Op.gte]: ctx.since } };
+  var where = fieldInPeriod('createdAt', ctx);
   if (user.role === 'client' || user.role === 'document_manager') {
     where.userId = user.id;
   }
@@ -104,6 +105,158 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString();
 }
 
+function fmtTime(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/** Plain-language labels for report readers (no IT jargon). */
+var ACTION_LABELS = {
+  login: 'Signed in',
+  successful_login: 'Signed in',
+  failed_login: 'Sign-in failed',
+  failed_otp: 'Verification code failed',
+  login_blocked: 'Sign-in blocked',
+  account_locked: 'Account locked',
+  logout: 'Signed out',
+  user_registered: 'Created an account',
+  register: 'Created an account',
+  email_verified: 'Verified email',
+  password_changed: 'Changed password',
+  password_reset_requested: 'Requested password reset',
+  password_reset_completed: 'Reset password',
+  document_upload: 'Uploaded a document',
+  upload: 'Uploaded a document',
+  document_uploaded: 'Uploaded a document',
+  bulk_upload: 'Uploaded several documents',
+  document_delete: 'Deleted a document',
+  document_deleted: 'Deleted a document',
+  document_update: 'Updated a document',
+  document_reupload: 'Re-uploaded a document',
+  document_status_update: 'Returned audit decision',
+  document_assigned: 'Assigned document to client',
+  client_document_request: 'Requested a document',
+  document_request: 'Requested a document',
+  request_audit: 'Asked auditor to review',
+  analysis: 'Ran document audit',
+  document_analysis: 'Ran document audit',
+  analyze: 'Ran document audit',
+  mfa_setup: 'Set up extra security',
+  mfa_verified: 'Verified security code',
+  mfa_failed: 'Security code failed',
+  role_updated: 'Changed user role',
+  user_status_updated: 'Updated account status',
+  user_deleted: 'Removed a user',
+  security_event: 'Security notice',
+};
+
+function humanizeHttpStyleAction(raw) {
+  var m = String(raw || '').toLowerCase().match(/^(get|post|put|patch|delete|head|options)[_/\s-]+(.+)$/);
+  if (!m) return null;
+  var method = m[1];
+  var resource = m[2].replace(/[_/\\.-]+/g, ' ').trim();
+  var topic = 'item';
+  if (/document|upload|file/i.test(resource)) topic = 'document';
+  else if (/auth|login|otp|password|user/i.test(resource)) topic = 'account';
+  else if (/report/i.test(resource)) topic = 'report';
+  else if (/audit|analysis|compliance/i.test(resource)) topic = 'audit';
+  else if (/task|workflow/i.test(resource)) topic = 'task';
+  else if (/dashboard|stat/i.test(resource)) topic = 'dashboard';
+  else if (/notification/i.test(resource)) topic = 'notification';
+  else if (/search/i.test(resource)) topic = 'search';
+  if (method === 'get') {
+    if (topic === 'document') return 'Viewed documents';
+    if (topic === 'report') return 'Viewed a report';
+    if (topic === 'audit') return 'Viewed audit information';
+    if (topic === 'dashboard') return 'Opened the dashboard';
+    if (topic === 'account') return 'Viewed account information';
+    return 'Viewed information';
+  }
+  if (method === 'post') {
+    if (topic === 'document') return 'Submitted a document';
+    if (topic === 'audit') return 'Started an audit';
+    if (topic === 'report') return 'Generated a report';
+    if (topic === 'account') return 'Updated account';
+    if (topic === 'search') return 'Searched';
+    return 'Saved a change';
+  }
+  if (method === 'put' || method === 'patch') {
+    if (topic === 'document') return 'Updated a document';
+    if (topic === 'account') return 'Updated account';
+    return 'Updated information';
+  }
+  if (method === 'delete') {
+    if (topic === 'document') return 'Deleted a document';
+    return 'Removed an item';
+  }
+  return 'Activity';
+}
+
+function humanizeAction(action) {
+  var raw = String(action || '').trim();
+  if (!raw) return 'Activity';
+  var key = raw.toLowerCase().replace(/\s+/g, '_');
+  if (ACTION_LABELS[key]) return ACTION_LABELS[key];
+  var httpLabel = humanizeHttpStyleAction(raw);
+  if (httpLabel) return httpLabel;
+  if (/login/i.test(raw) && /fail/i.test(raw)) return 'Sign-in failed';
+  if (/login|sign.?in/i.test(raw)) return 'Signed in';
+  if (/logout|sign.?out/i.test(raw)) return 'Signed out';
+  if (/upload/i.test(raw)) return 'Uploaded a document';
+  if (/assign/i.test(raw)) return 'Assigned a document';
+  if (/request/i.test(raw) && /document|magerwa|cargo/i.test(raw)) return 'Requested a document';
+  if (/audit|analysis|compliance/i.test(raw)) return 'Worked on an audit';
+  if (/status/i.test(raw)) return 'Updated status';
+  if (/password/i.test(raw)) return 'Password update';
+  if (/role|permission|access/i.test(raw)) return 'Access change';
+  if (/delete|remove/i.test(raw)) return 'Removed an item';
+  if (/download|export/i.test(raw)) return 'Downloaded a file';
+  // Strip technical leftovers and title-case remaining words
+  var cleaned = raw
+    .replace(/\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/gi, '')
+    .replace(/[_/\\.-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return 'Activity';
+  return cleaned.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+}
+
+function humanizeDetails(text) {
+  if (text == null || text === '') return '—';
+  var s = String(text);
+  s = s
+    .replace(/\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/gi, '')
+    .replace(/https?:\/\/[^\s]+/gi, '')
+    .replace(/\/api\/[^\s,]*/gi, '')
+    .replace(/\b(api|endpoint|json|uuid|jwt|smtp|http|https|localhost)\b/gi, '')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '')
+    .replace(/[_/\\]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.])/g, '$1')
+    .trim();
+  return s || '—';
+}
+
+function humanizeStatus(status) {
+  var s = String(status || '').toLowerCase();
+  if (!s || s === '—' || s === 'unknown') return '—';
+  if (s === 'success' || s === 'ok' || s === 'completed') return 'Done';
+  if (s === 'failure' || s === 'failed' || s === 'error') return 'Failed';
+  if (s === 'pending') return 'Pending';
+  return humanizeDetails(status);
+}
+
+function humanizeResource(resourceType) {
+  var r = String(resourceType || '').toLowerCase();
+  if (!r || r === '—') return '—';
+  if (r === 'auth') return 'Account';
+  if (r === 'document' || r === 'documents') return 'Document';
+  if (r === 'user' || r === 'users') return 'User';
+  if (r === 'analysis' || r === 'audit') return 'Audit';
+  if (r === 'report') return 'Report';
+  return humanizeDetails(resourceType);
+}
+
 function fmtBytes(n) {
   if (!n) return '—';
   var kb = Number(n) / 1024;
@@ -114,6 +267,119 @@ function fmtBytes(n) {
 function daysSince(d) {
   if (!d) return null;
   return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+}
+
+function ymdLocal(d) {
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
+function startOfLocalDay(d) {
+  var x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function endOfLocalDay(d) {
+  var x = new Date(d);
+  x.setHours(23, 59, 59, 999);
+  return x;
+}
+
+function parseYmd(str) {
+  if (!str || !/^\d{4}-\d{2}-\d{2}$/.test(String(str).trim())) return null;
+  var parts = String(str).trim().split('-').map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+/** Resolve report window from query: preset=yesterday | date=YYYY-MM-DD | startDate/endDate | days */
+function resolvePeriod(query) {
+  query = query || {};
+  var preset = String(query.preset || '').toLowerCase().trim();
+  var single = parseYmd(query.date);
+  var startDate = parseYmd(query.startDate);
+  var endDate = parseYmd(query.endDate);
+
+  if (preset === 'yesterday') {
+    var y = new Date();
+    y.setDate(y.getDate() - 1);
+    var yStart = startOfLocalDay(y);
+    var yEnd = endOfLocalDay(y);
+    return {
+      since: yStart,
+      until: yEnd,
+      days: 1,
+      periodLabel: 'Yesterday (' + ymdLocal(y) + ')',
+      periodStart: yStart.toISOString(),
+      periodEnd: yEnd.toISOString(),
+    };
+  }
+
+  if (preset === 'today') {
+    var t = new Date();
+    var tStart = startOfLocalDay(t);
+    var tEnd = endOfLocalDay(t);
+    return {
+      since: tStart,
+      until: tEnd,
+      days: 1,
+      periodLabel: 'Today (' + ymdLocal(t) + ')',
+      periodStart: tStart.toISOString(),
+      periodEnd: tEnd.toISOString(),
+    };
+  }
+
+  if (single) {
+    var sStart = startOfLocalDay(single);
+    var sEnd = endOfLocalDay(single);
+    return {
+      since: sStart,
+      until: sEnd,
+      days: 1,
+      periodLabel: ymdLocal(single),
+      periodStart: sStart.toISOString(),
+      periodEnd: sEnd.toISOString(),
+    };
+  }
+
+  if (startDate || endDate) {
+    var since = startOfLocalDay(startDate || endDate);
+    var until = endOfLocalDay(endDate || startDate || new Date());
+    if (until < since) {
+      var tmp = since;
+      since = startOfLocalDay(until);
+      until = endOfLocalDay(tmp);
+    }
+    var spanDays = Math.max(1, Math.round((until - since) / 86400000) + 1);
+    return {
+      since: since,
+      until: until,
+      days: spanDays,
+      periodLabel: ymdLocal(since) + ' – ' + ymdLocal(until),
+      periodStart: since.toISOString(),
+      periodEnd: until.toISOString(),
+    };
+  }
+
+  var days = Math.min(Math.max(parseInt(query.days, 10) || 90, 1), 365);
+  var until = new Date();
+  var sinceRoll = new Date(Date.now() - days * 86400000);
+  return {
+    since: sinceRoll,
+    until: until,
+    days: days,
+    periodLabel: 'Last ' + days + ' days',
+    periodStart: sinceRoll.toISOString(),
+    periodEnd: until.toISOString(),
+  };
+}
+
+function fieldInPeriod(field, ctx) {
+  var range = { [Op.gte]: ctx.since };
+  if (ctx.until) range[Op.lte] = ctx.until;
+  return { [field]: range };
 }
 
 async function loadUsersMap(models, ids) {
@@ -133,8 +399,7 @@ async function buildReport(reportId, models, user, query) {
   var meta = REPORT_META[reportId];
   if (!meta) return null;
 
-  var days = Math.min(parseInt(query.days, 10) || 90, 365);
-  var since = new Date(Date.now() - days * 86400000);
+  var period = resolvePeriod(query);
   var where = docScope(user);
   var handlers = {
     my_documents_status: buildMyDocumentsStatus,
@@ -152,6 +417,7 @@ async function buildReport(reportId, models, user, query) {
     time_to_audit: buildTimeToAudit,
     common_findings: buildCommonFindings,
     audit_trail_log: buildAuditTrailLog,
+    activity_report: buildActivityReport,
     workload_history: buildWorkloadHistory,
     user_activity: buildUserActivity,
     role_access_log: buildRoleAccessLog,
@@ -166,13 +432,22 @@ async function buildReport(reportId, models, user, query) {
 
   var handler = handlers[reportId];
   if (!handler) return null;
-  var payload = await handler(models, user, { where: where, since: since, days: days, user: user });
+  var payload = await handler(models, user, {
+    where: where,
+    since: period.since,
+    until: period.until,
+    days: period.days,
+    user: user,
+  });
   return Object.assign({
     id: reportId,
     title: meta.title,
     description: meta.description,
     generatedAt: new Date().toISOString(),
-    periodDays: days,
+    periodDays: period.days,
+    periodLabel: period.periodLabel,
+    periodStart: period.periodStart,
+    periodEnd: period.periodEnd,
     scope: ['client', 'document_manager'].includes(normalizeRole(user.role)) ? 'personal' : normalizeRole(user.role) === 'administrator' ? 'system' : 'organization',
     scopeLabel: scopeLabelForRole(user.role),
   }, payload);
@@ -221,7 +496,7 @@ async function buildMyDocumentsStatus(models, user, ctx) {
 
 async function buildUploadHistory(models, user, ctx) {
   var docs = await models.Document.findAll({
-    where: Object.assign({}, ctx.where, { uploadedAt: { [Op.gte]: ctx.since } }),
+    where: Object.assign({}, ctx.where, fieldInPeriod('uploadedAt', ctx)),
     order: [['uploadedAt', 'DESC']],
     limit: 100,
   });
@@ -394,14 +669,18 @@ async function buildVersionHistory(models, user, ctx) {
       { key: 'time', label: 'Date' },
     ],
     rows: logs.map(function (l) {
-      return { action: l.action, details: l.description || '—', time: fmtDate(l.createdAt) };
+      return {
+        action: humanizeAction(l.action),
+        details: humanizeDetails(l.description || '—'),
+        time: fmtDate(l.createdAt),
+      };
     }),
   };
 }
 
 async function buildSubmissionTrend(models, user, ctx) {
   var docs = await models.Document.findAll({
-    where: Object.assign({}, ctx.where, { uploadedAt: { [Op.gte]: ctx.since } }),
+    where: Object.assign({}, ctx.where, fieldInPeriod('uploadedAt', ctx)),
     attributes: ['uploadedAt'],
   });
   var buckets = {};
@@ -481,13 +760,13 @@ async function buildCompletionRate(models, user, ctx) {
   var analyses;
   if (normalizeRole(user.role) === 'auditor') {
     var tasks = await models.Task.findAll({
-      where: { assignedTo: user.id, status: 'completed', completedAt: { [Op.gte]: ctx.since } },
+      where: Object.assign({ assignedTo: user.id, status: 'completed' }, fieldInPeriod('completedAt', ctx)),
       attributes: ['documentId'],
     });
     var docIds = tasks.map(function (t) { return t.documentId; }).filter(Boolean);
     analyses = docIds.length
       ? await models.DocumentAnalysis.findAll({
-        where: { documentId: { [Op.in]: docIds }, createdAt: { [Op.gte]: ctx.since } },
+        where: Object.assign({ documentId: { [Op.in]: docIds } }, fieldInPeriod('createdAt', ctx)),
         include: [{ model: models.Document, attributes: ['id', 'title', 'status', 'category', 'uploadedBy'], required: false }],
         order: [['createdAt', 'DESC']],
         limit: 500,
@@ -586,23 +865,77 @@ async function buildAuditTrailLog(models, user, ctx) {
     summary: { events: logs.length },
     columns: [
       { key: 'user', label: 'User' },
-      { key: 'action', label: 'Action' },
-      { key: 'resource', label: 'Resource' },
-      { key: 'time', label: 'Time' },
+      { key: 'action', label: 'What happened' },
+      { key: 'resource', label: 'Related to' },
+      { key: 'time', label: 'When' },
     ],
     rows: logs.map(function (l) {
       return {
         user: users[l.userId] || 'System',
-        action: l.action,
-        resource: l.resourceType || '—',
+        action: humanizeAction(l.action),
+        resource: humanizeResource(l.resourceType),
         time: fmtDate(l.createdAt),
       };
     }),
   };
 }
 
+async function buildActivityReport(models, user, ctx) {
+  // Every user only sees their own actions (what they did)
+  var where = Object.assign(fieldInPeriod('createdAt', ctx), { userId: user.id });
+
+  var logs = await models.AuditLog.findAll({
+    where: where,
+    order: [['createdAt', 'DESC']],
+    limit: 500,
+  });
+
+  var displayName = user.fullName || user.email || 'You';
+  var logins = 0;
+  var uploads = 0;
+  var audits = 0;
+  var other = 0;
+
+  logs.forEach(function (l) {
+    if (/login/i.test(l.action)) logins++;
+    else if (/upload/i.test(l.action)) uploads++;
+    else if (/audit|analysis|compliance|review/i.test(l.action)) audits++;
+    else other++;
+  });
+
+  return {
+    summary: {
+      events: logs.length,
+      logins: logins,
+      uploads: uploads,
+      audits: audits,
+      other: other,
+    },
+    columns: [
+      { key: 'date', label: 'Date' },
+      { key: 'time', label: 'Time' },
+      { key: 'user', label: 'Person' },
+      { key: 'action', label: 'What happened' },
+      { key: 'details', label: 'Details' },
+      { key: 'status', label: 'Result' },
+    ],
+    rows: logs.map(function (l) {
+      return {
+        date: fmtDate(l.createdAt),
+        time: fmtTime(l.createdAt),
+        user: displayName,
+        action: humanizeAction(l.action),
+        details: l.description
+          ? humanizeDetails(l.description)
+          : humanizeResource(l.resourceType),
+        status: humanizeStatus(l.status),
+      };
+    }),
+  };
+}
+
 async function buildWorkloadHistory(models, user, ctx) {
-  var taskWhere = { assignedTo: user.id, status: 'completed', completedAt: { [Op.gte]: ctx.since } };
+  var taskWhere = Object.assign({ assignedTo: user.id, status: 'completed' }, fieldInPeriod('completedAt', ctx));
   var tasks = await models.Task.findAll({ where: taskWhere, attributes: ['completedAt'] });
   var buckets = {};
   tasks.forEach(function (t) {
@@ -648,7 +981,7 @@ async function buildAllUsers(models, user, ctx) {
 
 async function buildUserActivity(models, user, ctx) {
   var logs = await models.AuditLog.findAll({
-    where: { createdAt: { [Op.gte]: ctx.since } },
+    where: fieldInPeriod('createdAt', ctx),
     attributes: ['userId', 'action'],
   });
   var byUser = {};
@@ -681,18 +1014,21 @@ async function buildUserActivity(models, user, ctx) {
 
 async function buildRoleAccessLog(models, user, ctx) {
   var logs = await models.AuditLog.findAll({
-    where: {
-      createdAt: { [Op.gte]: ctx.since },
+    where: Object.assign(fieldInPeriod('createdAt', ctx), {
       action: { [Op.or]: [{ [Op.iLike]: '%role%' }, { [Op.iLike]: '%permission%' }, { [Op.iLike]: '%access%' }] },
-    },
+    }),
     order: [['createdAt', 'DESC']],
     limit: 100,
   });
   return {
     summary: { events: logs.length },
-    columns: [{ key: 'action', label: 'Event' }, { key: 'details', label: 'Details' }, { key: 'time', label: 'Time' }],
+    columns: [{ key: 'action', label: 'What happened' }, { key: 'details', label: 'Details' }, { key: 'time', label: 'When' }],
     rows: logs.map(function (l) {
-      return { action: l.action, details: l.description || '—', time: fmtDate(l.createdAt) };
+      return {
+        action: humanizeAction(l.action),
+        details: humanizeDetails(l.description || '—'),
+        time: fmtDate(l.createdAt),
+      };
     }),
   };
 }
@@ -719,7 +1055,7 @@ async function buildAuditorPerformance(models, user, ctx) {
   var rows = [];
   for (var i = 0; i < auditors.length; i++) {
     var a = auditors[i];
-    var completed = await models.Task.count({ where: { assignedTo: a.id, status: 'completed', completedAt: { [Op.gte]: ctx.since } } });
+    var completed = await models.Task.count({ where: Object.assign({ assignedTo: a.id, status: 'completed' }, fieldInPeriod('completedAt', ctx)) });
     var pending = await models.Task.count({ where: { assignedTo: a.id, status: { [Op.in]: ['pending', 'in_progress'] } } });
     rows.push({
       auditor: a.fullName || a.email,
@@ -773,7 +1109,7 @@ async function buildSystemHealth(models, user, ctx) {
   var totalBytes = docs.reduce(function (s, d) { return s + Number(d.fileSize || 0); }, 0);
   var analyses = await models.DocumentAnalysis.count();
   var errors = await models.AuditLog.count({
-    where: { status: 'failed', createdAt: { [Op.gte]: ctx.since } },
+    where: Object.assign({ status: 'failed' }, fieldInPeriod('createdAt', ctx)),
   });
   return {
     summary: { storage: fmtBytes(totalBytes), analyses: analyses, errors: errors },
@@ -849,14 +1185,16 @@ async function buildAiConfidence(models, user, ctx) {
 }
 
 const ACCESS_MAP = {
-  client: ['my_documents_status'],
-  document_manager: ['my_documents_status'],
-  auditor: ['my_audit_queue', 'audit_completion_rate'],
-  administrator: ['user_activity', 'all_users', 'document_inventory'],
+  client: ['my_documents_status', 'activity_report'],
+  document_manager: ['my_documents_status', 'activity_report'],
+  auditor: ['my_audit_queue', 'audit_completion_rate', 'activity_report'],
+  administrator: ['activity_report', 'user_activity', 'all_users', 'document_inventory'],
 };
 
 function canAccessReport(reportId, role) {
   var normalized = normalizeRole(role);
+  // Personal activity report is available to every signed-in role
+  if (reportId === 'activity_report' && REPORT_META[reportId]) return true;
   if (normalized === 'administrator') return !!REPORT_META[reportId];
   var allowed = ACCESS_MAP[normalized] || [];
   return allowed.indexOf(reportId) >= 0;

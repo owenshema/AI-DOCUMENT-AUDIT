@@ -9,7 +9,7 @@ export const ROLE_SECTIONS = [
     scope: 'Your uploaded documents and audit status',
     headerClass: 'bg-blue-600',
     headerLight: 'bg-blue-50 border-blue-100',
-    accent: 'blue',
+    accent: 'indigo',
   },
   {
     id: 'document_manager',
@@ -17,9 +17,9 @@ export const ROLE_SECTIONS = [
     title: 'Document Manager',
     tag: 'Your uploads',
     scope: 'Same as client — your uploaded documents and audit status',
-    headerClass: 'bg-emerald-600',
-    headerLight: 'bg-emerald-50 border-emerald-100',
-    accent: 'emerald',
+    headerClass: 'bg-blue-600',
+    headerLight: 'bg-blue-50 border-blue-100',
+    accent: 'indigo',
   },
   {
     id: 'auditor',
@@ -27,9 +27,9 @@ export const ROLE_SECTIONS = [
     title: 'Auditor',
     tag: 'Performs audits',
     scope: 'Your audit queue and completion rate only',
-    headerClass: 'bg-orange-500',
-    headerLight: 'bg-orange-50 border-orange-100',
-    accent: 'orange',
+    headerClass: 'bg-blue-600',
+    headerLight: 'bg-blue-50 border-blue-100',
+    accent: 'indigo',
   },
   {
     id: 'administrator',
@@ -37,9 +37,9 @@ export const ROLE_SECTIONS = [
     title: 'Admin',
     tag: 'System-wide access',
     scope: 'User history, all users, and document upload status',
-    headerClass: 'bg-violet-600',
-    headerLight: 'bg-violet-50 border-violet-100',
-    accent: 'violet',
+    headerClass: 'bg-blue-600',
+    headerLight: 'bg-blue-50 border-blue-100',
+    accent: 'indigo',
   },
 ];
 
@@ -47,10 +47,10 @@ export const CLIENT_REPORT_ID = 'my_documents_status';
 
 /** Report IDs each role may open (must match backend ACCESS_MAP). */
 export const ACCESS_BY_ROLE = {
-  client: [CLIENT_REPORT_ID],
-  document_manager: [CLIENT_REPORT_ID],
-  auditor: ['my_audit_queue', 'audit_completion_rate'],
-  administrator: ['user_activity', 'all_users', 'document_inventory'],
+  client: [CLIENT_REPORT_ID, 'activity_report'],
+  document_manager: [CLIENT_REPORT_ID, 'activity_report'],
+  auditor: ['my_audit_queue', 'audit_completion_rate', 'activity_report'],
+  administrator: ['activity_report', 'user_activity', 'all_users', 'document_inventory'],
 };
 
 export const ROLE_REPORTS = [
@@ -61,13 +61,37 @@ export const ROLE_REPORTS = [
     description: 'All documents you uploaded and their current audit status. Export is PDF only.',
   },
   {
+    id: 'activity_report',
+    section: 'client',
+    title: 'Activity report',
+    description: 'Only your own actions — logins, uploads, and document activity with date and time',
+  },
+  {
     id: CLIENT_REPORT_ID,
     section: 'document_manager',
     title: 'My uploads & status',
     description: 'All documents you uploaded and their current audit status. Export is PDF only.',
   },
+  {
+    id: 'activity_report',
+    section: 'document_manager',
+    title: 'Activity report',
+    description: 'Only your own actions — logins, uploads, and document activity with date and time',
+  },
   { id: 'my_audit_queue', section: 'auditor', title: 'My audit queue', description: 'Assigned documents with priority, age, and deadlines' },
   { id: 'audit_completion_rate', section: 'auditor', title: 'Audit completion rate', description: 'Pass/fail/revision breakdown across your completed audits' },
+  {
+    id: 'activity_report',
+    section: 'auditor',
+    title: 'Activity report',
+    description: 'Only your own logins, audits, and actions with date and time for the selected period',
+  },
+  {
+    id: 'activity_report',
+    section: 'administrator',
+    title: 'Activity report',
+    description: 'Only your own actions with date and time (use User activity history for all users)',
+  },
   { id: 'user_activity', section: 'administrator', title: 'User activity history', description: 'Logins, uploads, audits, and actions per user over time' },
   { id: 'all_users', section: 'administrator', title: 'All users', description: 'Every registered user with role, account status, and last login' },
   {
@@ -84,14 +108,11 @@ export function sectionsForUserRole(role) {
 }
 
 export function reportsForSection(sectionId) {
-  const sectionReports = ROLE_REPORTS.filter((r) => r.section === sectionId);
-  if (sectionId === 'client' || sectionId === 'document_manager') {
-    return sectionReports.filter((r) => r.id === CLIENT_REPORT_ID);
-  }
-  return sectionReports;
+  return ROLE_REPORTS.filter((r) => r.section === sectionId);
 }
 
 export function canAccessReport(reportId, role) {
+  if (reportId === 'activity_report') return true;
   const normalized = normalizeRole(role);
   const allowed = ACCESS_BY_ROLE[normalized] || [];
   return allowed.includes(reportId);

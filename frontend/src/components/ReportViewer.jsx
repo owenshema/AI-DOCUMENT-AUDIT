@@ -5,9 +5,9 @@ import {
 } from 'lucide-react';
 
 const HEALTH_STYLES = {
-  excellent: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', label: 'Excellent' },
-  good: { bg: 'bg-indigo-500/15', text: 'text-indigo-400', border: 'border-indigo-500/30', label: 'Good' },
-  review: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30', label: 'Review Required' },
+  excellent: { bg: 'bg-blue-600/15', text: 'text-blue-400', border: 'border-blue-400/30', label: 'Excellent' },
+  good: { bg: 'bg-blue-600/15', text: 'text-blue-400', border: 'border-blue-400/30', label: 'Good' },
+  review: { bg: 'bg-blue-600/15', text: 'text-blue-400', border: 'border-blue-400/30', label: 'Review Required' },
   failed: { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30', label: 'Failed' },
 };
 
@@ -62,7 +62,7 @@ function SectionBlock({ section, isDarkMode }) {
   return (
     <section className={`rounded-2xl border p-5 ${card}`}>
       <h3 className={`text-sm font-semibold mb-4 flex items-center gap-2 ${text}`}>
-        <FileText className="h-4 w-4 text-indigo-400" />
+        <FileText className="h-4 w-4 text-blue-400" />
         {section.title}
       </h3>
 
@@ -88,7 +88,7 @@ function SectionBlock({ section, isDarkMode }) {
             return (
               <div key={m.key || m.label}
                 className={`rounded-xl border px-3 py-2.5 flex items-center gap-2 ${m.warn ? 'border-red-500/30 bg-red-500/10' : isDarkMode ? 'border-white/8 bg-white/5' : 'border-gray-200 bg-white'}`}>
-                <Icon className={`h-4 w-4 flex-shrink-0 ${m.warn ? 'text-red-400' : 'text-indigo-400'}`} />
+                <Icon className={`h-4 w-4 flex-shrink-0 ${m.warn ? 'text-red-400' : 'text-blue-400'}`} />
                 <div>
                   <p className={`text-[10px] ${sub}`}>{m.label}</p>
                   <p className={`text-sm font-bold ${m.warn ? 'text-red-400' : text}`}>{m.value}</p>
@@ -103,8 +103,8 @@ function SectionBlock({ section, isDarkMode }) {
         <div className="flex flex-wrap gap-3 mb-3">
           {[
             { label: 'High', value: section.riskDistribution.high, color: 'text-red-400 bg-red-500/10 border-red-500/20' },
-            { label: 'Medium', value: section.riskDistribution.medium, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-            { label: 'Low', value: section.riskDistribution.low, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+            { label: 'Medium', value: section.riskDistribution.medium, color: 'text-blue-400 bg-blue-600/10 border-blue-400/30' },
+            { label: 'Low', value: section.riskDistribution.low, color: 'text-blue-400 bg-blue-600/10 border-blue-400/30' },
           ].map((r) => (
             <span key={r.label} className={`rounded-full border px-3 py-1 text-xs font-medium ${r.color}`}>
               {r.label}: {r.value}
@@ -139,7 +139,7 @@ function SectionBlock({ section, isDarkMode }) {
 
       {section.bullets?.map((b, i) => (
         <p key={i} className={`text-sm flex gap-2 mb-1.5 ${sub}`}>
-          <span className="text-indigo-400">•</span>{b}
+          <span className="text-blue-400">•</span>{b}
         </p>
       ))}
 
@@ -155,7 +155,7 @@ function SectionBlock({ section, isDarkMode }) {
 
       {section.numbered?.map((r, i) => (
         <p key={i} className={`text-sm mb-1.5 ${sub}`}>
-          <span className="text-indigo-400 font-semibold mr-2">{i + 1}.</span>{r}
+          <span className="text-blue-400 font-semibold mr-2">{i + 1}.</span>{r}
         </p>
       ))}
 
@@ -189,9 +189,9 @@ export default function ReportViewer({ report, isDarkMode, onClose }) {
 
   if (!structured) {
     return (
-      <div className={`rounded-2xl border p-6 ${isDarkMode ? 'bg-[#111318] border-white/8' : 'bg-white border-gray-200'}`}>
+      <div className={`rounded-2xl border p-6 ${isDarkMode ? 'bg-[#122a45] border-white/8' : 'bg-white border-gray-200'}`}>
         <p className={`text-sm ${sub} mb-4`}>Structured report view unavailable. Showing text summary.</p>
-        <pre className={`whitespace-pre-wrap text-xs leading-relaxed max-h-96 overflow-y-auto rounded-xl border p-4 ${isDarkMode ? 'border-white/8 bg-[#0d0f14] text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
+        <pre className={`whitespace-pre-wrap text-xs leading-relaxed max-h-96 overflow-y-auto rounded-xl border p-4 ${isDarkMode ? 'border-white/8 bg-[#0b1a2e] text-slate-300' : 'border-gray-200 bg-gray-50 text-gray-700'}`}>
           {report?.executiveSummary || report?.summary || 'No report content.'}
         </pre>
       </div>
@@ -201,7 +201,7 @@ export default function ReportViewer({ report, isDarkMode, onClose }) {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className={`rounded-2xl border overflow-hidden ${isDarkMode ? 'bg-gradient-to-br from-indigo-950/80 to-[#111318] border-indigo-500/20' : 'bg-gradient-to-br from-indigo-50 to-white border-indigo-100'}`}>
+      <div className={`rounded-2xl border overflow-hidden ${isDarkMode ? 'bg-gradient-to-br from-indigo-950/80 to-[#111318] border-blue-400/30' : 'bg-gradient-to-br from-indigo-50 to-white border-blue-100'}`}>
         <div className="p-6">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
             <div className="flex gap-4">
@@ -223,7 +223,7 @@ export default function ReportViewer({ report, isDarkMode, onClose }) {
                   {meta?.reportTypeLabel || report?.reportType?.replace(/_/g, ' ')}
                 </span>
                 {meta?.confidential && (
-                  <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] text-amber-500 bg-amber-500/10 border border-amber-500/20">
+                  <span className="flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] text-amber-500 bg-blue-600/10 border border-blue-400/30">
                     <Lock className="h-3 w-3" /> Confidential
                   </span>
                 )}
@@ -251,7 +251,7 @@ export default function ReportViewer({ report, isDarkMode, onClose }) {
             )}
           </div>
 
-          <div className={`mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 rounded-xl border p-3 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-indigo-100 bg-white/70'}`}>
+          <div className={`mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 rounded-xl border p-3 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-blue-100 bg-white/70'}`}>
             {[
               ['Overall Health', `${overallScore}%`],
               ['Compliance', `${complianceScore}%`],

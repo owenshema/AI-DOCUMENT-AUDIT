@@ -87,11 +87,11 @@ const UserAccessPage = () => {
                     <td className="px-4 py-3 text-sm font-medium text-white">{u.fullName}</td>
                     <td className="px-4 py-3 text-xs text-slate-400">{u.email}</td>
                     <td className="px-4 py-3">
-                      <span className="rounded-full bg-[#0ea5e9]/15 px-2 py-0.5 text-[10px] font-semibold text-[#38bdf8]">{formatRoleLabel(u.role)}</span>
+                      <span className="rounded-full bg-blue-600/15 px-2 py-0.5 text-[10px] font-semibold text-blue-400">{formatRoleLabel(u.role)}</span>
                     </td>
                     <td className="px-4 py-3">
                       {u.isActive ? (
-                        <span className="flex items-center gap-1 text-xs text-emerald-400"><CheckCircle className="h-3 w-3" /> Active</span>
+                        <span className="flex items-center gap-1 text-xs text-blue-400"><CheckCircle className="h-3 w-3" /> Active</span>
                       ) : (
                         <span className="flex items-center gap-1 text-xs text-red-400"><XCircle className="h-3 w-3" /> Inactive</span>
                       )}
@@ -103,7 +103,7 @@ const UserAccessPage = () => {
                           <button onClick={() => { setEditUser(u); setEditRole(u.role); }}
                             className="rounded p-1 text-[#38bdf8] hover:bg-[#0ea5e9]/10"><Edit className="h-4 w-4" /></button>
                           <button onClick={() => handleToggleStatus(u)}
-                            className={`rounded px-2 py-1 text-[10px] font-medium ${u.isActive ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'}`}>
+                            className={`rounded px-2 py-1 text-[10px] font-medium ${u.isActive ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25' : 'bg-blue-600/15 text-blue-400 hover:bg-blue-600/25'}`}>
                             {u.isActive ? 'Deactivate' : 'Activate'}
                           </button>
                         </div>

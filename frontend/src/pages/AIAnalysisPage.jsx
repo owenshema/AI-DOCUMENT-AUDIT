@@ -135,10 +135,10 @@ function DocumentViewer({ doc, localFile, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#111318] shadow-2xl">
+      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#122a45] shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            <FileText className="h-5 w-5 text-indigo-400 flex-shrink-0" />
+            <FileText className="h-5 w-5 text-blue-400 flex-shrink-0" />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white truncate">{doc?.title || fileName}</p>
               <p className="text-xs text-slate-500">{ext ? ext.toUpperCase() : 'FILE'} document</p>
@@ -154,7 +154,7 @@ function DocumentViewer({ doc, localFile, onClose }) {
             </button>
           </div>
         </div>
-        <div className="flex min-h-[60vh] flex-1 items-stretch justify-center overflow-auto bg-[#0d0f14]">
+        <div className="flex min-h-[60vh] flex-1 items-stretch justify-center overflow-auto bg-[#0b1a2e]">
           {loading && (
             <div className="flex flex-col items-center justify-center gap-3 m-auto">
               <div className="h-8 w-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
@@ -167,7 +167,7 @@ function DocumentViewer({ doc, localFile, onClose }) {
               <p className="text-sm text-red-400">{err}</p>
               {!localFile && (
                 <button onClick={handleDownload}
-                  className="flex items-center gap-2 rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600">
                   <Download className="h-4 w-4" /> Download to View
                 </button>
               )}
@@ -287,17 +287,24 @@ function normalizeDocumentInspection(raw, result) {
 }
 
 const STATUS_PILL = {
-  approved: 'bg-emerald-500/15 text-emerald-400',
+  approved: 'bg-blue-600/15 text-blue-400',
   in_review: 'bg-blue-500/15 text-blue-400',
-  in_progress: 'bg-amber-500/15 text-amber-400',
-  submitted: 'bg-indigo-500/15 text-indigo-400',
+  in_progress: 'bg-blue-600/15 text-blue-400',
+  submitted: 'bg-blue-600/15 text-blue-400',
   changes_requested: 'bg-purple-500/15 text-purple-400',
   rejected: 'bg-red-500/15 text-red-400',
   uploaded: 'bg-blue-500/15 text-blue-400',
   reviewed: 'bg-purple-500/15 text-purple-400',
 };
 
-const AUDIT_STATUSES = ['in_review', 'in_progress', 'reviewed', 'changes_requested', 'approved', 'rejected'];
+const AUDIT_STATUSES = [
+  { value: 'approved', label: 'Approved — manager can assign to client' },
+  { value: 'reviewed', label: 'Reviewed — manager can assign to client' },
+  { value: 'changes_requested', label: 'Changes requested — send back for correction' },
+  { value: 'rejected', label: 'Rejected — send back for correction' },
+  { value: 'in_progress', label: 'In progress — not ready for client yet' },
+  { value: 'in_review', label: 'In review — not ready for client yet' },
+];
 
 export default function AIAnalysisPage() {
   const { isDarkMode, user } = useAuthStore();
@@ -317,18 +324,18 @@ export default function AIAnalysisPage() {
   const [viewerLocalFile, setViewerLocalFile] = useState(null);
   const [auditedDocId, setAuditedDocId] = useState(null);
   const [auditedDoc, setAuditedDoc] = useState(null);
-  const [statusDraft, setStatusDraft] = useState({ status: 'in_review', reason: '' });
+  const [statusDraft, setStatusDraft] = useState({ status: 'approved', reason: '' });
   const [statusSaving, setStatusSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
   const isAuditorView = user?.role === 'auditor' || user?.role === 'administrator';
   const canUpdateStatus = user?.role === 'auditor';
 
-  const card    = isDarkMode ? 'bg-[#111318] border-white/8'  : 'bg-white border-gray-200 shadow-sm';
+  const card    = isDarkMode ? 'bg-[#122a45] border-white/8'  : 'bg-white border-gray-200 shadow-sm';
   const text    = isDarkMode ? 'text-white'    : 'text-gray-900';
   const sub     = isDarkMode ? 'text-slate-500': 'text-gray-500';
   const inputCls = isDarkMode
-    ? 'border-white/10 bg-[#0d0f14] text-white placeholder-slate-700 focus:border-indigo-500/50'
+    ? 'border-white/10 bg-[#0b1a2e] text-white placeholder-slate-700 focus:border-blue-400/30'
     : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:border-indigo-400';
 
   const loadExistingDocs = useCallback(async (filter) => {
@@ -367,7 +374,7 @@ export default function AIAnalysisPage() {
     setAuditedDoc(null);
     setViewerDoc(null);
     setViewerLocalFile(null);
-    setStatusDraft({ status: 'in_review', reason: '' });
+    setStatusDraft({ status: 'approved', reason: '' });
     setStatusMsg('');
   };
 
@@ -430,7 +437,13 @@ export default function AIAnalysisPage() {
     setStep('analyzing');
     try {
       const res = await analysisAPI.analyzeDocument(uploadedId);
-      setResult(res?.analysis || res);
+      const analysis = res?.analysis || res;
+      setResult(analysis);
+      const score = analysis?.compliance_score ?? analysis?.complianceScore ?? analysis?.overall_audit_score ?? 0;
+      setStatusDraft({
+        status: Number(score) >= 60 ? 'approved' : 'changes_requested',
+        reason: '',
+      });
       setStep('done');
     } catch (e) {
       setError(e?.response?.data?.error || e?.message || 'Analysis failed.');
@@ -447,7 +460,13 @@ export default function AIAnalysisPage() {
     setFile(null); setBusy(true); setError(''); setResult(null); setStep('analyzing');
     try {
       const res = await analysisAPI.analyzeDocument(doc.id);
-      setResult(res?.analysis || res);
+      const analysis = res?.analysis || res;
+      setResult(analysis);
+      const score = analysis?.compliance_score ?? analysis?.complianceScore ?? analysis?.overall_audit_score ?? 0;
+      setStatusDraft({
+        status: Number(score) >= 60 ? 'approved' : 'changes_requested',
+        reason: '',
+      });
       setStep('done');
     } catch (e) {
       setError(e?.response?.data?.error || e?.message || 'Analysis failed.');
@@ -465,7 +484,14 @@ export default function AIAnalysisPage() {
         status: statusDraft.status,
         reason: statusDraft.reason || '',
       });
-      setStatusMsg(`Returned to document manager — they will assign the approved document to the client for cargo clearance.`);
+      const assignable = ['approved', 'reviewed'].includes(statusDraft.status);
+      setStatusMsg(
+        assignable
+          ? 'Returned to document manager. They can now open Document Management → Assign to Client and pick any client.'
+          : statusDraft.status === 'changes_requested' || statusDraft.status === 'rejected'
+            ? 'Returned to document manager for correction before client assignment.'
+            : 'Returned to document manager. Choose Approved or Reviewed so they can assign it to a client.'
+      );
       if (showPicker) loadExistingDocs(auditFilter);
     } catch (e) {
       setStatusMsg(e?.response?.data?.error || 'Status update failed.');
@@ -481,8 +507,8 @@ export default function AIAnalysisPage() {
   return (
     <AppShell title="AI Analysis">
       {/* Engine badge */}
-      <div className={`mb-5 flex items-center gap-3 rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-indigo-500/20 bg-indigo-500/5' : 'border-indigo-100 bg-indigo-50'}`}>
-        <Bot className="h-5 w-5 text-indigo-400 flex-shrink-0" />
+      <div className={`mb-5 flex items-center gap-3 rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-blue-400/30 bg-blue-600/5' : 'border-blue-100 bg-blue-50'}`}>
+        <Bot className="h-5 w-5 text-blue-400 flex-shrink-0" />
         <p className={`text-xs ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>
           <span className={`font-semibold ${text}`}>SIFCO ML Training Engine</span>
           {' — '}Trained on your six SIFCO reference PDFs. Validation uses text inside the document only — you can rename the file; the audit does not depend on the file name.
@@ -504,13 +530,13 @@ export default function AIAnalysisPage() {
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
             className={`cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-colors ${
-              dragging ? 'border-indigo-400 bg-indigo-500/10'
-              : file ? (isDarkMode ? 'border-indigo-500/40 bg-indigo-500/5' : 'border-indigo-300 bg-indigo-50')
-              : (isDarkMode ? 'border-white/10 hover:border-indigo-500/30 hover:bg-white/2' : 'border-gray-300 hover:border-indigo-300 hover:bg-indigo-50/30')
+              dragging ? 'border-indigo-400 bg-blue-600/10'
+              : file ? (isDarkMode ? 'border-blue-400/30 bg-blue-600/5' : 'border-indigo-300 bg-blue-50')
+              : (isDarkMode ? 'border-white/10 hover:border-blue-400/30 hover:bg-white/2' : 'border-gray-300 hover:border-indigo-300 hover:bg-blue-50/30')
             }`}>
             {file ? (
               <div className="flex flex-col items-center gap-2">
-                <FileText className="h-8 w-8 text-indigo-400" />
+                <FileText className="h-8 w-8 text-blue-400" />
                 <p className={`text-sm font-medium ${text}`}>{file.name}</p>
                 <p className={`text-xs ${sub}`}>{(file.size / 1024).toFixed(1)} KB</p>
                 <button
@@ -533,7 +559,7 @@ export default function AIAnalysisPage() {
           {/* Actions */}
           <div className="flex flex-col gap-2">
             <button onClick={handleUploadAndAudit} disabled={!file || busy}
-              className="flex items-center justify-center gap-2 rounded-xl bg-indigo-500 py-3 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-40">
+              className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-40">
               <Zap className="h-4 w-4" />
               {step === 'uploading' ? 'Uploading...' : step === 'analyzing' ? 'Running AI audit...' : 'Upload & Run Audit'}
             </button>
@@ -566,10 +592,10 @@ export default function AIAnalysisPage() {
                 const active = step === s;
                 return (
                   <div key={s} className="flex items-center gap-2.5">
-                    <div className={`h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold transition-colors ${done ? 'bg-emerald-500 text-white' : active ? 'bg-indigo-500 text-white animate-pulse' : isDarkMode ? 'bg-white/8 text-slate-600' : 'bg-gray-200 text-gray-400'}`}>
+                    <div className={`h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold transition-colors ${done ? 'bg-blue-600 text-white' : active ? 'bg-blue-600 text-white animate-pulse' : isDarkMode ? 'bg-white/8 text-slate-600' : 'bg-gray-200 text-gray-400'}`}>
                       {done ? '✓' : i + 1}
                     </div>
-                    <span className={`text-xs ${done ? 'text-emerald-400' : active ? text : sub}`}>{label}</span>
+                    <span className={`text-xs ${done ? 'text-blue-400' : active ? text : sub}`}>{label}</span>
                   </div>
                 );
               })}
@@ -585,12 +611,12 @@ export default function AIAnalysisPage() {
               {(auditedDocId || file) && (
                 <button
                   onClick={() => openDocumentReview(file ? { localFile: file } : { doc: auditedDoc || { id: auditedDocId, title: docTitle, fileName: docTitle } })}
-                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-medium ${isDarkMode ? 'border-indigo-500/25 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20' : 'border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-medium ${isDarkMode ? 'border-blue-400/30 bg-blue-600/10 text-blue-400 hover:bg-blue-600/20' : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'}`}>
                   <Eye className="h-3 w-3" /> Review Document
                 </button>
               )}
               {result && (
-                <span className={`text-[10px] rounded-full px-2 py-0.5 border ${isDarkMode ? 'border-indigo-500/20 bg-indigo-500/10 text-indigo-400' : 'border-indigo-200 bg-indigo-50 text-indigo-600'}`}>
+                <span className={`text-[10px] rounded-full px-2 py-0.5 border ${isDarkMode ? 'border-blue-400/30 bg-blue-600/10 text-blue-400' : 'border-blue-200 bg-blue-50 text-blue-600'}`}>
                   {result.engine === 'openai' ? '🤖 OpenAI' : '⚙️ Rule-based'}
                 </span>
               )}
@@ -616,12 +642,12 @@ export default function AIAnalysisPage() {
             <div className="space-y-4">
               {docTitle && (
                 <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
-                  <FileText className="h-4 w-4 text-indigo-400 flex-shrink-0" />
+                  <FileText className="h-4 w-4 text-blue-400 flex-shrink-0" />
                   <p className={`text-xs truncate flex-1 ${isDarkMode ? 'text-slate-300' : 'text-gray-600'}`}>{docTitle}</p>
                   {(auditedDocId || file) && (
                     <button
                       onClick={() => openDocumentReview(file ? { localFile: file } : { doc: auditedDoc || { id: auditedDocId, title: docTitle, fileName: docTitle } })}
-                      className="flex items-center gap-1 rounded-lg bg-indigo-500/15 border border-indigo-500/20 px-2 py-1 text-[10px] font-medium text-indigo-400 hover:bg-indigo-500/25 flex-shrink-0">
+                      className="flex items-center gap-1 rounded-lg bg-blue-600/15 border border-blue-400/30 px-2 py-1 text-[10px] font-medium text-blue-400 hover:bg-blue-600/25 flex-shrink-0">
                       <Eye className="h-3 w-3" /> Review
                     </button>
                   )}
@@ -644,12 +670,12 @@ export default function AIAnalysisPage() {
                 const overallLabel = result?.overall_audit_status || (overallScore >= 85 ? 'Excellent' : overallScore >= 60 ? 'Good' : overallScore >= 40 ? 'Review Required' : 'Failed');
                 return (
                   <div className="space-y-3">
-                    <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-indigo-500/25 bg-indigo-500/8' : 'border-indigo-200 bg-indigo-50'}`}>
+                    <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-blue-400/30 bg-blue-600/8' : 'border-blue-200 bg-blue-50'}`}>
                       <div className="flex items-center gap-4">
                         <ScoreArc score={overallScore} dark={isDarkMode} />
                         <div>
                           <p className={`text-[10px] uppercase tracking-wider mb-0.5 ${sub}`}>Overall Audit Health</p>
-                          <p className={`text-2xl font-bold ${overallScore >= 85 ? 'text-emerald-400' : overallScore >= 60 ? 'text-indigo-400' : overallScore >= 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                          <p className={`text-2xl font-bold ${overallScore >= 85 ? 'text-blue-400' : overallScore >= 60 ? 'text-blue-400' : overallScore >= 40 ? 'text-blue-400' : 'text-red-400'}`}>
                             {overallScore}%
                           </p>
                           <p className={`text-xs font-semibold ${text}`}>{overallLabel}</p>
@@ -662,17 +688,17 @@ export default function AIAnalysisPage() {
                       <div className="text-center">
                         <ScoreArc score={score} dark={isDarkMode} />
                         <p className={`text-[10px] uppercase tracking-wider mt-2 ${sub}`}>Compliance</p>
-                        <p className={`text-xs font-bold ${score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : 'text-red-400'}`}>{score}%</p>
+                        <p className={`text-xs font-bold ${score >= 80 ? 'text-blue-400' : score >= 60 ? 'text-blue-400' : 'text-red-400'}`}>{score}%</p>
                       </div>
                       <div className="text-center">
                         <ScoreArc score={integrityScore} dark={isDarkMode} />
                         <p className={`text-[10px] uppercase tracking-wider mt-2 ${sub}`}>Integrity</p>
-                        <p className={`text-xs font-bold ${integrityScore >= 70 ? 'text-emerald-400' : integrityScore >= 50 ? 'text-amber-400' : 'text-red-400'}`}>{integrityScore}%</p>
+                        <p className={`text-xs font-bold ${integrityScore >= 70 ? 'text-blue-400' : integrityScore >= 50 ? 'text-blue-400' : 'text-red-400'}`}>{integrityScore}%</p>
                       </div>
                       <div className="text-center">
                         <ScoreArc score={authenticity} dark={isDarkMode} />
                         <p className={`text-[10px] uppercase tracking-wider mt-2 ${sub}`}>Authenticity</p>
-                        <p className={`text-xs font-bold ${!aiAssessed ? sub : (aiGenerated > 25 ? 'text-red-400' : 'text-emerald-400')}`}>{aiAssessed ? `${authenticity}%` : 'N/A'}</p>
+                        <p className={`text-xs font-bold ${!aiAssessed ? sub : (aiGenerated > 25 ? 'text-red-400' : 'text-blue-400')}`}>{aiAssessed ? `${authenticity}%` : 'N/A'}</p>
                         {aiSourceLabel && (
                           <p className={`text-[9px] mt-0.5 ${sub}`} title={aiDetection?.detail || ''}>{aiSourceLabel}</p>
                         )}
@@ -684,7 +710,7 @@ export default function AIAnalysisPage() {
 
               {(result.decision?.title || result.summary) && (
                 <div className={`rounded-xl border px-3 py-3 text-xs leading-relaxed ${
-                  isDarkMode ? 'border-indigo-500/25 bg-indigo-500/8 text-slate-200' : 'border-indigo-200 bg-indigo-50 text-gray-800'
+                  isDarkMode ? 'border-blue-400/30 bg-blue-600/8 text-slate-200' : 'border-blue-200 bg-blue-50 text-gray-800'
                 }`}>
                   <p className="font-semibold text-sm mb-1">
                     {result.decision?.title || 'Analysis summary'}
@@ -703,38 +729,45 @@ export default function AIAnalysisPage() {
 
               {/* Auditor status update — after AI audit completes */}
               {auditedDocId && canUpdateStatus && step === 'done' && (
-                <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-indigo-500/25 bg-indigo-500/5' : 'border-indigo-200 bg-indigo-50'}`}>
+                <div className={`w-full min-w-0 rounded-xl border p-4 ${isDarkMode ? 'border-blue-400/30 bg-blue-600/5' : 'border-blue-200 bg-blue-50'}`}>
                   <p className={`text-xs font-semibold mb-1 ${text}`}>Auditor decision</p>
-                  <p className={`text-[11px] mb-3 ${sub}`}>
-                    Review the analysis, set status, and return to the document manager. They will assign the approved document back to the uploading client for Magerwa/port clearance.
+                  <p className={`text-[11px] mb-4 ${sub}`}>
+                    Set status and return to the document manager. Use <strong>Approved</strong> or <strong>Reviewed</strong> so they can assign the document to any client for cargo clearance.
                     {overallScore >= 60
-                      ? ' This document scored 60% or above — you may approve it or request changes.'
+                      ? ' This document scored 60% or above — suggested status is Approved.'
                       : ' Scores below 60% may warrant changes requested or rejection.'}
                   </p>
-                  <div className="grid gap-2 sm:grid-cols-[180px_1fr_auto]">
-                    <select
-                      value={statusDraft.status}
-                      onChange={e => setStatusDraft(prev => ({ ...prev, status: e.target.value }))}
-                      className={`rounded-lg border px-2 py-2 text-xs outline-none ${inputCls}`}>
-                      {AUDIT_STATUSES.map(s => (
-                        <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
-                      ))}
-                    </select>
-                    <input
-                      value={statusDraft.reason}
-                      onChange={e => setStatusDraft(prev => ({ ...prev, reason: e.target.value }))}
-                      placeholder="Reason or note for document owner"
-                      className={`rounded-lg border px-2 py-2 text-xs outline-none ${inputCls}`}
-                    />
+                  <div className="flex w-full min-w-0 flex-col gap-3">
+                    <div>
+                      <label className={`mb-1.5 block text-[10px] font-medium uppercase tracking-wide ${sub}`}>Status</label>
+                      <select
+                        value={statusDraft.status}
+                        onChange={e => setStatusDraft(prev => ({ ...prev, status: e.target.value }))}
+                        className={`w-full rounded-lg border px-3 py-2.5 text-xs outline-none ${inputCls}`}>
+                        {AUDIT_STATUSES.map(s => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className={`mb-1.5 block text-[10px] font-medium uppercase tracking-wide ${sub}`}>Reason or note</label>
+                      <input
+                        value={statusDraft.reason}
+                        onChange={e => setStatusDraft(prev => ({ ...prev, reason: e.target.value }))}
+                        placeholder="Optional note for the document manager"
+                        className={`w-full rounded-lg border px-3 py-2.5 text-xs outline-none ${inputCls}`}
+                      />
+                    </div>
                     <button
+                      type="button"
                       onClick={handleStatusUpdate}
                       disabled={statusSaving}
-                      className="rounded-lg bg-indigo-500 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-600 disabled:opacity-40">
-                      {statusSaving ? 'Saving...' : 'Return to document manager'}
+                      className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-40 sm:w-auto sm:self-end">
+                      {statusSaving ? 'Returning…' : 'Return to document manager'}
                     </button>
                   </div>
                   {statusMsg && (
-                    <p className={`mt-2 text-[11px] ${statusMsg.includes('failed') || statusMsg.includes('error') ? 'text-red-400' : 'text-emerald-400'}`}>
+                    <p className={`mt-3 text-[11px] ${statusMsg.includes('failed') || statusMsg.includes('error') ? 'text-red-400' : 'text-blue-400'}`}>
                       {statusMsg}
                     </p>
                   )}
@@ -742,7 +775,7 @@ export default function AIAnalysisPage() {
               )}
 
               {(result.ml_training?.best_match || result.organization_training?.ml_training?.best_match || result.organization_category) && (
-                <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-emerald-200 bg-emerald-50'}`}>
+                <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-blue-400/30 bg-blue-600/5' : 'border-blue-200 bg-blue-50'}`}>
                   <p className="text-[10px] font-semibold text-emerald-500 mb-1">ML training match</p>
                   {(() => {
                     const ml = result.ml_training || result.organization_training?.ml_training;
@@ -769,8 +802,8 @@ export default function AIAnalysisPage() {
               {(result.missing_fields?.length > 0 || result.calculation_errors?.length > 0) && (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {result.missing_fields?.length > 0 && (
-                    <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-amber-500/25 bg-amber-500/5' : 'border-amber-200 bg-amber-50'}`}>
-                      <p className="text-[10px] font-semibold text-amber-400 mb-2">Missing areas ({result.missing_fields.length})</p>
+                    <div className={`rounded-xl border p-3 ${isDarkMode ? 'border-blue-400/30 bg-blue-600/5' : 'border-blue-200 bg-blue-50'}`}>
+                      <p className="text-[10px] font-semibold text-blue-400 mb-2">Missing areas ({result.missing_fields.length})</p>
                       <ul className="space-y-1">
                         {result.missing_fields.slice(0, 10).map(function (f, i) {
                           return (
@@ -810,7 +843,7 @@ export default function AIAnalysisPage() {
                   <ul className="space-y-1.5">
                     {result.fraud_flags.map((f, i) => (
                       <li key={i} className="flex items-start gap-2 text-[11px]">
-                        <span className={`mt-0.5 rounded px-1 py-0.5 text-[9px] font-bold flex-shrink-0 ${f.severity === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>{f.severity?.toUpperCase()}</span>
+                        <span className={`mt-0.5 rounded px-1 py-0.5 text-[9px] font-bold flex-shrink-0 ${f.severity === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-blue-600/20 text-blue-400'}`}>{f.severity?.toUpperCase()}</span>
                         <span className={isDarkMode ? 'text-slate-300' : 'text-gray-600'}>{f.message}</span>
                       </li>
                     ))}
@@ -846,9 +879,9 @@ export default function AIAnalysisPage() {
                 const rowCls = `flex items-start justify-between gap-2 py-2 border-b ${isDarkMode ? 'border-white/5' : 'border-gray-100'} last:border-0`;
                 const labelCls = `text-[11px] font-medium flex-shrink-0 w-28 ${isDarkMode ? 'text-slate-500' : 'text-gray-400'}`;
                 const valCls = `text-[11px] text-right ${isDarkMode ? 'text-slate-200' : 'text-gray-700'}`;
-                const ok  = `text-emerald-400`;
+                const ok  = `text-blue-400`;
                 const bad = `text-red-400`;
-                const warn = `text-amber-400`;
+                const warn = `text-blue-400`;
 
                 return (
                   <div className={`rounded-xl border p-4 ${isDarkMode ? 'border-white/8 bg-white/3' : 'border-gray-200 bg-gray-50'}`}>
@@ -996,7 +1029,7 @@ export default function AIAnalysisPage() {
       {/* Existing doc picker */}
       {showPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#1a1d24] border-white/10' : 'bg-white border-gray-200'}`}>
+          <div className={`w-full max-w-lg rounded-2xl border shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#122a45] border-white/10' : 'bg-white border-gray-200'}`}>
             <div className={`flex items-center justify-between px-5 py-4 border-b ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
               <div>
                 <h3 className={`text-sm font-semibold ${text}`}>Select Document to Audit</h3>
@@ -1029,7 +1062,7 @@ export default function AIAnalysisPage() {
                     onClick={() => setAuditFilter(tab.key)}
                     className={`rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${
                       auditFilter === tab.key
-                        ? 'bg-indigo-500 text-white'
+                        ? 'bg-blue-600 text-white'
                         : isDarkMode
                         ? 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
                         : 'border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
@@ -1060,8 +1093,8 @@ export default function AIAnalysisPage() {
               ) : existingDocs.map(doc => (
                 <div key={doc.id}
                   className={`flex items-center gap-3 px-5 py-3.5 ${isDarkMode ? 'border-b border-white/5 hover:bg-white/5' : 'border-b border-gray-100 hover:bg-gray-50'}`}>
-                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-indigo-500/15 border border-indigo-500/20' : 'bg-indigo-50 border border-indigo-100'}`}>
-                    <FileText className="h-4 w-4 text-indigo-400" />
+                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-blue-600/15 border border-blue-400/30' : 'bg-blue-50 border border-blue-100'}`}>
+                    <FileText className="h-4 w-4 text-blue-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-medium truncate ${text}`}>{doc.title || doc.fileName}</p>
@@ -1079,7 +1112,7 @@ export default function AIAnalysisPage() {
                     <Eye className="h-3.5 w-3.5" />
                   </button>
                   <button onClick={() => handleAuditExisting(doc)} title="Run audit"
-                    className={`rounded-lg p-1.5 flex-shrink-0 ${isDarkMode ? 'text-indigo-400 hover:bg-indigo-500/15' : 'text-indigo-600 hover:bg-indigo-50'}`}>
+                    className={`rounded-lg p-1.5 flex-shrink-0 ${isDarkMode ? 'text-blue-400 hover:bg-blue-600/15' : 'text-blue-600 hover:bg-blue-50'}`}>
                     <Zap className="h-4 w-4" />
                   </button>
                 </div>

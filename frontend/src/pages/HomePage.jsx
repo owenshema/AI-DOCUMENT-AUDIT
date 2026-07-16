@@ -35,7 +35,7 @@ const NAV_LINKS = ['Home', 'About', 'Services', 'Contact'];
 
 function SectionLabel({ children, dark = false }) {
   return (
-    <p className={`text-xs font-semibold uppercase tracking-widest mb-3 ${dark ? 'text-indigo-300' : 'text-indigo-600'}`}>
+    <p className={`text-xs font-semibold uppercase tracking-widest mb-3 ${dark ? 'text-blue-300' : 'text-blue-600'}`}>
       {children}
     </p>
   );
@@ -58,7 +58,7 @@ function NavLink({ name, active, onClick, mobile = false }) {
     : 'relative py-1 text-sm transition-colors';
 
   const color = isActive
-    ? 'text-indigo-400 font-semibold'
+    ? 'text-blue-400 font-semibold'
     : 'text-gray-300 font-medium hover:text-white';
 
   return (
@@ -125,7 +125,7 @@ export default function HomePage() {
               onError={e => { e.target.style.display = 'none'; }} />
             <div>
               <p className="text-sm font-bold text-white leading-none">SIFCO AE</p>
-              <p className="text-[10px] text-indigo-300 font-medium">Freight & Logistics</p>
+              <p className="text-[10px] text-blue-300 font-medium">Freight & Logistics</p>
             </div>
           </Link>
 
@@ -141,7 +141,7 @@ export default function HomePage() {
               Login
             </Link>
             <Link to={isAuthenticated ? '/dashboard' : '/register'}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 shadow-sm shadow-indigo-600/30 transition-colors">
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-600 shadow-sm shadow-indigo-600/30 transition-colors">
               Get Started
             </Link>
           </div>
@@ -160,7 +160,7 @@ export default function HomePage() {
               <div className="mt-3 flex flex-col gap-2 pt-3 border-t border-indigo-900/40">
                 <Link to="/login" className="rounded-lg border border-white/20 px-4 py-2.5 text-center text-sm text-gray-200 hover:border-indigo-400 transition-colors" onClick={closeMenu}>Login</Link>
                 <Link to={isAuthenticated ? '/dashboard' : '/register'}
-                  className="rounded-lg bg-indigo-600 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-indigo-500 transition-colors" onClick={closeMenu}>Get Started</Link>
+                  className="rounded-lg bg-blue-600 px-4 py-2.5 text-center text-sm font-semibold text-white hover:bg-blue-600 transition-colors" onClick={closeMenu}>Get Started</Link>
               </div>
             </div>
           </div>
@@ -184,7 +184,7 @@ export default function HomePage() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-24 w-full">
           <div className="max-w-2xl rounded-2xl bg-[#0a1628]/40 backdrop-blur-sm p-6 sm:p-8 border border-white/10">
-            <div className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white uppercase tracking-widest mb-6 shadow-md">
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white uppercase tracking-widest mb-6 shadow-md">
               SIFCO AE — Freight & Logistics
             </div>
 
@@ -203,7 +203,7 @@ export default function HomePage() {
 
             <div className="flex flex-col sm:flex-row items-start gap-4 mb-10">
               <Link to={isAuthenticated ? '/dashboard' : '/register'}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 transition-colors">
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-blue-600 transition-colors">
                 Get Started <ArrowRight className="h-5 w-5" />
               </Link>
               <a href="#about"
@@ -230,7 +230,7 @@ export default function HomePage() {
         </div>
 
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 z-10">
-          <button onClick={prev} className="h-8 w-8 rounded-full border border-white/30 bg-white/10 flex items-center justify-center text-white hover:bg-indigo-600/40 hover:border-indigo-400/50 transition-colors">
+          <button onClick={prev} className="h-8 w-8 rounded-full border border-white/30 bg-white/10 flex items-center justify-center text-white hover:bg-blue-600/40 hover:border-indigo-400/50 transition-colors">
             <ChevronLeft className="h-4 w-4" />
           </button>
           <div className="flex gap-2">
@@ -239,7 +239,7 @@ export default function HomePage() {
                 className={`rounded-full transition-all ${i === slide ? 'w-6 h-2 bg-indigo-400' : 'w-2 h-2 bg-white/40 hover:bg-indigo-300/60'}`} />
             ))}
           </div>
-          <button onClick={next} className="h-8 w-8 rounded-full border border-white/30 bg-white/10 flex items-center justify-center text-white hover:bg-indigo-600/40 hover:border-indigo-400/50 transition-colors">
+          <button onClick={next} className="h-8 w-8 rounded-full border border-white/30 bg-white/10 flex items-center justify-center text-white hover:bg-blue-600/40 hover:border-indigo-400/50 transition-colors">
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
@@ -267,14 +267,14 @@ export default function HomePage() {
               </p>
               <div className="flex flex-wrap gap-3">
                 {['ISO Certified', 'Global Network', '24/7 Support', 'Supply Chain Experts'].map(t => (
-                  <span key={t} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 border border-indigo-100 px-3 py-1.5 text-xs font-medium text-indigo-700">
-                    <CheckCircle2 className="h-3 w-3 text-indigo-600" /> {t}
+                  <span key={t} className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700">
+                    <CheckCircle2 className="h-3 w-3 text-blue-600" /> {t}
                   </span>
                 ))}
               </div>
             </div>
 
-            <div className={`rounded-2xl border border-indigo-100 bg-white p-8 shadow-sm shadow-indigo-100/50 ${CARD_LIFT} hover:border-indigo-300 hover:shadow-indigo-200/60`}>
+            <div className={`rounded-2xl border border-blue-100 bg-white p-8 shadow-sm shadow-indigo-100/50 ${CARD_LIFT} hover:border-indigo-300 hover:shadow-indigo-200/60`}>
               <h3 className="text-lg font-semibold text-gray-900 mb-6">Why Choose SIFCO AE</h3>
               <ul className="space-y-4">
                 {[
@@ -285,8 +285,8 @@ export default function HomePage() {
                   'Trusted partnerships with global organizations',
                 ].map(obj => (
                   <li key={obj} className="flex items-start gap-3">
-                    <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 mt-0.5">
-                      <CheckCircle2 className="h-3 w-3 text-indigo-600" />
+                    <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 mt-0.5">
+                      <CheckCircle2 className="h-3 w-3 text-blue-600" />
                     </span>
                     <span className="text-sm text-gray-600 leading-relaxed">{obj}</span>
                   </li>
@@ -315,12 +315,12 @@ export default function HomePage() {
               { icon: ShieldCheck, title: 'Compliance', desc: 'Regulatory compliance across all operations.' },
             ].map(s => (
               <div key={s.title}
-                className={`rounded-2xl border border-indigo-500/20 bg-indigo-950/30 p-6 text-left ${CARD_LIFT} hover:border-indigo-400/50 hover:bg-indigo-900/30 hover:shadow-indigo-900/50`}>
-                <div className="h-11 w-11 rounded-xl bg-indigo-600/25 flex items-center justify-center mb-4">
-                  <s.icon className="h-5 w-5 text-indigo-300" />
+                className={`rounded-2xl border border-blue-400/30 bg-indigo-950/30 p-6 text-left ${CARD_LIFT} hover:border-indigo-400/50 hover:bg-indigo-900/30 hover:shadow-indigo-900/50`}>
+                <div className="h-11 w-11 rounded-xl bg-blue-600/25 flex items-center justify-center mb-4">
+                  <s.icon className="h-5 w-5 text-blue-300" />
                 </div>
                 <h3 className="text-sm font-semibold text-white mb-2">{s.title}</h3>
-                <p className="text-xs text-indigo-200/60 leading-relaxed">{s.desc}</p>
+                <p className="text-xs text-blue-200/60 leading-relaxed">{s.desc}</p>
               </div>
             ))}
           </div>
@@ -368,24 +368,24 @@ export default function HomePage() {
             ].map(c => {
               const CardWrapper = c.href ? 'a' : 'div';
               const wrapperProps = c.href
-                ? { href: c.href, className: `block rounded-2xl border border-indigo-100 bg-gray-50 p-8 text-center cursor-pointer no-underline ${CARD_LIFT} hover:border-indigo-300 hover:bg-white hover:shadow-indigo-200/60` }
-                : { className: `rounded-2xl border border-indigo-100 bg-gray-50 p-8 text-center ${CARD_LIFT} hover:border-indigo-300 hover:bg-white hover:shadow-indigo-200/60` };
+                ? { href: c.href, className: `block rounded-2xl border border-blue-100 bg-gray-50 p-8 text-center cursor-pointer no-underline ${CARD_LIFT} hover:border-indigo-300 hover:bg-white hover:shadow-indigo-200/60` }
+                : { className: `rounded-2xl border border-blue-100 bg-gray-50 p-8 text-center ${CARD_LIFT} hover:border-indigo-300 hover:bg-white hover:shadow-indigo-200/60` };
 
               return (
               <CardWrapper key={c.title} {...wrapperProps}>
-                <div className="h-12 w-12 rounded-xl bg-indigo-600 flex items-center justify-center mb-5 mx-auto shadow-sm shadow-indigo-600/25">
+                <div className="h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center mb-5 mx-auto shadow-sm shadow-indigo-600/25">
                   <c.icon className="h-5 w-5 text-white" />
                 </div>
                 <h3 className="text-base font-semibold text-gray-900 mb-3">{c.title}</h3>
                 <div className="space-y-1.5">
                   {c.lines.map(line => (
-                    <p key={line.text} className={`text-sm leading-relaxed ${line.bold ? 'font-semibold text-indigo-600' : 'text-gray-500'}`}>
+                    <p key={line.text} className={`text-sm leading-relaxed ${line.bold ? 'font-semibold text-blue-600' : 'text-gray-500'}`}>
                       {line.text}
                     </p>
                   ))}
                 </div>
                 {c.href && (
-                  <span className="inline-flex items-center gap-1.5 mt-4 text-sm font-semibold text-indigo-600">
+                  <span className="inline-flex items-center gap-1.5 mt-4 text-sm font-semibold text-blue-600">
                     Send Email <ArrowRight className="h-4 w-4" />
                   </span>
                 )}
@@ -406,10 +406,10 @@ export default function HomePage() {
                   onError={e => { e.target.style.display = 'none'; }} />
                 <div>
                   <span className="text-base font-bold text-white block">SIFCO AE</span>
-                  <span className="text-[10px] text-indigo-300 font-medium">Freight & Logistics</span>
+                  <span className="text-[10px] text-blue-300 font-medium">Freight & Logistics</span>
                 </div>
               </div>
-              <p className="text-sm text-indigo-200/60 leading-relaxed">
+              <p className="text-sm text-blue-200/60 leading-relaxed">
                 Leading freight forwarding and logistics company in the Middle East,
                 serving customers worldwide with reliable supply chain solutions.
               </p>
@@ -423,29 +423,29 @@ export default function HomePage() {
                   return (
                     <li key={n}>
                       <a href={`#${id}`}
-                        className={`transition-colors ${isActive ? 'text-indigo-300 font-medium' : 'text-indigo-200/50 hover:text-indigo-300'}`}>
+                        className={`transition-colors ${isActive ? 'text-blue-300 font-medium' : 'text-blue-200/50 hover:text-blue-300'}`}>
                         {n}
                       </a>
                     </li>
                   );
                 })}
-                <li><Link to="/login" className="text-indigo-200/50 hover:text-indigo-300 transition-colors">Login</Link></li>
-                <li><Link to="/register" className="text-indigo-200/50 hover:text-indigo-300 transition-colors">Register</Link></li>
+                <li><Link to="/login" className="text-blue-200/50 hover:text-blue-300 transition-colors">Login</Link></li>
+                <li><Link to="/register" className="text-blue-200/50 hover:text-blue-300 transition-colors">Register</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-sm font-semibold text-white mb-4">Contact</h4>
-              <ul className="space-y-2.5 text-sm text-indigo-200/50">
+              <ul className="space-y-2.5 text-sm text-blue-200/50">
                 <li>Al Shamali International Freight Services LLC</li>
                 <li>Dubai, United Arab Emirates</li>
                 <li>Kigali, Rwanda</li>
                 <li>
-                  <a href="mailto:info@sifco.ae?subject=SIFCO%20AE%20Inquiry" className="hover:text-indigo-300 transition-colors underline underline-offset-2">info@sifco.ae</a>
+                  <a href="mailto:info@sifco.ae?subject=SIFCO%20AE%20Inquiry" className="hover:text-blue-300 transition-colors underline underline-offset-2">info@sifco.ae</a>
                 </li>
               </ul>
             </div>
           </div>
-          <div className="border-t border-indigo-900/40 pt-6 text-center text-xs text-indigo-300/40">
+          <div className="border-t border-indigo-900/40 pt-6 text-center text-xs text-blue-300/40">
             © {new Date().getFullYear()} SIFCO AE. All rights reserved.
           </div>
         </div>

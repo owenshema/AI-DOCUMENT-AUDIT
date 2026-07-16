@@ -10,8 +10,8 @@ const inputCls =
   'w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-3 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors';
 const labelCls = 'block text-xs text-white/60 mb-1.5';
 const btnPrimary =
-  'w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors';
-const linkCls = 'text-xs text-indigo-300 hover:text-white transition-colors';
+  'w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 transition-colors';
+const linkCls = 'text-xs text-blue-300 hover:text-white transition-colors';
 
 const OTPInput = ({ value, onChange }) => {
   const ref0 = useRef(null); const ref1 = useRef(null);
@@ -158,7 +158,7 @@ export default function LoginPage() {
               <img src="/sifco/logo.png" alt="SIFCO AE" className="h-10 w-auto brightness-0 invert"
                 onError={e => { e.target.style.display = 'none'; }} />
               <div>
-                <p className="text-sm font-bold text-white leading-none">DocAudit AI</p>
+                <p className="text-sm font-bold text-white leading-none">SIFCO AE</p>
                 <p className="text-[10px] text-white/50 mt-0.5">SIFCO AE · Audit System</p>
               </div>
             </Link>
@@ -169,7 +169,7 @@ export default function LoginPage() {
             <div className="w-full max-w-sm">
               <div className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md p-7 shadow-2xl">
                 {isPending && (
-                  <div className="mb-5 rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+                  <div className="mb-5 rounded-xl border border-amber-400/30 bg-blue-600/10 p-3 text-xs text-blue-100">
                     Your account is pending approval.{' '}
                     <Link to="/pending-approval" className="underline hover:text-white">View status</Link>
                   </div>
@@ -213,7 +213,7 @@ export default function LoginPage() {
                       </button>
                     </form>
                     <p className="mt-5 text-center text-xs text-white/40">
-                      No account? <Link to="/register" className="text-indigo-300 hover:text-white transition-colors">Register</Link>
+                      No account? <Link to="/register" className="text-blue-300 hover:text-white transition-colors">Register</Link>
                     </p>
                   </>
                 )}
@@ -222,8 +222,8 @@ export default function LoginPage() {
                 {step === 'otp' && (
                   <>
                     <div className="text-center mb-4">
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/30 border border-indigo-400/30 mb-3">
-                        <ShieldCheck className="h-6 w-6 text-indigo-300" />
+                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600/30 border border-indigo-400/30 mb-3">
+                        <ShieldCheck className="h-6 w-6 text-blue-300" />
                       </div>
                       <h2 className="text-base font-semibold text-white">Enter verification code</h2>
                       <p className="text-xs text-white/60 mt-1">
@@ -233,7 +233,7 @@ export default function LoginPage() {
                       </p>
                     </div>
                     {emailWarning && (
-                      <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-100">
+                      <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-400/30 bg-blue-600/10 px-3 py-2.5 text-xs text-blue-100">
                         <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                         <span>Email delivery failed. Your code is still valid — tap Resend code to try again.</span>
                       </div>
@@ -248,7 +248,7 @@ export default function LoginPage() {
                       <button onClick={() => { setStep('credentials'); setOtp(''); setError(''); }}
                         className="text-xs text-white/40 hover:text-white/70 transition-colors">← Back</button>
                       <button onClick={handleResend} disabled={resending}
-                        className="flex items-center gap-1 text-xs text-indigo-300 hover:text-white disabled:opacity-50 transition-colors">
+                        className="flex items-center gap-1 text-xs text-blue-300 hover:text-white disabled:opacity-50 transition-colors">
                         <RefreshCw className={`h-3 w-3 ${resending ? 'animate-spin' : ''}`} />
                         {resending ? 'Sending...' : 'Resend code'}
                       </button>
@@ -260,8 +260,8 @@ export default function LoginPage() {
                 {step === 'totp' && (
                   <>
                     <div className="text-center mb-4">
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/30 border border-indigo-400/30 mb-3">
-                        <ShieldCheck className="h-6 w-6 text-indigo-300" />
+                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600/30 border border-indigo-400/30 mb-3">
+                        <ShieldCheck className="h-6 w-6 text-blue-300" />
                       </div>
                       <h2 className="text-base font-semibold text-white">Authenticator code</h2>
                       <p className="text-xs text-white/50 mt-1">Enter the 6-digit code from your authenticator app</p>

@@ -22,18 +22,18 @@ const FILTERS = [
 ];
 
 const STATUS_PILL = {
-  approved: 'bg-emerald-500/15 text-emerald-400',
+  approved: 'bg-blue-600/15 text-blue-400',
   changes_requested: 'bg-red-500/15 text-red-400',
   rejected: 'bg-red-500/15 text-red-400',
-  in_progress: 'bg-amber-500/15 text-amber-400',
+  in_progress: 'bg-blue-600/15 text-blue-400',
   reviewed: 'bg-purple-500/15 text-purple-400',
 };
 
 const AUDIT_PILL = {
-  needs_audit: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
-  audited: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20',
+  needs_audit: 'bg-blue-600/15 text-blue-400 border-blue-400/30',
+  audited: 'bg-blue-600/15 text-blue-400 border-blue-400/30',
   pending: 'bg-slate-500/15 text-slate-400 border-slate-500/20',
-  pending_preparation: 'bg-amber-500/15 text-amber-400 border-amber-500/20',
+  pending_preparation: 'bg-blue-600/15 text-blue-400 border-blue-400/30',
 };
 
 function AuditBadge({ state }) {
@@ -77,12 +77,12 @@ export default function DocumentManagementPage() {
   const [prepareFile, setPrepareFile] = useState(null);
   const [prepareNote, setPrepareNote] = useState('');
 
-  const card = isDarkMode ? 'bg-[#111318] border-white/8' : 'bg-white border-gray-200 shadow-sm';
-  const text = isDarkMode ? 'text-white' : 'text-gray-900';
-  const sub = isDarkMode ? 'text-slate-500' : 'text-gray-500';
+  const card = isDarkMode ? 'bg-[#122a45] border-blue-400/25' : 'bg-white border-blue-200 shadow-sm';
+  const text = isDarkMode ? 'text-white' : 'text-slate-900';
+  const sub = isDarkMode ? 'text-blue-200/70' : 'text-slate-600';
   const inputCls = isDarkMode
-    ? 'border-white/10 bg-[#0d0f14] text-white placeholder-slate-600'
-    : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400';
+    ? 'border-blue-400/30 bg-[#0b1a2e] text-white placeholder-blue-300/50'
+    : 'border-blue-200 bg-white text-slate-900 placeholder-slate-400';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,6 +101,23 @@ export default function DocumentManagementPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const loadClients = useCallback(async () => {
+    try {
+      const res = await documentAPI.getAssignableClients();
+      setClients(res?.clients || []);
+    } catch {
+      try {
+        const res = await authAPI.listUsers({ role: 'client', limit: 500 });
+        setClients((res?.users || []).filter(u => u.isActive !== false && (u.role === 'client' || u.role === 'viewer')));
+      } catch {
+        setClients([]);
+      }
+    }
+  }, []);
+
+  // Prefetch all clients so assign modal always has the full list
+  useEffect(() => { loadClients(); }, [loadClients]);
+
   useEffect(() => {
     const urlFilter = searchParams.get('filter');
     if (!urlFilter || !FILTERS.some(f => f.key === urlFilter)) return;
@@ -115,26 +132,16 @@ export default function DocumentManagementPage() {
     const documentId = searchParams.get('documentId');
     if (!documentId || loading) return;
     setHighlightDocId(documentId);
+    const match = documents.find(d => d.id === documentId);
+    if (match?.awaitingClientAssignment && ['approved', 'reviewed'].includes(match.status)) {
+      setFilter('ready_for_client');
+    }
     const next = new URLSearchParams(searchParams);
     next.delete('documentId');
     setSearchParams(next, { replace: true });
     const t = setTimeout(() => setHighlightDocId(null), 8000);
     return () => clearTimeout(t);
   }, [documents, loading, searchParams, setSearchParams]);
-
-  const loadClients = async () => {
-    try {
-      const res = await documentAPI.getAssignableClients();
-      setClients(res?.clients || []);
-    } catch {
-      try {
-        const res = await authAPI.listUsers({ role: 'client', limit: 200 });
-        setClients((res?.users || []).filter(u => u.isActive !== false));
-      } catch {
-        setClients([]);
-      }
-    }
-  };
 
   const openNotify = (doc) => {
     if (doc.auditState === 'audited') return;
@@ -243,8 +250,9 @@ export default function DocumentManagementPage() {
         note: assignNote.trim() || null,
         port: assignPort.trim() || null,
       });
-      setMsg(res?.message || 'Document assigned to client(s).');
+      setMsg(res?.message || 'Document assigned to client(s). Any related client request was cleared automatically.');
       setAssignDoc(null);
+      loadClients();
       load();
     } catch (e) {
       setErr(e?.response?.data?.error || 'Failed to assign document.');
@@ -361,11 +369,11 @@ export default function DocumentManagementPage() {
   };
 
   const statCards = [
-    { label: 'Total documents', value: summary.total, icon: FileText, tone: 'text-indigo-400' },
-    { label: 'Prepare request', value: summary.needsPreparation || 0, icon: Upload, tone: 'text-amber-400' },
-    { label: 'Client uploads', value: summary.clientUploads || 0, icon: UserPlus, tone: 'text-blue-400' },
-    { label: 'Awaiting assignment', value: summary.awaitingAssignment || 0, icon: CheckCircle2, tone: 'text-violet-400' },
-    { label: 'Needs audit', value: summary.needsAudit, icon: Clock, tone: 'text-amber-400' },
+    { label: 'Total documents', value: summary.total, icon: FileText, tone: 'text-blue-400', filterKey: 'all' },
+    { label: 'Prepare request', value: summary.needsPreparation || 0, icon: Upload, tone: 'text-blue-400', filterKey: 'needs_preparation' },
+    { label: 'Client uploads', value: summary.clientUploads || 0, icon: UserPlus, tone: 'text-blue-400', filterKey: 'client_uploads' },
+    { label: 'Awaiting assignment', value: summary.awaitingAssignment || 0, icon: CheckCircle2, tone: 'text-violet-400', filterKey: 'ready_for_client' },
+    { label: 'Needs audit', value: summary.needsAudit, icon: Clock, tone: 'text-blue-400', filterKey: 'needs_audit' },
   ];
 
   const canNotifyAuditors = (doc) => doc.auditState !== 'audited' && !doc.needsManagerPreparation;
@@ -374,20 +382,44 @@ export default function DocumentManagementPage() {
   return (
     <AppShell title="Document Management">
       <p className={`mb-5 text-sm ${sub}`}>
-        Clients can request documents without uploading. You prepare the file, send it to the auditor, then assign
-        the approved document back to the client for Magerwa/port cargo clearance. Client uploads follow the same
-        audit → assign flow.
+        After the auditor returns an approved document, open <strong>Assign to Client</strong>, pick any client
+        from the full client list, and assign it for Magerwa/port cargo clearance.
       </p>
+
+      {(summary.awaitingAssignment > 0 || clients.length > 0) && (
+        <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${isDarkMode ? 'border-blue-400/30 bg-blue-500/15' : 'border-blue-200 bg-blue-50'}`}>
+          <div>
+            <p className={`text-sm font-semibold ${isDarkMode ? 'text-blue-200' : 'text-blue-800'}`}>
+              {summary.awaitingAssignment || 0} document(s) ready to assign · {clients.length} client(s) available
+            </p>
+            <p className={`mt-0.5 text-xs ${isDarkMode ? 'text-blue-200/70' : 'text-blue-700/80'}`}>
+              You can assign returned documents to any active client account.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFilter('ready_for_client')}
+            className="rounded-xl bg-blue-500 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-600"
+          >
+            View assign queue
+          </button>
+        </div>
+      )}
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {statCards.map(item => (
-          <div key={item.label} className={`rounded-2xl border p-4 ${card}`}>
+          <button
+            key={item.label}
+            type="button"
+            onClick={() => item.filterKey && setFilter(item.filterKey)}
+            className={`rounded-2xl border p-4 text-left transition-colors ${card} ${isDarkMode ? 'hover:border-white/20' : 'hover:border-gray-300'}`}
+          >
             <div className="flex items-center justify-between">
               <item.icon className={`h-5 w-5 ${item.tone}`} />
               <p className={`text-2xl font-bold ${text}`}>{item.value}</p>
             </div>
             <p className={`mt-2 text-xs ${sub}`}>{item.label}</p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -399,7 +431,7 @@ export default function DocumentManagementPage() {
               onClick={() => setFilter(tab.key)}
               className={`rounded-xl px-3 py-2 text-xs font-semibold transition-colors ${
                 filter === tab.key
-                  ? 'bg-indigo-500 text-white'
+                  ? 'bg-blue-600 text-white'
                   : isDarkMode ? 'bg-white/5 text-slate-400 hover:text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -413,18 +445,54 @@ export default function DocumentManagementPage() {
         </button>
       </div>
 
-      {msg && <div className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs text-emerald-400">{msg}</div>}
+      {msg && <div className="mb-4 rounded-xl border border-blue-400/30 bg-blue-600/10 px-4 py-2 text-xs text-blue-400">{msg}</div>}
       {err && <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs text-red-400">{err}</div>}
 
       <div className={`overflow-hidden rounded-2xl border ${card}`}>
         <div className={`border-b px-5 py-4 ${isDarkMode ? 'border-white/8' : 'border-gray-200'}`}>
-          <h2 className={`text-sm font-semibold ${text}`}>Documents ({documents.length})</h2>
+          <h2 className={`text-sm font-semibold ${text}`}>
+            {FILTERS.find(f => f.key === filter)?.label || 'Documents'} ({documents.length})
+            {filter !== 'all' && summary.total > 0 && (
+              <span className={`ml-2 font-normal ${sub}`}>· {summary.total} total in system</span>
+            )}
+          </h2>
         </div>
 
         {loading ? (
           <div className={`p-10 text-center text-sm ${sub}`}>Loading documents...</div>
         ) : documents.length === 0 ? (
-          <div className={`p-10 text-center text-sm ${sub}`}>No documents match this filter.</div>
+          <div className="p-10 text-center">
+            {filter === 'ready_for_client' ? (
+              <>
+                <p className={`text-sm font-medium ${text}`}>No documents waiting to assign</p>
+                <p className={`mx-auto mt-2 max-w-md text-xs leading-relaxed ${sub}`}>
+                  You have {summary.total || 0} document(s) total, but none are ready for client assignment yet.
+                  An auditor must finish the audit and click <strong>Return to document manager</strong> with status
+                  {' '}<strong>Approved</strong> or <strong>Reviewed</strong>. Then they appear here.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setFilter('all')}
+                  className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-600"
+                >
+                  Show all {summary.total || 0} documents
+                </button>
+              </>
+            ) : (
+              <>
+                <p className={`text-sm ${sub}`}>No documents match this filter.</p>
+                {summary.total > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter('all')}
+                    className="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-600"
+                  >
+                    Show all {summary.total} documents
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -437,7 +505,7 @@ export default function DocumentManagementPage() {
               </thead>
               <tbody className={`divide-y ${isDarkMode ? 'divide-white/5' : 'divide-gray-100'}`}>
                 {documents.map(doc => (
-                  <tr key={doc.id} className={`${isDarkMode ? 'hover:bg-white/2' : 'hover:bg-gray-50'} ${highlightDocId === doc.id ? (isDarkMode ? 'bg-indigo-500/10 ring-1 ring-indigo-500/30' : 'bg-indigo-50 ring-1 ring-indigo-200') : ''}`}>
+                  <tr key={doc.id} className={`${isDarkMode ? 'hover:bg-white/2' : 'hover:bg-gray-50'} ${highlightDocId === doc.id ? (isDarkMode ? 'bg-blue-600/10 ring-1 ring-indigo-500/30' : 'bg-blue-50 ring-1 ring-indigo-200') : ''}`}>
                     <td className="px-4 py-3">
                       <p className={`font-medium ${text}`}>{doc.title || doc.fileName}</p>
                       <p className={`text-xs ${sub}`}>{doc.category} · {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : '—'}</p>
@@ -445,16 +513,16 @@ export default function DocumentManagementPage() {
                         <span className="mt-1 inline-flex rounded-full bg-blue-500/15 px-2 py-0.5 text-[10px] font-semibold text-blue-300">Client upload</span>
                       )}
                       {doc.isRequestOnly && doc.needsManagerPreparation && (
-                        <span className="mt-1 ml-1 inline-flex rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">Needs preparation</span>
+                        <span className="mt-1 ml-1 inline-flex rounded-full bg-blue-600/15 px-2 py-0.5 text-[10px] font-semibold text-blue-300">Needs preparation</span>
                       )}
                       {doc.magerwaRequested && doc.magerwaRequestStatus === 'pending' && !doc.needsManagerPreparation && (
-                        <span className="mt-1 ml-1 inline-flex rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">Document requested</span>
+                        <span className="mt-1 ml-1 inline-flex rounded-full bg-blue-600/15 px-2 py-0.5 text-[10px] font-semibold text-blue-300">Document requested</span>
                       )}
                     </td>
                     <td className={`px-4 py-3 text-xs ${sub}`}>
                       {doc.uploader?.fullName || doc.uploader?.email || 'Unknown'}
                       {doc.uploader?.role === 'client' && doc.uploader?.phone && (
-                        <span className="mt-0.5 block text-emerald-400/80">{doc.uploader.phone}</span>
+                        <span className="mt-0.5 block text-blue-400/80">{doc.uploader.phone}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -476,14 +544,14 @@ export default function DocumentManagementPage() {
                         ? doc.assignedClients.map(c => (
                           <span key={c.id} className="block">
                             {c.fullName || c.email}
-                            {c.phone && <span className="text-emerald-400/80"> · {c.phone}</span>}
+                            {c.phone && <span className="text-blue-400/80"> · {c.phone}</span>}
                           </span>
                         ))
                         : isAudited(doc) ? 'Not assigned' : '—'}
                     </td>
                     <td className={`px-4 py-3 text-xs ${sub}`}>
                       {doc.arrivalPort ? (
-                        <span className="inline-flex items-center gap-1 text-indigo-300">
+                        <span className="inline-flex items-center gap-1 text-blue-300">
                           <Ship className="h-3 w-3" /> {doc.arrivalPort}
                         </span>
                       ) : '—'}
@@ -500,14 +568,14 @@ export default function DocumentManagementPage() {
                         {doc.needsManagerPreparation ? (
                           <button
                             onClick={() => openPrepare(doc)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 px-2.5 py-1.5 text-[10px] font-semibold text-amber-300 hover:bg-amber-500/25"
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600/15 px-2.5 py-1.5 text-[10px] font-semibold text-blue-300 hover:bg-blue-600/25"
                           >
                             <Upload className="h-3 w-3" /> Prepare document
                           </button>
                         ) : canNotifyAuditors(doc) ? (
                           <button
                             onClick={() => openNotify(doc)}
-                            className="inline-flex items-center gap-1 rounded-lg bg-indigo-500/15 px-2.5 py-1.5 text-[10px] font-semibold text-indigo-300 hover:bg-indigo-500/25"
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600/15 px-2.5 py-1.5 text-[10px] font-semibold text-blue-300 hover:bg-blue-600/25"
                           >
                             <Bell className="h-3 w-3" /> Notify auditor
                           </button>
@@ -522,7 +590,7 @@ export default function DocumentManagementPage() {
                             {canAssignToClient(doc) && (
                               <button
                                 onClick={() => openAssign(doc)}
-                                className="inline-flex items-center gap-1 rounded-lg bg-violet-500/15 px-2.5 py-1.5 text-[10px] font-semibold text-violet-300 hover:bg-violet-500/25"
+                                className="inline-flex items-center gap-1 rounded-lg bg-blue-500/15 px-2.5 py-1.5 text-[10px] font-semibold text-blue-300 hover:bg-blue-500/15"
                               >
                                 <UserPlus className="h-3 w-3" /> Assign client
                               </button>
@@ -568,7 +636,7 @@ export default function DocumentManagementPage() {
 
       {prepareDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'bg-[#1a1d24] border-amber-500/20' : 'bg-white border-amber-200'}`}>
+          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'bg-[#122a45] border-blue-400/30' : 'bg-white border-blue-200'}`}>
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className={`text-base font-semibold ${text}`}>Prepare client document</h3>
@@ -597,7 +665,7 @@ export default function DocumentManagementPage() {
                   className={`w-full rounded-xl border px-3 py-2 text-sm ${inputCls}`}
                 />
                 {prepareFile && (
-                  <p className={`mt-1 text-xs text-emerald-400`}>{prepareFile.name}</p>
+                  <p className={`mt-1 text-xs text-blue-400`}>{prepareFile.name}</p>
                 )}
               </div>
               <div>
@@ -610,12 +678,12 @@ export default function DocumentManagementPage() {
                   className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none ${inputCls}`}
                 />
               </div>
-              <div className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-indigo-500/20 bg-indigo-500/10 text-indigo-200' : 'border-indigo-200 bg-indigo-50 text-indigo-800'}`}>
+              <div className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-blue-400/30 bg-blue-600/10 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-800'}`}>
                 After upload, the document is sent to auditors automatically. When they return it, assign it to the requesting client.
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={handleFulfillRequest} disabled={busy || !prepareFile}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-amber-500 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-60">
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
                   <Upload className="h-4 w-4" /> {busy ? 'Uploading…' : 'Upload & send to auditor'}
                 </button>
                 <button onClick={() => setPrepareDoc(null)}
@@ -630,7 +698,7 @@ export default function DocumentManagementPage() {
 
       {notifyDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'bg-[#1a1d24] border-white/10' : 'bg-white border-gray-200'}`}>
+          <div className={`w-full max-w-md rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'bg-[#122a45] border-white/10' : 'bg-white border-gray-200'}`}>
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className={`text-base font-semibold ${text}`}>Notify auditors</h3>
@@ -664,12 +732,12 @@ export default function DocumentManagementPage() {
                   className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none ${inputCls}`}
                 />
               </div>
-              <div className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-amber-500/20 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+              <div className={`rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-blue-400/30 bg-blue-600/10 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-800'}`}>
                 Auditors will receive an in-app notification and email asking them to audit this document.
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={handleNotify} disabled={busy}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-500 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600 disabled:opacity-60">
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-60">
                   <Bell className="h-4 w-4" /> {busy ? 'Sending...' : 'Send to auditors'}
                 </button>
                 <button onClick={() => setNotifyDoc(null)}
@@ -684,12 +752,12 @@ export default function DocumentManagementPage() {
 
       {assignDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className={`max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'bg-[#1a1d24] border-white/10' : 'bg-white border-gray-200'}`}>
+          <div className={`max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'bg-[#122a45] border-white/10' : 'bg-white border-gray-200'}`}>
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className={`text-base font-semibold ${text}`}>Assign to client</h3>
                 <p className={`mt-1 text-xs ${sub}`}>{assignDoc.title || assignDoc.fileName}</p>
-                <p className={`mt-1 text-[10px] text-emerald-400`}>
+                <p className={`mt-1 text-[10px] text-blue-400`}>
                   {assignDoc?.isClientUpload || assignDoc?.uploader?.role === 'client'
                     ? 'The uploading client is pre-selected — confirm or add others, then assign for cargo clearance.'
                     : 'Search or pick from the dropdown — select clients to receive this document.'}
@@ -702,7 +770,16 @@ export default function DocumentManagementPage() {
 
             <div className="space-y-3">
               {clients.length === 0 ? (
-                <p className={`text-xs ${sub}`}>No active client accounts found.</p>
+                <div className={`rounded-xl border px-4 py-6 text-center ${isDarkMode ? 'border-white/10' : 'border-gray-200'}`}>
+                  <p className={`text-xs ${sub}`}>No active client accounts found.</p>
+                  <button
+                    type="button"
+                    onClick={loadClients}
+                    className="mt-3 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-blue-600"
+                  >
+                    Reload clients
+                  </button>
+                </div>
               ) : (
                 <>
                   {selectedClients.length > 0 && (
@@ -713,7 +790,7 @@ export default function DocumentManagementPage() {
                         return (
                           <span
                             key={id}
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium ${isDarkMode ? 'bg-violet-500/20 text-violet-200' : 'bg-violet-100 text-violet-800'}`}
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium ${isDarkMode ? 'bg-blue-500/15 text-blue-200' : 'bg-blue-100 text-blue-800'}`}
                           >
                             {c.fullName || c.email}
                             <button type="button" onClick={() => toggleClient(id)} className="opacity-70 hover:opacity-100">
@@ -764,7 +841,7 @@ export default function DocumentManagementPage() {
                         <p className={`px-3 py-6 text-center text-xs ${sub}`}>No clients match your search.</p>
                       ) : (
                         <table className="w-full text-xs">
-                          <thead className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#1a1d24]' : 'bg-white'}`}>
+                          <thead className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#122a45]' : 'bg-white'}`}>
                             <tr className={`border-b text-left ${isDarkMode ? 'border-white/10 text-slate-500' : 'border-gray-200 text-gray-500'}`}>
                               <th className="w-8 px-3 py-2" />
                               <th className="px-3 py-2 font-medium">Name</th>
@@ -779,7 +856,7 @@ export default function DocumentManagementPage() {
                                 key={client.id}
                                 onClick={() => toggleClient(client.id)}
                                 className={`cursor-pointer ${selectedClients.includes(client.id)
-                                  ? isDarkMode ? 'bg-violet-500/15' : 'bg-violet-50'
+                                  ? isDarkMode ? 'bg-blue-500/15' : 'bg-blue-50'
                                   : isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}`}
                               >
                                 <td className="px-3 py-2.5">
@@ -795,7 +872,7 @@ export default function DocumentManagementPage() {
                                 <td className={`px-3 py-2.5 ${sub}`}>{client.email || '—'}</td>
                                 <td className="px-3 py-2.5">
                                   {client.phone ? (
-                                    <span className={`inline-flex items-center gap-1 ${isDarkMode ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                                    <span className={`inline-flex items-center gap-1 ${isDarkMode ? 'text-blue-300' : 'text-blue-700'}`}>
                                       <Phone className="h-3 w-3" /> {client.phone}
                                     </span>
                                   ) : (
@@ -833,7 +910,7 @@ export default function DocumentManagementPage() {
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={handleAssign} disabled={busy || !selectedClients.length}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-500 py-2.5 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-60">
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-500 py-2.5 text-sm font-semibold text-white hover:bg-violet-600 disabled:opacity-60">
                   <UserPlus className="h-4 w-4" /> {busy ? 'Assigning…' : 'Assign to client(s)'}
                 </button>
                 <button onClick={() => setAssignDoc(null)}
@@ -848,7 +925,7 @@ export default function DocumentManagementPage() {
 
       {reviewDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className={`max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'bg-[#1a1d24] border-white/10' : 'bg-white border-gray-200'}`}>
+          <div className={`max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border p-6 shadow-2xl ${isDarkMode ? 'bg-[#122a45] border-white/10' : 'bg-white border-gray-200'}`}>
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h3 className={`text-base font-semibold ${text}`}>Audit returned from auditor</h3>
@@ -863,7 +940,7 @@ export default function DocumentManagementPage() {
             </div>
 
             {reviewDoc.metadata?.statusReason && (
-              <p className={`mb-3 rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-amber-500/20 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+              <p className={`mb-3 rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-blue-400/30 bg-blue-600/10 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-900'}`}>
                 Auditor note: {reviewDoc.metadata.statusReason}
               </p>
             )}
@@ -920,7 +997,7 @@ export default function DocumentManagementPage() {
 
             {canAssignToClient(reviewDoc) && (
               <button onClick={() => { setReviewDoc(null); openAssign(reviewDoc); }}
-                className="w-full rounded-xl bg-violet-500 py-2.5 text-sm font-semibold text-white hover:bg-violet-600">
+                className="w-full rounded-xl bg-blue-500 py-2.5 text-sm font-semibold text-white hover:bg-violet-600">
                 Assign approved document to client
               </button>
             )}

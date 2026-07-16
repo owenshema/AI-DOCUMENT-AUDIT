@@ -99,7 +99,7 @@ const SettingsPage = () => {
                       <p className="text-sm font-medium text-white">{p.name}</p>
                       <p className="text-xs text-slate-500">Type: {p.documentType} · {p.retentionDays} days · Action: {p.action}</p>
                     </div>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${p.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-500/15 text-slate-400'}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${p.isActive ? 'bg-blue-600/15 text-blue-400' : 'bg-slate-500/15 text-slate-400'}`}>
                       {p.isActive ? 'Active' : 'Inactive'}
                     </span>
                   </div>
@@ -128,7 +128,7 @@ const SettingsPage = () => {
                     <p className="text-xs text-slate-500">Expires: {d.expiryDate ? new Date(d.expiryDate).toLocaleDateString() : 'Unknown'}</p>
                   </div>
                   <button onClick={() => handleLegalHold(d.id)}
-                    className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/20">
+                    className="rounded-lg border border-blue-400/30 bg-blue-600/10 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-600/20">
                     Apply Legal Hold
                   </button>
                 </div>

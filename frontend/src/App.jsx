@@ -29,7 +29,7 @@ export default function App() {
 
   if (!hydrated) {
     return (
-      <div className="min-h-screen bg-[#0d0f14] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0b1a2e] flex items-center justify-center">
         <div className="h-8 w-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
       </div>
     );
@@ -82,11 +82,11 @@ export default function App() {
         } />
 
         <Route path="*" element={
-          <div className="flex min-h-screen items-center justify-center bg-[#0d0f14]">
+          <div className="flex min-h-screen items-center justify-center bg-[#0b1a2e]">
             <div className="text-center">
               <p className="text-5xl font-bold text-white mb-3">404</p>
               <p className="text-slate-400 mb-6">Page not found</p>
-              <a href="/dashboard" className="rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-600">
+              <a href="/dashboard" className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-600">
                 Go to Dashboard
               </a>
             </div>

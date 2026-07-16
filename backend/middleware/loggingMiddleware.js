@@ -30,13 +30,21 @@ const auditLogger = (req, res, next) => {
           const models = req.app?.locals?.models;
           if (!models?.AuditLog) return;
 
+          const resource = (req.path.split('/')[2] || 'item').replace(/-/g, ' ');
+          const verbByMethod = {
+            POST: 'Saved',
+            PUT: 'Updated',
+            PATCH: 'Updated',
+            DELETE: 'Removed',
+          };
+          const verb = verbByMethod[req.method] || 'Changed';
           await models.AuditLog.create({
             userId: req.user.id,
             userRole: req.user.role,
             action: `${req.method.toLowerCase()}_${req.path.split('/')[2] || 'unknown'}`,
             resourceType: req.path.split('/')[2] || null,
             status: res.statusCode < 400 ? 'success' : 'failure',
-            description: `${req.method} ${req.path}`,
+            description: `${verb} ${resource}`,
             ipAddress: req.ip,
             userAgent: req.get('user-agent'),
             details: {

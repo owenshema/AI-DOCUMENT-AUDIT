@@ -9,13 +9,9 @@ import { formatRoleLabel, ROLE_LABELS, normalizeRole } from '../config/roles';
 import { authAPI } from '../api/auth';
 import GlobalSearchBar from './GlobalSearchBar';
 import NotificationBell from './NotificationBell';
+import { getAppTheme } from '../utils/uiTheme';
 
-// â”€â”€ Role-based nav config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // roles: null = all, array = restricted to those roles
-const DARK_BG = 'bg-[#0f0f0f]';
-const DARK_SURFACE = 'bg-[#0f0f0f]';
-const LIGHT_BG = 'bg-gray-50';
-const LIGHT_SURFACE = 'bg-white';
 
 const ALL_NAV = [
   { path: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard',     roles: null },
@@ -33,10 +29,10 @@ const ALL_NAV = [
 
 // Role descriptions shown in sidebar
 const ROLE_BADGE = {
-  administrator:   { label: 'Administrator', color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300' },
-  auditor:         { label: 'Auditor',       color: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'    },
-  document_manager:{ label: 'Doc Manager',   color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300' },
-  client: { label: ROLE_LABELS.client, color: 'bg-gray-100 text-gray-600 dark:bg-slate-500/20 dark:text-slate-400'  },
+  administrator:    { label: 'Administrator', color: 'bg-blue-100 text-blue-800 dark:bg-blue-500/25 dark:text-blue-100' },
+  auditor:          { label: 'Auditor',       color: 'bg-blue-100 text-blue-800 dark:bg-blue-500/25 dark:text-blue-100' },
+  document_manager: { label: 'Doc Manager',   color: 'bg-blue-100 text-blue-800 dark:bg-blue-500/25 dark:text-blue-100' },
+  client:           { label: ROLE_LABELS.client, color: 'bg-blue-100 text-blue-800 dark:bg-blue-500/25 dark:text-blue-100' },
 };
 
 export default function AppShell({ children, title }) {
@@ -60,24 +56,24 @@ export default function AppShell({ children, title }) {
     navigate('/login', { replace: true });
   };
 
-  // Theme classes — low-contrast, matching surfaces
-  const bg       = isDarkMode ? DARK_BG : LIGHT_BG;
-  const surface  = isDarkMode ? DARK_SURFACE : LIGHT_SURFACE;
-  const text     = isDarkMode ? 'text-white' : 'text-gray-900';
-  const subtext  = isDarkMode ? 'text-slate-400' : 'text-gray-500';
+  const t = getAppTheme(isDarkMode);
+  const bg = t.page;
+  const surface = `${t.surface} border-r ${t.borderSoft}`;
+  const text = t.text;
+  const subtext = t.muted;
   const navActive = isDarkMode
-    ? 'bg-white/[0.08] text-white font-medium'
-    : 'bg-indigo-50 text-indigo-700 font-medium';
-  const navIdle  = isDarkMode
-    ? 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'
-    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900';
+    ? 'bg-blue-500/25 text-white font-medium'
+    : 'bg-blue-100 text-blue-800 font-medium';
+  const navIdle = isDarkMode
+    ? 'text-blue-100/80 hover:bg-blue-500/15 hover:text-white'
+    : 'text-slate-600 hover:bg-blue-50 hover:text-blue-900';
   const SidebarContent = ({ collapsed = false }) => (
     <div className={`flex h-full flex-col ${surface}`}>
       {/* Brand */}
       <div className={`${collapsed ? 'px-3' : 'px-5'} pt-5 pb-4`}>
         {collapsed ? (
           <div className="flex justify-center">
-            <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-sm font-bold ${isDarkMode ? 'bg-indigo-500' : 'bg-indigo-600'} text-white`}>
+            <div className="h-8 w-8 rounded-lg flex items-center justify-center text-sm font-bold bg-blue-600 text-white">
               S
             </div>
           </div>
@@ -86,8 +82,8 @@ export default function AppShell({ children, title }) {
             <img src="/sifco/logo.png" alt="SIFCO" className="h-8 w-auto"
               onError={e => { e.target.style.display='none'; }} />
             <div>
-              <p className={`text-sm font-bold leading-none ${text}`}>DocAudit AI</p>
-              <p className={`text-[10px] mt-0.5 ${subtext}`}>SIFCO AE · Audit System</p>
+              <p className={`text-sm font-bold leading-none ${text}`}>SIFCO AE</p>
+              <p className={`text-[10px] mt-0.5 ${subtext}`}>Audit System</p>
             </div>
           </div>
         )}
@@ -97,7 +93,7 @@ export default function AppShell({ children, title }) {
       {!collapsed && (
         <div className="px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className={`h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold ${isDarkMode ? 'bg-indigo-500' : 'bg-indigo-600'} text-white`}>
+            <div className="h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold bg-blue-600 text-white">
               {initials}
             </div>
             <div className="min-w-0">
@@ -129,7 +125,7 @@ export default function AppShell({ children, title }) {
       <div className="px-3 pb-4 pt-2 space-y-1">
         <button onClick={handleLogout}
           title={collapsed ? 'Sign out' : undefined}
-          className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-xl px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors`}>
+          className={`flex w-full items-center ${collapsed ? 'justify-center' : 'gap-3'} rounded-xl px-3 py-2 text-sm transition-colors ${isDarkMode ? 'text-blue-100 hover:bg-blue-500/15' : 'text-blue-800 hover:bg-blue-50'}`}>
           <LogOut className="h-4 w-4" />
           {!collapsed && 'Sign out'}
         </button>
@@ -157,9 +153,9 @@ export default function AppShell({ children, title }) {
       {/* Main */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Topbar */}
-        <header className={`flex items-center justify-between px-5 py-3 ${surface}`}>
+        <header className={`flex items-center justify-between px-5 py-3 border-b ${t.surface} ${t.borderSoft}`}>
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <button className={`${subtext} hover:${text} transition-colors flex-shrink-0`} 
+            <button className={`${subtext} transition-colors flex-shrink-0 hover:text-blue-600`}
               onClick={() => {
                 if (window.innerWidth < 1024) {
                   setMobileOpen(true);
@@ -180,15 +176,15 @@ export default function AppShell({ children, title }) {
 
             <button onClick={toggleTheme}
               title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              className={`rounded-lg p-2 transition-colors ${isDarkMode ? 'text-slate-400 hover:bg-white/[0.06] hover:text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
+              className={`rounded-lg p-2 transition-colors ${isDarkMode ? 'text-blue-200 hover:bg-blue-500/20 hover:text-white' : 'text-blue-700 hover:bg-blue-50'}`}>
               {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
             {/* User menu */}
             <div className="relative">
               <button onClick={() => setDropOpen(p => !p)}
-                className={`flex items-center gap-2 rounded-xl px-3 py-1.5 transition-colors ${isDarkMode ? 'bg-white/[0.06] hover:bg-white/[0.09]' : 'bg-gray-50 hover:bg-gray-100'}`}>
-                <div className="h-6 w-6 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] font-bold text-white">
+                className={`flex items-center gap-2 rounded-xl px-3 py-1.5 transition-colors ${isDarkMode ? 'bg-blue-500/15 hover:bg-blue-500/25' : 'bg-blue-50 hover:bg-blue-100'}`}>
+                <div className="h-6 w-6 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white">
                   {initials}
                 </div>
                 <div className="hidden sm:block text-left">
@@ -198,14 +194,14 @@ export default function AppShell({ children, title }) {
                 <ChevronDown className={`h-3 w-3 ${subtext}`} />
               </button>
               {dropOpen && (
-                <div className={`absolute right-0 top-11 z-20 w-44 rounded-xl shadow-2xl shadow-black/40 p-1 ${isDarkMode ? 'bg-[#212121]' : 'bg-white ring-1 ring-black/5'}`}>
-                  <div className={`px-3 py-2 mb-1 ${isDarkMode ? '' : 'border-b border-gray-100'}`}>
+                <div className={`absolute right-0 top-11 z-20 w-44 rounded-xl p-1 shadow-2xl ${t.modal}`}>
+                  <div className={`px-3 py-2 mb-1 border-b ${t.borderSoft}`}>
                     <p className={`text-xs font-semibold ${text}`}>{user?.fullName}</p>
                     <p className={`text-[10px] ${subtext}`}>{user?.email}</p>
                     <span className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold mt-1 ${badge.color}`}>{badge.label}</span>
                   </div>
                   <button onClick={handleLogout}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-400 hover:bg-red-500/10">
+                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm ${isDarkMode ? 'text-blue-100 hover:bg-blue-500/15' : 'text-blue-800 hover:bg-blue-50'}`}>
                     <LogOut className="h-4 w-4" /> Sign out
                   </button>
                 </div>
