@@ -268,7 +268,7 @@ export default function LoginActivityPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className={`border-b text-xs ${isDarkMode ? 'border-white/8 text-slate-500' : 'border-gray-200 text-gray-500'}`}>
-                  {['Date', 'Time', 'User', 'Email', 'Role', 'Event', 'Status', 'Portal / Host', 'Server', 'Client host', 'IP address'].map(h => (
+                  {['Date', 'Time', 'User', 'Email', 'Role', 'Event', 'Status', 'Device', 'Portal / Host', 'Server', 'Client host', 'IP address'].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
                   ))}
                 </tr>
@@ -289,6 +289,7 @@ export default function LoginActivityPage() {
                         {row.status}
                       </span>
                     </td>
+                    <td className={`px-4 py-3 text-xs ${text}`} title={row.device}>{row.device || '—'}</td>
                     <td className={`px-4 py-3 text-xs ${text}`} title={row.portalHost}>{row.portalHost}</td>
                     <td className={`px-4 py-3 text-xs ${sub}`} title={row.serverHost}>{row.serverHost}</td>
                     <td className={`px-4 py-3 text-xs ${sub}`} title={row.clientHost}>{row.clientHost}</td>

@@ -54,7 +54,10 @@ const exportRoleReport = async (req, res) => {
       });
     }
 
-    data.preparedBy = req.user?.fullName || req.user?.email || 'System';
+    data.exportedByRole = role;
+    if (role !== 'client') {
+      data.preparedBy = req.user?.fullName || req.user?.email || 'System';
+    }
 
     return roleReportExportService.sendReport(data, format, res);
   } catch (error) {

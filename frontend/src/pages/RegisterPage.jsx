@@ -57,7 +57,16 @@ export default function RegisterPage() {
   const [otp, setOtp]       = useState('');
   const [showPw, setShowPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
-  const [form, setForm]     = useState({ fullName: '', email: '', password: '', confirmPassword: '', role: 'client', phone: '', department: '' });
+  const [form, setForm]     = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    role: 'client',
+    phone: '',
+    accountType: '',
+    department: '',
+  });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -65,7 +74,14 @@ export default function RegisterPage() {
   const { setUser, setToken } = useAuthStore();
 
   const strength = form.password ? passwordStrength(form.password) : null;
-  const handleChange = e => setForm(p => ({ ...p, [e.target.name]: e.target.value }));
+  const handleChange = e => {
+    const { name, value } = e.target;
+    setForm(p => ({
+      ...p,
+      [name]: value,
+      ...(name === 'accountType' && value === 'individual' ? { department: '' } : {}),
+    }));
+  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -79,19 +95,27 @@ export default function RegisterPage() {
       if (!phone || phone.replace(/\D/g, '').length < 7) {
         return setError('Phone number is required (at least 7 digits).');
       }
-      if (!form.department.trim() || form.department.trim().length < 2) {
-        return setError('Company or organization name is required.');
+      if (!form.accountType) {
+        return setError('Select whether you are registering as an Individual or Organization.');
+      }
+      if (form.accountType === 'organization') {
+        if (!form.department.trim() || form.department.trim().length < 2) {
+          return setError('Company or organization name is required.');
+        }
       }
     }
     setLoading(true);
     try {
+      const clientDepartment = form.accountType === 'individual'
+        ? 'Individual'
+        : form.department.trim();
       const payload = {
         fullName: form.fullName,
         email: form.email,
         password: form.password,
         role: form.role,
         phone: form.phone.trim() || undefined,
-        department: form.role === 'client' ? form.department.trim() : 'General',
+        department: form.role === 'client' ? clientDepartment : 'General',
       };
       const res = await authAPI.register(payload);
       setUserId(res.userId);
@@ -201,13 +225,43 @@ export default function RegisterPage() {
                       <p className="mt-1 text-[10px] text-white/40">Required so document managers can reach you when cargo is assigned.</p>
                     </div>
                     <div>
-                      <label className="block text-xs text-white/60 mb-1.5">Company / Organization *</label>
+                      <label className="block text-xs text-white/60 mb-1.5">Account type *</label>
                       <div className="relative">
-                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-                        <input name="department" value={form.department} onChange={handleChange} required
-                          className={inputCls} placeholder="Your company or business name" />
+                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40 pointer-events-none" />
+                        <select
+                          name="accountType"
+                          value={form.accountType}
+                          onChange={handleChange}
+                          required
+                          className="w-full rounded-xl border border-white/20 bg-white/10 py-2.5 pl-9 pr-3 text-sm text-white outline-none focus:border-indigo-400 focus:bg-white/15 transition-colors"
+                        >
+                          <option value="" className="bg-[#0d2044]">Select individual or organization</option>
+                          <option value="individual" className="bg-[#0d2044]">Individual</option>
+                          <option value="organization" className="bg-[#0d2044]">Organization</option>
+                        </select>
                       </div>
                     </div>
+                    {form.accountType === 'organization' && (
+                      <div>
+                        <label className="block text-xs text-white/60 mb-1.5">Company name *</label>
+                        <div className="relative">
+                          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+                          <input
+                            name="department"
+                            value={form.department}
+                            onChange={handleChange}
+                            required
+                            autoFocus
+                            className={inputCls}
+                            placeholder="Enter your company or business name"
+                          />
+                        </div>
+                        <p className="mt-1 text-[10px] text-white/40">Enter the full company or organization name.</p>
+                      </div>
+                    )}
+                    {form.accountType === 'individual' && (
+                      <p className="text-[10px] text-white/40 -mt-1">Registered as an individual (no company name needed).</p>
+                    )}
                   </>
                 )}
                 <div>

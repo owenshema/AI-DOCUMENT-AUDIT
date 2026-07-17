@@ -18,7 +18,7 @@ const QRCode   = require('qrcode');
 const { v4: uuidv4 } = require('uuid');
 const emailService = require('../services/emailService');
 const { logSecurityEvent } = require('../utils/securityAudit');
-const { buildLoginContext } = require('../utils/loginContext');
+const { buildLoginContext, parseDeviceFromUserAgent } = require('../utils/loginContext');
 const { VALID_ROLES, DEFAULT_ROLE, normalizeRole, formatRoleLabel } = require('../utils/roles');
 
 const JWT_SECRET  = process.env.JWT_SECRET  || 'change-this-secret';
@@ -36,6 +36,7 @@ function logAuthEvent(models, req, event) {
     ...event,
     ipAddress: ctx.ipAddress,
     userAgent: ctx.userAgent,
+    device: ctx.device,
     details: {
       ...(event.details || {}),
       host: ctx.host,
@@ -44,6 +45,7 @@ function logAuthEvent(models, req, event) {
       portalUrl: ctx.portalUrl,
       serverHostname: ctx.serverHostname,
       accessFrom: ctx.accessFrom,
+      deviceLabel: ctx.device?.label || null,
     },
   });
 }
@@ -878,6 +880,15 @@ const formatLoginActivityRow = (log, userMap, emailFromDetails, hostnameByIp = {
   }
   clientHost = clientHost || '—';
 
+  let device = 'Unknown device';
+  if (log.device && typeof log.device === 'object' && log.device.label) {
+    device = log.device.label;
+  } else if (details.deviceLabel) {
+    device = details.deviceLabel;
+  } else if (log.userAgent) {
+    device = parseDeviceFromUserAgent(log.userAgent);
+  }
+
   return {
     id: log.id,
     userId: log.userId,
@@ -891,6 +902,7 @@ const formatLoginActivityRow = (log, userMap, emailFromDetails, hostnameByIp = {
     portalHost,
     serverHost,
     clientHost,
+    device,
     accessFrom: portalHost !== '—' ? portalHost : clientHost,
     date: when ? when.toLocaleDateString('en-GB') : '—',
     time: when ? when.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—',
@@ -983,9 +995,9 @@ const getLoginActivity = async (req, res) => {
 
     if (format === 'csv') {
       const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-      const header = 'User Name,Email,Role,Event,Status,Date,Time,IP Address,Portal Host,Server Host,Client Host,Description';
+      const header = 'User Name,Email,Role,Event,Status,Date,Time,Device,IP Address,Portal Host,Server Host,Client Host,Description';
       const lines = activities.map(a => [
-        a.userName, a.email, a.role, a.action, a.status, a.date, a.time,
+        a.userName, a.email, a.role, a.action, a.status, a.date, a.time, a.device,
         a.ipAddress, a.portalHost, a.serverHost, a.clientHost, a.description,
       ].map(escape).join(','));
       const csv = [header, ...lines].join('\n');

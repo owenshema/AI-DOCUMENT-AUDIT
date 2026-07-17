@@ -128,13 +128,37 @@ function buildAuditMarkup(analysis, documentStatus = 'in_progress') {
     });
   });
 
+  (results.inconsistencies || []).forEach(item => {
+    markup.push({
+      id: `inconsistency-${idx++}`,
+      type: 'inconsistency',
+      severity: 'MEDIUM',
+      status: documentStatus,
+      text: violationText(item),
+      location: (item && (item.field || item.check || item.title)) || null,
+      markColor: 'red',
+    });
+  });
+
+  (results.fraud_flags || []).forEach(f => {
+    markup.push({
+      id: `fraud-${idx++}`,
+      type: 'fraud_flag',
+      severity: String((f && f.severity) || 'high').toUpperCase(),
+      status: documentStatus,
+      text: violationText(f),
+      location: null,
+      markColor: 'red',
+    });
+  });
+
   (results.missing_fields || []).forEach(f => {
     markup.push({
       id: `missing-${idx++}`,
       type: 'missing_field',
       severity: 'HIGH',
       status: documentStatus,
-      text: typeof f === 'string' ? f : (f.message || String(f)),
+      text: violationText(f) || (typeof f === 'string' ? f : ''),
       location: null,
       markColor: 'red',
     });
@@ -146,31 +170,7 @@ function buildAuditMarkup(analysis, documentStatus = 'in_progress') {
       type: 'calculation_error',
       severity: 'CRITICAL',
       status: documentStatus,
-      text: typeof err === 'string' ? err : (err.message || String(err)),
-      location: null,
-      markColor: 'red',
-    });
-  });
-
-  (results.inconsistencies || []).forEach(item => {
-    markup.push({
-      id: `inconsistency-${idx++}`,
-      type: 'inconsistency',
-      severity: 'MEDIUM',
-      status: documentStatus,
-      text: typeof item === 'string' ? item : (item.message || String(item)),
-      location: null,
-      markColor: 'red',
-    });
-  });
-
-  (results.fraud_flags || []).forEach(f => {
-    markup.push({
-      id: `fraud-${idx++}`,
-      type: 'fraud_flag',
-      severity: String(f.severity || 'high').toUpperCase(),
-      status: documentStatus,
-      text: f.message || String(f),
+      text: violationText(err),
       location: null,
       markColor: 'red',
     });

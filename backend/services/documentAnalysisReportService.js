@@ -1,15 +1,30 @@
 'use strict';
 /**
  * Single-document audit analysis PDF export — same DocAudit AI layout as period audit reports.
- * Annotated mode highlights mistakes in red for document manager review.
+ * Annotated mode: clean professional layout focused on scores and mistakes only.
  */
 const PDFDocument = require('pdfkit');
 const layout = require('./reportLayout');
-const { buildAuditMarkup } = require('./auditMarkupService');
-function scoreColor(score) {
-  if (score >= 80) return layout.COLORS.good;
-  if (score >= 60) return layout.COLORS.warn;
-  return layout.COLORS.danger;
+const { buildAuditMarkup, violationText } = require('./auditMarkupService');
+
+/** Flatten any markup / finding value to readable text (avoids [object Object]). */
+function safeMarkupText(value) {
+  if (value == null || value === '') return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (typeof value === 'object') {
+    return (
+      value.summary ||
+      value.message ||
+      value.title ||
+      value.description ||
+      value.detail ||
+      value.text ||
+      violationText(value) ||
+      ''
+    );
+  }
+  return String(value);
 }
 
 function riskLabel(level) {
@@ -49,7 +64,7 @@ function buildReportSections(document, analysis, auditorUser) {
   if (violations.length) {
     sections.push({
       title: 'Violations',
-      lines: violations.map(v => `• ${typeof v === 'string' ? v : v.message || JSON.stringify(v)}`),
+      lines: violations.map(v => `• ${safeMarkupText(v) || JSON.stringify(v)}`),
     });
   }
 
@@ -57,7 +72,7 @@ function buildReportSections(document, analysis, auditorUser) {
   if (missing.length) {
     sections.push({
       title: 'Missing Fields',
-      lines: missing.map(f => `• ${f}`),
+      lines: missing.map(f => `• ${safeMarkupText(f)}`),
     });
   }
 
@@ -65,7 +80,7 @@ function buildReportSections(document, analysis, auditorUser) {
   if (recommendations.length) {
     sections.push({
       title: 'Recommendations',
-      lines: recommendations.map(r => `• ${r}`),
+      lines: recommendations.map(r => `• ${safeMarkupText(r)}`),
     });
   }
 
@@ -73,7 +88,7 @@ function buildReportSections(document, analysis, auditorUser) {
   if (comment) {
     sections.push({
       title: 'Auditor Comments',
-      lines: [comment],
+      lines: [safeMarkupText(comment)],
     });
   }
 
@@ -92,38 +107,51 @@ function buildReportSections(document, analysis, auditorUser) {
   return sections;
 }
 
-function statusBadgeColor(status) {
-  const s = String(status || '').toLowerCase();
-  if (s === 'approved' || s === 'reviewed') return layout.COLORS.good;
-  if (s === 'changes_requested') return layout.COLORS.warn;
-  if (s === 'rejected') return layout.COLORS.danger;
-  return layout.COLORS.muted;
+function normalizeMarkupItem(item, documentStatus) {
+  const text = safeMarkupText(item?.text) || safeMarkupText(item) || 'Issue noted';
+  return {
+    type: String(item?.type || 'issue').replace(/_/g, ' '),
+    severity: String(item?.severity || 'MEDIUM').toUpperCase(),
+    text,
+    location: item?.location ? safeMarkupText(item.location) : null,
+    status: String(item?.status || documentStatus || '').replace(/_/g, ' '),
+  };
 }
 
+/**
+ * Annotated PDF body: scores + mistakes only, neutral professional styling.
+ */
 function renderAnnotatedPdfBody(doc, ctx, startY) {
-  const { document, analysis, auditorUser, annotated = false } = ctx;
+  const { document, analysis, annotated = false } = ctx;
   const results = analysis?.results || {};
   const meta = document.metadata || {};
-  const complianceScore = results.compliance_score ?? meta.latestComplianceScore ?? 0;
-  const overallScore = results.overall_audit_score ?? meta.latestOverallAuditScore ?? complianceScore;
+  const complianceScore = Number(results.compliance_score ?? meta.latestComplianceScore ?? 0);
+  const overallScore = Number(results.overall_audit_score ?? meta.latestOverallAuditScore ?? complianceScore);
   const documentStatus = document.status || meta.latestAuditDecision?.status || 'in_progress';
-  const markup = meta.auditMarkup || buildAuditMarkup(analysis, documentStatus);
+  const rawMarkup = meta.auditMarkup || buildAuditMarkup(analysis, documentStatus);
+  const markup = (rawMarkup || []).map(item => normalizeMarkupItem(item, documentStatus));
 
   let y = startY;
   const pageBottom = () => doc.page.height - 60;
+  const ink = layout.COLORS.text;
+  const body = layout.COLORS.body;
+  const muted = layout.COLORS.muted;
+  const line = layout.COLORS.line;
+
   const ensureSpace = (needed) => {
     if (y + needed > pageBottom()) {
       doc.addPage();
       y = 50;
     }
   };
+
   const writeText = (text, opts = {}) => {
     const {
       x = 50,
       width = 495,
       fontSize = 9,
       font = 'Helvetica',
-      color = layout.COLORS.body,
+      color = body,
       lineGap = 3,
       spacing = 6,
     } = opts;
@@ -136,78 +164,86 @@ function renderAnnotatedPdfBody(doc, ctx, startY) {
     y += height + spacing;
   };
 
-  const renderScoreBar = (label, score) => {
-    ensureSpace(50);
-    doc.fontSize(11).font('Helvetica-Bold').fillColor(layout.COLORS.text).text(label, 50, y);
-    y += 18;
-    const barWidth = Math.round((Math.min(100, Math.max(0, score)) / 100) * 495);
-    doc.rect(50, y, 495, 14).fillColor('#f3f4f6').fill();
-    doc.rect(50, y, barWidth, 14).fillColor(scoreColor(score)).fill();
-    doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff')
-      .text(`${score}%`, 50 + Math.max(barWidth - 28, 4), y + 2, { width: 30, align: 'right' });
-    y += 30;
+  const sectionRule = () => {
+    ensureSpace(12);
+    doc.moveTo(50, y).lineTo(545, y).strokeColor(line).lineWidth(0.75).stroke();
+    y += 14;
   };
 
-  // ── Audit status banner ──
-  ensureSpace(36);
-  const statusLabel = String(documentStatus).replace(/_/g, ' ').toUpperCase();
-  doc.rect(50, y, 495, 28).fillColor(statusBadgeColor(documentStatus)).fill();
-  doc.fontSize(11).font('Helvetica-Bold').fillColor('#ffffff')
-    .text(`AUDIT STATUS: ${statusLabel}`, 50, y + 8, { width: 495, align: 'center' });
-  y += 38;
+  const renderScoreRow = (label, score) => {
+    const value = Math.min(100, Math.max(0, Math.round(Number(score) || 0)));
+    ensureSpace(36);
+    doc.fontSize(10).font('Helvetica-Bold').fillColor(ink).text(label, 50, y);
+    doc.fontSize(10).font('Helvetica').fillColor(ink)
+      .text(`${value}%`, 50, y, { width: 495, align: 'right' });
+    y += 16;
+    const barWidth = Math.round((value / 100) * 495);
+    doc.rect(50, y, 495, 8).fillColor('#f3f4f6').fill();
+    doc.rect(50, y, barWidth, 8).fillColor('#1f3a5f').fill();
+    y += 22;
+  };
 
-  if (annotated && markup.length) {
-    ensureSpace(30);
-    doc.fontSize(12).font('Helvetica-Bold').fillColor(layout.COLORS.danger)
-      .text('MISTAKES MARKED FOR CORRECTION', 50, y);
-    y += 18;
-    doc.moveTo(50, y).lineTo(545, y).strokeColor(layout.COLORS.danger).lineWidth(2).stroke();
-    y += 10;
+  // ── Status (plain text, no colored banner) ──
+  ensureSpace(28);
+  doc.fontSize(10).font('Helvetica-Bold').fillColor(ink)
+    .text('Audit status', 50, y);
+  doc.fontSize(10).font('Helvetica').fillColor(body)
+    .text(String(documentStatus).replace(/_/g, ' '), 160, y);
+  y += 20;
+  sectionRule();
 
-    markup.forEach((item, i) => {
-      ensureSpace(44);
-      doc.rect(50, y, 495, 2).fillColor(layout.COLORS.danger).fill();
-      y += 6;
-      doc.fontSize(9).font('Helvetica-Bold').fillColor(layout.COLORS.danger)
-        .text(`✕ MARK ${i + 1} — ${String(item.type).replace(/_/g, ' ').toUpperCase()} [${item.severity}]`, 50, y);
-      y += 14;
-      writeText(item.text, { fontSize: 10, font: 'Helvetica-Bold', color: layout.COLORS.danger, spacing: 4 });
-      if (item.location) {
-        writeText(`Location: ${item.location}`, { fontSize: 8, color: layout.COLORS.muted, spacing: 4 });
-      }
-      writeText(`Status: ${String(item.status || documentStatus).replace(/_/g, ' ')}`, {
-        fontSize: 8,
-        color: layout.COLORS.muted,
+  // ── Scores ──
+  doc.fontSize(11).font('Helvetica-Bold').fillColor(ink).text('Scores', 50, y);
+  y += 18;
+  renderScoreRow('Compliance score', complianceScore);
+  renderScoreRow('Overall audit score', overallScore);
+  sectionRule();
+
+  // ── Mistakes only (annotated) ──
+  if (annotated) {
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(ink).text('Mistakes', 50, y);
+    y += 8;
+    doc.fontSize(8).font('Helvetica').fillColor(muted)
+      .text(markup.length ? `${markup.length} item(s) marked for review` : 'No mistakes flagged.', 50, y + 6);
+    y += 22;
+
+    if (!markup.length) {
+      writeText('Document passed audit checks with no marked mistakes.', {
+        fontSize: 9,
+        color: body,
         spacing: 8,
       });
-    });
-    y += 8;
-  } else if (annotated) {
-    ensureSpace(30);
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(layout.COLORS.good)
-      .text('No mistakes flagged — document passed audit checks.', 50, y);
-    y += 24;
+    } else {
+      markup.forEach((item, i) => {
+        ensureSpace(56);
+        doc.fontSize(9).font('Helvetica-Bold').fillColor(ink)
+          .text(`${i + 1}. ${item.type.toUpperCase()} · ${item.severity}`, 50, y);
+        y += 13;
+        writeText(item.text, { fontSize: 9, font: 'Helvetica', color: body, spacing: 4 });
+        if (item.location) {
+          writeText(`Location: ${item.location}`, { fontSize: 8, color: muted, spacing: 4 });
+        }
+        if (item.status) {
+          writeText(`Status: ${item.status}`, { fontSize: 8, color: muted, spacing: 10 });
+        }
+        if (i < markup.length - 1) {
+          doc.moveTo(50, y).lineTo(545, y).strokeColor(line).lineWidth(0.5).stroke();
+          y += 10;
+        }
+      });
+    }
+    return y;
   }
 
-  renderScoreBar('Compliance Score', complianceScore);
-  renderScoreBar('Overall Audit Score', overallScore);
-
-  const sections = buildReportSections(document, analysis, auditorUser);
-  doc.fontSize(11).font('Helvetica-Bold').fillColor(layout.COLORS.text).text('Analysis Report (attached)', 50, y);
-  y += 20;
+  // ── Full analysis (non-annotated exports) ──
+  const sections = buildReportSections(document, analysis, ctx.auditorUser);
+  doc.fontSize(11).font('Helvetica-Bold').fillColor(ink).text('Analysis', 50, y);
+  y += 18;
 
   sections.forEach(section => {
-    writeText(section.title, { fontSize: 10, font: 'Helvetica-Bold', color: '#4f46e5', spacing: 4 });
+    writeText(section.title, { fontSize: 10, font: 'Helvetica-Bold', color: ink, spacing: 4 });
     (section.lines || []).forEach(line => {
-      const isMistakeLine = annotated && markup.some(m =>
-        line.includes('•') && m.text && line.includes(String(m.text).slice(0, 20))
-      );
-      writeText(line, {
-        fontSize: 9,
-        font: isMistakeLine ? 'Helvetica-Bold' : 'Helvetica',
-        color: isMistakeLine ? layout.COLORS.danger : layout.COLORS.body,
-        spacing: 4,
-      });
+      writeText(line, { fontSize: 9, font: 'Helvetica', color: body, spacing: 4 });
     });
     y += 6;
   });
@@ -216,14 +252,17 @@ function renderAnnotatedPdfBody(doc, ctx, startY) {
 }
 
 function streamDocumentAnalysisPdf(res, ctx) {
-  const { document, analysis, preparedBy } = ctx;
+  const { document, analysis, preparedBy, auditorUser, exportedByRole } = ctx;
   const annotated = ctx.annotated !== false && (ctx.annotated === true || ctx.format === 'annotated');
-  const results = analysis?.results || {};
+  const isClient = String(exportedByRole || '').toLowerCase() === 'client';
   const meta = document.metadata || {};
   const reportTitle = annotated
     ? `Annotated Audit — ${document.title || document.fileName}`
     : `Document Audit Analysis — ${document.title || document.fileName}`;
   const analyzedAt = analysis?.completedAt || meta.latestAuditDecision?.updatedAt || new Date();
+  const generatedBy = preparedBy
+    || (auditorUser && (auditorUser.fullName || auditorUser.email))
+    || 'System';
 
   const pdf = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
   res.setHeader('Content-Type', 'application/pdf');
@@ -232,18 +271,25 @@ function streamDocumentAnalysisPdf(res, ctx) {
   res.setHeader('Content-Disposition', `attachment; filename="${prefix}${safeName}.pdf"`);
   pdf.pipe(res);
 
-  let y = layout.drawHeader(pdf);
-  y = layout.drawReportDetails(pdf, y, [
-    ['Report Type', annotated ? 'Annotated Audit (mistakes marked)' : 'Document Audit Analysis'],
+  const detailPairs = [
+    ['Report Type', annotated ? 'Annotated Audit' : 'Document Audit Analysis'],
     ['Document', document.title || document.fileName],
     ['Status', (document.status || '—').replace(/_/g, ' ')],
-    ['Date Generated', layout.fmtDate(analyzedAt)],
-  ], reportTitle);
+  ];
+  if (!isClient) {
+    detailPairs.push(['Generated by', generatedBy]);
+  }
+  detailPairs.push(['Date Generated', layout.fmtDate(analyzedAt)]);
+
+  let y = layout.drawHeader(pdf);
+  y = layout.drawReportDetails(pdf, y, detailPairs, reportTitle, { minimal: annotated || isClient });
   y = layout.drawCenteredTitle(pdf, y, `${reportTitle} – ${layout.monthYear(analyzedAt)}`);
 
   y = renderAnnotatedPdfBody(pdf, { ...ctx, annotated }, y);
 
-  layout.drawSignatureBlock(pdf, y);
+  if (!isClient) {
+    layout.drawSignatureBlock(pdf, y);
+  }
   layout.drawFooter(pdf);
   pdf.end();
 }
@@ -256,4 +302,5 @@ module.exports = {
   buildReportSections,
   streamDocumentAnalysisPdf,
   streamDocumentAnalysisPdfLegacy,
+  safeMarkupText,
 };

@@ -100,14 +100,16 @@ function drawHeader(doc) {
  * "REPORT DETAILS" block.
  * @param {Array<[string, any]>} pairs - key/value lines.
  * @param {string} reportName - bold report name shown first.
+ * @param {{ minimal?: boolean }} [opts] - minimal = neutral lines (no orange/green).
  */
-function drawReportDetails(doc, y, pairs, reportName) {
+function drawReportDetails(doc, y, pairs, reportName, opts) {
   const left = doc.page.margins.left;
   const right = doc.page.width - doc.page.margins.right;
+  const minimal = opts && opts.minimal;
 
-  doc.fillColor(COLORS.navyText).font('Helvetica-Bold').fontSize(12).text('REPORT DETAILS', left, y);
-  y += 18;
-  doc.moveTo(left, y).lineTo(right, y).lineWidth(2).strokeColor(COLORS.orange).stroke();
+  doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(11).text('REPORT DETAILS', left, y);
+  y += 16;
+  doc.moveTo(left, y).lineTo(right, y).lineWidth(1).strokeColor(minimal ? COLORS.line : COLORS.orange).stroke();
   y += 10;
 
   if (reportName) {
@@ -125,7 +127,7 @@ function drawReportDetails(doc, y, pairs, reportName) {
   });
 
   y += 6;
-  doc.moveTo(left, y).lineTo(right, y).lineWidth(2).strokeColor(COLORS.green).stroke();
+  doc.moveTo(left, y).lineTo(right, y).lineWidth(1).strokeColor(minimal ? COLORS.line : COLORS.green).stroke();
   return y + 18;
 }
 

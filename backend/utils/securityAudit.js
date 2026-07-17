@@ -1,8 +1,12 @@
 'use strict';
 
+const { parseDeviceInfo } = require('./loginContext');
+
 async function logSecurityEvent(models, event) {
   if (!models || !models.AuditLog) return;
   try {
+    const userAgent = event.userAgent || null;
+    const device = event.device || (userAgent ? parseDeviceInfo(userAgent) : null);
     await models.AuditLog.create({
       userId: event.userId || null,
       userRole: event.userRole || 'anonymous',
@@ -11,7 +15,8 @@ async function logSecurityEvent(models, event) {
       status: event.status || 'failure',
       description: event.description || 'Security event',
       ipAddress: event.ipAddress || null,
-      userAgent: event.userAgent || null,
+      userAgent,
+      device,
       details: event.details || {},
     });
   } catch (err) {

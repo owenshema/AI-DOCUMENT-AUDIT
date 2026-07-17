@@ -1135,15 +1135,16 @@ const updateDocumentStatus = async (req, res) => {
       lastModifiedAt: new Date(),
     });
 
-    await notifyDocumentOwner(req.app.locals.models, document, status, reason, req.user.id);
-    await notifyDocumentManagersAuditReturn(
+    // Fire-and-forget so SMTP does not block the button response
+    notifyDocumentOwner(req.app.locals.models, document, status, reason, req.user.id).catch(() => {});
+    notifyDocumentManagersAuditReturn(
       req.app.locals.models,
       { ...document.toJSON(), metadata },
       status,
       reason,
       req.user.id,
       auditMarkup
-    );
+    ).catch(() => {});
 
     if (AUDIT_DONE_STATUSES.includes(status)) {
       await resolveNeedsAuditNotifications(req.app.locals.models, document.id);
@@ -1653,13 +1654,13 @@ const assignDocumentToClients = async (req, res) => {
 
     await document.update(updates);
 
-    const notifyResult = await notifyAssignedClients(
+    notifyAssignedClients(
       req.app.locals.models,
       { ...document.toJSON(), metadata },
       validIds,
       req.user.id,
       note
-    );
+    ).catch(() => {});
 
     await AuditLog.create({
       userId: req.user.id,
@@ -1674,7 +1675,7 @@ const assignDocumentToClients = async (req, res) => {
 
     res.json({
       message: `Document assigned to ${validIds.length} client(s).`,
-      notified: notifyResult.notified || 0,
+      notified: validIds.length,
       assignedClients: clients,
       document: enrichDocumentManagement({ ...document.toJSON(), metadata }),
     });
@@ -1733,13 +1734,13 @@ const createClientDocumentRequest = async (req, res) => {
       },
     });
 
-    const notifyResult = await notifyDocumentManagersClientDocumentRequest(
+    notifyDocumentManagersClientDocumentRequest(
       req.app.locals.models,
       document,
       req.user,
       resolvedPort,
       note
-    );
+    ).catch(() => {});
 
     await AuditLog.create({
       userId,
@@ -1754,7 +1755,7 @@ const createClientDocumentRequest = async (req, res) => {
 
     res.status(201).json({
       message: 'Document request submitted. Your document manager will prepare it, send it for audit, and assign it to you when ready.',
-      notifiedManagers: notifyResult.notified || 0,
+      notifiedManagers: 0,
       document: sanitizeDocumentForClient(enrichDocumentManagement(document, userId), role),
     });
   } catch (error) {
@@ -1812,7 +1813,7 @@ const fulfillClientDocumentRequest = async (req, res) => {
     });
 
     const updated = await Document.findByPk(id);
-    const auditNotify = await notifyAuditorsNeedAudit(
+    notifyAuditorsNeedAudit(
       req.app.locals.models,
       updated,
       req.user.id,
@@ -1822,7 +1823,7 @@ const fulfillClientDocumentRequest = async (req, res) => {
         note: note || `Document prepared for client request. Please audit and return to document manager.`,
         requestedByName: req.user.fullName || req.user.email,
       }
-    );
+    ).catch(() => {});
 
     const { Notification, User } = req.app.locals.models;
     const client = document.uploadedBy
@@ -1857,8 +1858,8 @@ const fulfillClientDocumentRequest = async (req, res) => {
     });
 
     res.json({
-      message: `Document prepared and sent to ${auditNotify.notified || 0} auditor(s) for audit.`,
-      notifiedAuditors: auditNotify.notified || 0,
+      message: 'Document prepared and sent to auditors for audit.',
+      notifiedAuditors: 0,
       document: enrichDocumentManagement(updated),
     });
   } catch (error) {
@@ -1917,17 +1918,16 @@ const requestMagerwaPresentation = async (req, res) => {
 
     await document.update({ metadata });
 
-    const notifyMgr = await notifyDocumentManagersMagerwaRequest(
+    notifyDocumentManagersMagerwaRequest(
       req.app.locals.models,
       { ...document.toJSON(), metadata },
       req.user,
       resolvedPort,
       note
-    );
+    ).catch(() => {});
 
-    let auditorNotify = { notified: 0 };
     if (!documentHasAuditorReview({ ...document.toJSON(), metadata })) {
-      auditorNotify = await notifyAuditorsNeedAudit(
+      notifyAuditorsNeedAudit(
         req.app.locals.models,
         { ...document.toJSON(), metadata },
         userId,
@@ -1936,7 +1936,7 @@ const requestMagerwaPresentation = async (req, res) => {
           port: resolvedPort,
           note: note || 'Client requested this document. Please audit urgently so the document manager can assign it back.',
         }
-      );
+      ).catch(() => {});
     }
 
     await AuditLog.create({
@@ -1952,8 +1952,8 @@ const requestMagerwaPresentation = async (req, res) => {
 
     res.json({
       message: 'Document request sent. You will be notified when the document manager assigns it to you.',
-      notifiedManagers: notifyMgr.notified || 0,
-      notifiedAuditors: auditorNotify.notified || 0,
+      notifiedManagers: 0,
+      notifiedAuditors: 0,
       document: enrichDocumentManagement({ ...document.toJSON(), metadata }, userId),
     });
   } catch (error) {
@@ -1994,7 +1994,7 @@ const requestDocumentAudit = async (req, res) => {
 
     await document.update({ metadata });
 
-    const result = await notifyAuditorsNeedAudit(
+    notifyAuditorsNeedAudit(
       req.app.locals.models,
       { ...document.toJSON(), metadata },
       req.user.id,
@@ -2004,13 +2004,11 @@ const requestDocumentAudit = async (req, res) => {
         note: note || 'This document has not been audited yet. Please complete the audit.',
         requestedByName: req.user.fullName || req.user.email,
       }
-    );
+    ).catch(() => {});
 
     res.json({
-      message: result.notified
-        ? `Audit request sent to ${result.notified} auditor(s).`
-        : 'No active auditors are available to notify.',
-      notified: result.notified || 0,
+      message: 'Audit request sent to auditors.',
+      notified: 0,
       document: enrichDocumentManagement({ ...document.toJSON(), metadata }),
     });
   } catch (error) {
