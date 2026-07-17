@@ -673,7 +673,7 @@ export default function DocumentsPage() {
                         <p className={`text-xs font-semibold ${t.bannerTitle}`}>{st.title}</p>
                         <p className={`mt-0.5 text-[11px] ${t.bannerBody}`}>{st.detail}</p>
                         {doc.magerwaRequestPort && (
-                          <p className={`mt-1 text-[10px] ${t.muted}`}>Port: {doc.magerwaRequestPort}</p>
+                          <p className={`mt-1 text-[10px] ${t.muted}`}>Receiving point: {doc.magerwaRequestPort}</p>
                         )}
                       </div>
                       <span className={`rounded-full px-3 py-1 text-[10px] font-semibold ${t.pill}`}>{st.badge}</span>
@@ -719,7 +719,7 @@ export default function DocumentsPage() {
                         <p className={`mt-0.5 text-[11px] ${t.bannerBody}`}>
                           {doc.cargoPort || doc.arrivalPort
                             ? <>Present at <span className="font-semibold">{doc.cargoPort || doc.arrivalPort}</span> to receive cargo</>
-                            : 'Download and take this document to Magerwa or the port to receive your cargo'}
+                            : 'Download and take this document to Magerwa (Rwanda receiving point) or the seaport to receive your cargo'}
                         </p>
                         {doc.assignmentNote && (
                           <p className={`mt-1 text-[10px] ${t.muted}`}>Note: {doc.assignmentNote}</p>
@@ -860,7 +860,7 @@ export default function DocumentsPage() {
                         ['Size', doc.fileSize ? `${Math.round(doc.fileSize / 1024)} KB` : '—'],
                         ['Text extraction', getProcessingStatus(doc)],
                         ['Uploader', getUploaderLabel(doc)],
-                        ...(doc.cargoPort || doc.arrivalPort ? [['Port / Magerwa', doc.cargoPort || doc.arrivalPort]] : []),
+                        ...(doc.cargoPort || doc.arrivalPort ? [['Receiving point', doc.cargoPort || doc.arrivalPort]] : []),
                         ...(isAssignedCargoDoc(doc) && doc.assignedAt ? [['Assigned', new Date(doc.assignedAt).toLocaleString()]] : []),
                       ].map(([k, v]) => (
                         <div key={k} className={`rounded-lg border p-2 ${t.borderSoft} ${t.panel}`}>
@@ -1069,11 +1069,11 @@ export default function DocumentsPage() {
                 />
               </div>
               <div>
-                <label className={`mb-1.5 block text-xs ${t.muted}`}>Port / location (optional)</label>
+                <label className={`mb-1.5 block text-xs ${t.muted}`}>Receiving point / location (optional)</label>
                 <input
                   value={newRequestForm.port}
                   onChange={e => setNewRequestForm(p => ({ ...p, port: e.target.value }))}
-                  placeholder="e.g. Magerwa, Mombasa Port"
+                  placeholder="e.g. Magerwa (Kigali receiving point), Mombasa Port"
                   className={`w-full px-3 py-2.5 text-sm ${t.input}`}
                 />
               </div>
@@ -1119,11 +1119,11 @@ export default function DocumentsPage() {
             </p>
             <div className="space-y-3">
               <div>
-                <label className={`mb-1.5 block text-xs ${t.muted}`}>Port / location (optional)</label>
+                <label className={`mb-1.5 block text-xs ${t.muted}`}>Receiving point / location (optional)</label>
                 <input
                   value={requestForm.port}
                   onChange={e => setRequestForm(p => ({ ...p, port: e.target.value }))}
-                  placeholder="e.g. Magerwa, Mombasa Port"
+                  placeholder="e.g. Magerwa (Kigali receiving point), Mombasa Port"
                   className={`w-full px-3 py-2.5 text-sm ${t.input}`}
                 />
               </div>

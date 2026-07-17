@@ -383,7 +383,7 @@ export default function DocumentManagementPage() {
     <AppShell title="Document Management">
       <p className={`mb-5 text-sm ${sub}`}>
         After the auditor returns an approved document, open <strong>Assign to Client</strong>, pick any client
-        from the full client list, and assign it for Magerwa/port cargo clearance.
+        from the full client list, and assign it for Magerwa receiving-point cargo clearance.
       </p>
 
       {(summary.awaitingAssignment > 0 || clients.length > 0) && (
@@ -889,14 +889,14 @@ export default function DocumentManagementPage() {
                 </>
               )}
               <div>
-                <label className={`mb-1 block text-xs ${sub}`}>Port / Magerwa location</label>
+                <label className={`mb-1 block text-xs ${sub}`}>Receiving point / Magerwa location</label>
                 <input
                   value={assignPort}
                   onChange={e => setAssignPort(e.target.value)}
-                  placeholder="e.g. Magerwa, Jebel Ali, Mombasa Port"
+                  placeholder="e.g. Magerwa (Kigali receiving point), Jebel Ali, Mombasa Port"
                   className={`w-full rounded-xl border px-3 py-2.5 text-sm outline-none ${inputCls}`}
                 />
-                <p className={`mt-1 text-[10px] ${sub}`}>Client will see this when downloading the document for cargo clearance.</p>
+                <p className={`mt-1 text-[10px] ${sub}`}>Client will see this when downloading the document for cargo clearance. Magerwa is Rwanda&apos;s inland receiving point, not a seaport.</p>
               </div>
               <div>
                 <label className={`mb-1 block text-xs ${sub}`}>Note to client (optional)</label>

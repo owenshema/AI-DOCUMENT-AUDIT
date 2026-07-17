@@ -316,7 +316,7 @@ const notifyDocumentOwner = async (models, document, status, reason, actorId) =>
   const ownerIsClient = normalizeRole(owner?.role) === 'client';
   const message = ownerIsClient
     ? (['approved', 'reviewed'].includes(status)
-      ? `Your document "${document.title}" passed audit. The document manager will assign it to you shortly for Magerwa/port cargo clearance.`
+      ? `Your document "${document.title}" passed audit. The document manager will assign it to you shortly for Magerwa receiving-point cargo clearance.`
       : `Your document "${document.title}" is being reviewed. The document manager will contact you when it is ready.`)
     : `Document "${document.title}" has been updated. Log in to the portal to view the status and full analysis.`;
 
@@ -391,7 +391,7 @@ const notifyDocumentManagersAuditReturn = async (models, document, status, reaso
     const needsFix = status === 'changes_requested' || status === 'rejected';
     const message = needsFix
       ? `Auditor returned "${document.title}" with ${mistakeCount} mistake(s) marked in red. Status: ${status.replace(/_/g, ' ')}. Please review, correct the document, then release to the client.`
-      : `Auditor approved "${document.title}". ${mistakeCount ? `${mistakeCount} note(s) attached.` : 'No mistakes found.'} You may assign the document to the client for Magerwa/port cargo clearance.`;
+      : `Auditor approved "${document.title}". ${mistakeCount ? `${mistakeCount} note(s) attached.` : 'No mistakes found.'} You may assign the document to the client for Magerwa receiving-point cargo clearance.`;
 
     const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000/document-management';
 
@@ -447,7 +447,7 @@ const notifyDocumentManagersClientUpload = async (models, document, clientUser) 
     if (!managers.length) return { notified: 0 };
 
     const clientName = clientUser?.fullName || clientUser?.email || 'A client';
-    const message = `${clientName} uploaded "${document.title}". Auditors have been notified to audit it. After approval, assign the document back to this client for Magerwa/port cargo clearance.`;
+    const message = `${clientName} uploaded "${document.title}". Auditors have been notified to audit it. After approval, assign the document back to this client for Magerwa receiving-point cargo clearance.`;
     const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000/document-management';
 
     await Promise.all(managers.map(mgr => Notification.create({
@@ -487,7 +487,7 @@ const notifyDocumentManagersClientUpload = async (models, document, clientUser) 
 };
 
 /**
- * Notify document managers when a client requests a document for Magerwa/port presentation.
+ * Notify document managers when a client requests a document for Magerwa (Rwanda receiving point) presentation.
  */
 const notifyDocumentManagersMagerwaRequest = async (models, document, clientUser, port, note) => {
   const { Notification, User } = models;
@@ -499,7 +499,7 @@ const notifyDocumentManagersMagerwaRequest = async (models, document, clientUser
     if (!managers.length) return { notified: 0 };
 
     const clientName = clientUser?.fullName || clientUser?.email || 'A client';
-    const message = `${clientName} requested document "${document.title}".${port ? ` Port: ${port}.` : ''}${note ? ` Note: ${note}` : ''} Please ensure audit is complete and assign the approved document to the client.`;
+    const message = `${clientName} requested document "${document.title}".${port ? ` Receiving point: ${port}.` : ''}${note ? ` Note: ${note}` : ''} Please ensure audit is complete and assign the approved document to the client.`;
     const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000/document-management';
 
     await Promise.all(managers.map(mgr => Notification.create({
@@ -553,7 +553,7 @@ const notifyDocumentManagersClientDocumentRequest = async (models, document, cli
     if (!managers.length) return { notified: 0 };
 
     const clientName = clientUser?.fullName || clientUser?.email || 'A client';
-    const message = `${clientName} needs a document: "${document.title}".${port ? ` Port: ${port}.` : ''}${note ? ` Note: ${note}` : ''} Please prepare the document, send it to the auditor for audit, then assign it back to the client.`;
+    const message = `${clientName} needs a document: "${document.title}".${port ? ` Receiving point: ${port}.` : ''}${note ? ` Note: ${note}` : ''} Please prepare the document, send it to the auditor for audit, then assign it back to the client.`;
     const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000/document-management';
 
     await Promise.all(managers.map(mgr => Notification.create({
@@ -1509,9 +1509,11 @@ const notifyAssignedClients = async (models, document, clientIds, actorId, note)
 
   const managerName = manager?.fullName || manager?.email || 'Document manager';
   const port = document.metadata?.cargoPort || document.metadata?.arrivalPort;
-  const portLine = port ? ` Present this document at ${port} to receive your cargo.` : ' Download the document and take it to Magerwa or the port to receive your cargo.';
+  const portLine = port
+    ? ` Present this document at ${port} to receive your cargo.`
+    : ' Download the document and take it to Magerwa (Rwanda receiving point) or the seaport to receive your cargo.';
   const message = note
-    || `Document "${document.title}" has been audited and assigned to you.${portLine} Download the document from your portal and take it to the port.`;
+    || `Document "${document.title}" has been audited and assigned to you.${portLine} Download the document from your portal and present it at the receiving point.`;
 
   await Promise.all(clients.map(client => Notification.create({
     recipientId: client.id,
@@ -1582,7 +1584,7 @@ const assignDocumentToClients = async (req, res) => {
 
     if (!['approved', 'reviewed'].includes(document.status)) {
       return res.status(400).json({
-        error: 'Only approved documents can be assigned to clients for Magerwa/port cargo clearance.',
+        error: 'Only approved documents can be assigned to clients for Magerwa receiving-point cargo clearance.',
       });
     }
 
