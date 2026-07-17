@@ -304,7 +304,7 @@ function runFullFieldValidation(documentText, specId, notebookResult) {
   return {
     issues: issues,
     fields: fields,
-    missing_fields: notebookAudit.issuesToMissingFields(issues),
+    missing_fields: notebookAudit.issuesToMissingFields(issues, body),
     docType: docType,
   };
 }
@@ -468,15 +468,28 @@ function isMetadataOnlyInput(text) {
   if (n.length < 30) return true;
   var hasOrgContent = /sifco|super\s+international|al\s+shamali|packing\s+list|bill\s+of\s+lading|trucking\s+invoice|shipp?ing\s+agreement|freight\s+invoce|unique\s+hybrid|agape\s+house|top\s+sifco/i.test(n);
   if (hasOrgContent) return false;
-  var metaLines = (n.match(/^(title|file|category|department|status|description|classification|date):/gim) || []).length;
+  // Do not treat document "Date:" fields as upload metadata.
+  var metaLines = (n.match(/^(title|file|category|department|status|description|classification)\s*:/gim) || []).length;
   return metaLines >= 2 && n.length < 350;
 }
 
-/** Strip upload metadata lines so renamed filenames never influence scoring */
+/**
+ * Strip upload-form metadata lines so renamed filenames never influence scoring.
+ * Important: do NOT strip document body lines like "Date: 15/02/2026" — packing lists
+ * and invoices use that label; removing them caused false "Missing: date" findings.
+ */
 function extractBodyTextForAudit(documentText) {
   var lines = (documentText || '').split(/\n/);
   var body = lines.filter(function (line) {
-    return !/^\s*(title|file|category|department|status|description|classification|date)\s*:/i.test(line);
+    // Upload metadata only (not document Date / TIN / etc.)
+    if (/^\s*(title|file|category|department|status|description|classification)\s*:/i.test(line)) {
+      return false;
+    }
+    // Legacy form date lines look like ISO timestamps, not DD/MM/YYYY packing-list dates
+    if (/^\s*date\s*:\s*\d{4}-\d{2}-\d{2}/i.test(line)) {
+      return false;
+    }
+    return true;
   }).join('\n');
   return body.trim();
 }
@@ -730,13 +743,23 @@ function runTrainedAudit(documentText, context) {
 
   var fieldValidation = runFullFieldValidation(documentText, matchedSpecId, notebookResult);
   var allIssues = fieldValidation.issues.length ? fieldValidation.issues : (notebookResult.issues || []);
-  var missing_fields = notebookAudit.issuesToMissingFields(allIssues);
+  // Prefer body text used for field checks so date/TIN rules match what was audited
+  var auditBody = bodyText || extractBodyTextForAudit(documentText || '');
+  var missing_fields = notebookAudit.issuesToMissingFields(allIssues, auditBody);
   var calculation_errors = calcService.calculationErrorsFromIssues(allIssues);
   var fieldBlock = notebookAudit.hasBlockingIssues(allIssues);
   var criticalIssues = notebookAudit.hasCriticalIssues(allIssues);
   var mandatoryMissing = notebookAudit.hasMandatoryMissing(missing_fields, allIssues);
   var validButIncomplete = !!(mandatoryMissing && !criticalIssues);
-  violations = notebookAudit.issuesToViolations(allIssues);
+  violations = notebookAudit.issuesToViolations(allIssues).filter(function (v) {
+    // Drop false "Missing: date" when the document body has a real date value
+    if (notebookAudit.hasDocumentDate(auditBody) &&
+        /required.?fields|date/i.test((v.title || '') + ' ' + (v.summary || '')) &&
+        /missing:\s*date\b|no date found/i.test(v.summary || '')) {
+      return false;
+    }
+    return true;
+  });
 
   if (!fieldBlock && !mandatoryMissing) {
     accepted = true;

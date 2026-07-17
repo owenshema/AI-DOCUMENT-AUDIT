@@ -109,13 +109,23 @@ function attachMarkupPositions(extractedText, markup) {
   return positioned;
 }
 
-function buildAuditMarkup(analysis, documentStatus = 'in_progress') {
+function textHasDateValue(text) {
+  return /\b\d{1,2}\s*[./\-]\s*\d{1,2}\s*[./\-]\s*\d{2,4}\b/.test(String(text || ''));
+}
+
+function isFalseMissingDateItem(item, extractedText) {
+  if (!textHasDateValue(extractedText)) return false;
+  const blob = `${item?.text || ''} ${item?.check || ''} ${item?.field || ''}`.toLowerCase();
+  return /\bdate\b/.test(blob) && /missing|no date found|blank/.test(blob) && !/\btin\b/.test(blob);
+}
+
+function buildAuditMarkup(analysis, documentStatus = 'in_progress', extractedText = '') {
   const results = analysis?.results || analysis || {};
   const markup = [];
   let idx = 0;
 
   (results.violations || []).forEach(v => {
-    markup.push({
+    const item = {
       id: `violation-${idx++}`,
       type: 'violation',
       severity: String(v.severity || 'MEDIUM').toUpperCase(),
@@ -125,7 +135,8 @@ function buildAuditMarkup(analysis, documentStatus = 'in_progress') {
       field: v.title || v.field || null,
       check: v.title || v.check || null,
       markColor: 'red',
-    });
+    };
+    if (!isFalseMissingDateItem(item, extractedText)) markup.push(item);
   });
 
   (results.inconsistencies || []).forEach(item => {
@@ -153,7 +164,7 @@ function buildAuditMarkup(analysis, documentStatus = 'in_progress') {
   });
 
   (results.missing_fields || []).forEach(f => {
-    markup.push({
+    const item = {
       id: `missing-${idx++}`,
       type: 'missing_field',
       severity: 'HIGH',
@@ -161,7 +172,8 @@ function buildAuditMarkup(analysis, documentStatus = 'in_progress') {
       text: violationText(f) || (typeof f === 'string' ? f : ''),
       location: null,
       markColor: 'red',
-    });
+    };
+    if (!isFalseMissingDateItem(item, extractedText)) markup.push(item);
   });
 
   (results.calculation_errors || []).forEach(err => {

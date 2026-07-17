@@ -145,6 +145,9 @@ export default function DocumentManagementPage() {
 
   const openNotify = (doc) => {
     if (doc.auditState === 'audited') return;
+    // Only one panel at a time — close assign / prepare when opening notify
+    setAssignDoc(null);
+    setPrepareDoc(null);
     setNotifyDoc(doc);
     setNotifyForm({
       urgent: Boolean(doc.isUrgent),
@@ -158,6 +161,8 @@ export default function DocumentManagementPage() {
   };
 
   const openAssign = async (doc) => {
+    setNotifyDoc(null);
+    setPrepareDoc(null);
     setAssignDoc(doc);
     const uploaderIsClient = doc.isClientUpload || doc.uploader?.role === 'client' || doc.isRequestOnly;
     const preselect = doc.assignedClientIds?.length
@@ -189,6 +194,8 @@ export default function DocumentManagementPage() {
   };
 
   const openPrepare = (doc) => {
+    setNotifyDoc(null);
+    setAssignDoc(null);
     setPrepareDoc(doc);
     setPrepareFile(null);
     setPrepareNote('');

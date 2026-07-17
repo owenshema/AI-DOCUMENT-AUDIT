@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FolderOpen, Bot, FileBarChart2,
@@ -39,16 +39,45 @@ export default function AppShell({ children, title }) {
   const { user, logout, isDarkMode, toggleTheme } = useAuthStore();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const userMenuRef = useRef(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [dropOpen, setDropOpen]     = useState(false);
+  /** Only one header panel at a time: null | 'notifications' | 'user' */
+  const [headerMenu, setHeaderMenu] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const role     = normalizeRole(user?.role);
   const initials = (user?.fullName || 'U').split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
   const badge    = ROLE_BADGE[role] || ROLE_BADGE.client;
+  const dropOpen = headerMenu === 'user';
+  const notifOpen = headerMenu === 'notifications';
 
   // Filter nav by role
   const visibleNav = ALL_NAV.filter(n => !n.roles || n.roles.includes(role));
+
+  // Close header menus when navigating to another page/tab
+  useEffect(() => {
+    setHeaderMenu(null);
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Close user menu on outside click / Escape
+  useEffect(() => {
+    if (!dropOpen) return undefined;
+    const onPointerDown = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setHeaderMenu(null);
+      }
+    };
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setHeaderMenu(null);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [dropOpen]);
 
   const handleLogout = async () => {
     try { await authAPI.logout(); } catch { /* ignore */ }
@@ -172,7 +201,11 @@ export default function AppShell({ children, title }) {
           </div>
 
           <div className="flex items-center gap-2">
-            <NotificationBell isDarkMode={isDarkMode} />
+            <NotificationBell
+              isDarkMode={isDarkMode}
+              open={notifOpen}
+              onOpenChange={(open) => setHeaderMenu(open ? 'notifications' : null)}
+            />
 
             <button onClick={toggleTheme}
               title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -180,9 +213,15 @@ export default function AppShell({ children, title }) {
               {isDarkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
-            {/* User menu */}
-            <div className="relative">
-              <button onClick={() => setDropOpen(p => !p)}
+            {/* User menu — opens only this panel; closes notifications */}
+            <div className="relative" ref={userMenuRef}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHeaderMenu(prev => (prev === 'user' ? null : 'user'));
+                }}
+                aria-expanded={dropOpen}
                 className={`flex items-center gap-2 rounded-xl px-3 py-1.5 transition-colors ${isDarkMode ? 'bg-blue-500/15 hover:bg-blue-500/25' : 'bg-blue-50 hover:bg-blue-100'}`}>
                 <div className="h-6 w-6 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white">
                   {initials}
@@ -194,17 +233,25 @@ export default function AppShell({ children, title }) {
                 <ChevronDown className={`h-3 w-3 ${subtext}`} />
               </button>
               {dropOpen && (
-                <div className={`absolute right-0 top-11 z-20 w-44 rounded-xl p-1 shadow-2xl ${t.modal}`}>
-                  <div className={`px-3 py-2 mb-1 border-b ${t.borderSoft}`}>
-                    <p className={`text-xs font-semibold ${text}`}>{user?.fullName}</p>
-                    <p className={`text-[10px] ${subtext}`}>{user?.email}</p>
-                    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold mt-1 ${badge.color}`}>{badge.label}</span>
+                <>
+                  <button
+                    type="button"
+                    aria-label="Close user menu"
+                    className="fixed inset-0 z-20 cursor-default bg-transparent"
+                    onClick={() => setHeaderMenu(null)}
+                  />
+                  <div className={`absolute right-0 top-11 z-30 w-44 rounded-xl p-1 shadow-2xl ${t.modal}`}>
+                    <div className={`px-3 py-2 mb-1 border-b ${t.borderSoft}`}>
+                      <p className={`text-xs font-semibold ${text}`}>{user?.fullName}</p>
+                      <p className={`text-[10px] ${subtext}`}>{user?.email}</p>
+                      <span className={`inline-block rounded-full px-1.5 py-0.5 text-[9px] font-semibold mt-1 ${badge.color}`}>{badge.label}</span>
+                    </div>
+                    <button onClick={handleLogout}
+                      className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm ${isDarkMode ? 'text-blue-100 hover:bg-blue-500/15' : 'text-blue-800 hover:bg-blue-50'}`}>
+                      <LogOut className="h-4 w-4" /> Sign out
+                    </button>
                   </div>
-                  <button onClick={handleLogout}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm ${isDarkMode ? 'text-blue-100 hover:bg-blue-500/15' : 'text-blue-800 hover:bg-blue-50'}`}>
-                    <LogOut className="h-4 w-4" /> Sign out
-                  </button>
-                </div>
+                </>
               )}
             </div>
           </div>

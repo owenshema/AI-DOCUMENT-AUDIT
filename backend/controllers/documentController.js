@@ -1090,7 +1090,9 @@ const updateDocumentStatus = async (req, res) => {
     if (!document) return res.status(404).json({ error: 'Document not found' });
 
     const analysis = await DocumentAnalysis.findOne({ where: { documentId: id } });
-    const rawMarkup = analysis ? buildAuditMarkup(analysis, status) : [];
+    const rawMarkup = analysis
+      ? buildAuditMarkup(analysis, status, document.extractedText || '')
+      : [];
     const auditMarkup = document.extractedText
       ? attachMarkupPositions(document.extractedText, rawMarkup)
       : rawMarkup;

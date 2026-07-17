@@ -21,6 +21,7 @@ TEMPLATES = {
             "method of loading", "weight", "bill of loading",
             "final destination", "name of vessel", "voyage number", "etd",
         ],
+        "field_checks": {"tin": "required", "bl": "required", "vessel": "warn", "voyage": "warn", "final_destination": "required"},
         "valid_tins": ["121348946"],
         "valid_issuers": ["SUPER INTERNATIONAL FREIGHT SERVICES LLC"],
         "required_signatures": ["SIFCO SIGNATURE", "CLIENT'S SIGNATURE"],
@@ -34,6 +35,7 @@ TEMPLATES = {
             "port of loading", "port of discharge", "bl number",
             "final destination", "name of vessel", "voyage number", "etd",
         ],
+        "field_checks": {"date": "required", "bl": "required", "ports": "required", "vessel": "warn", "voyage": "warn", "final_destination": "required"},
         "valid_tins": [],
         "valid_issuers": ["GANADOR GENERAL TRADING"],
         "required_signatures": [],
@@ -43,10 +45,11 @@ TEMPLATES = {
         "spec_id": "packing_list",
         "keywords": ["packing list", "packages", "qty", "total packages"],
         "required_fields": [
-            "consigne", "date", "total", "method of loading",
+            "consigne", "total", "method of loading",
             "weight", "container number", "bill of loading",
             "final destination", "name of vessel", "voyage number", "etd",
         ],
+        "field_checks": {"tin": "required", "date": "required", "container": "required", "bl": "required", "vessel": "warn", "voyage": "warn", "final_destination": "required"},
         "valid_tins": [],
         "valid_issuers": ["GANADOR GENERAL TRADING"],
         "required_signatures": [],
@@ -60,6 +63,7 @@ TEMPLATES = {
             "place of receipt", "port of loading", "port of discharge",
             "gross weight", "container no", "seal",
         ],
+        "field_checks": {"tin": "required", "container": "required", "bl": "required", "ports": "required", "vessel": "warn"},
         "valid_tins": ["121348946"],
         "valid_issuers": ["AL SHAMALI INTERNATIONAL", "SUPER INTERNATIONAL FREIGHT"],
         "required_signatures": ["authorised signatory"],
@@ -72,6 +76,7 @@ TEMPLATES = {
             "invoice no", "date", "currency", "plate number",
             "origin", "destination", "container no", "rate", "total amount",
         ],
+        "field_checks": {"tin": "required", "date": "required", "invoice_no": "required", "container": "required"},
         "valid_tins": ["4003036334"],
         "valid_issuers": ["TOP SIFCO"],
         "required_signatures": [],
@@ -84,6 +89,7 @@ TEMPLATES = {
             "invoice no", "date", "currency", "origin", "destination",
             "container no", "freight charges", "bl fee", "local charges", "bank",
         ],
+        "field_checks": {"tin": "required", "date": "required", "invoice_no": "required", "container": "required"},
         "valid_tins": ["121348946"],
         "valid_issuers": ["SUPER INTERNATIONAL FREIGHT SERVICES LLC"],
         "required_signatures": [],
@@ -100,6 +106,7 @@ TEMPLATES = {
             "container no", "method of loading", "description of goods",
             "freight", "b/l fee", "total",
         ],
+        "field_checks": {"container": "required", "ports": "warn", "signatures": "required"},
         "valid_tins": [],
         "valid_issuers": ["AL SHAMALI INTERNATIONAL FREIGHT SERVICES LLC"],
         "required_signatures": ["SIGNATURE (H.O.D)", "SIGNATURE (CUSTOMER)"],
@@ -206,7 +213,8 @@ def extract_fields(text: str) -> dict:
     text_upper = text.upper()
     fields = {}
 
-    tins = re.findall(r"(?:TIN|NIF)\s*(?:NUMBER)?\s*[:\-]?\s*(\d{6,12})", text_upper)
+    # Capture full digit runs; Rwanda TIN must be exactly 9 digits.
+    tins = re.findall(r"(?:TIN|NIF)\s*(?:NO\.?|NUMBER)?\s*[:\-]?\s*(\d+)", text_upper)
     fields["tin_numbers"] = list(set(tins))
 
     bls = re.findall(
@@ -257,18 +265,81 @@ def check_document(text: str, doc_type: str, fields: dict) -> list[dict]:
 
     valid_tins = template.get("valid_tins", [])
     found_tins = fields.get("tin_numbers", [])
-    if valid_tins:
-        if not found_tins:
-            issues.append({"severity": "HIGH", "check": "TIN", "message": f"TIN missing. Expected: {valid_tins}"})
+    field_checks = template.get("field_checks") or {}
+    blank_tin = bool(
+        re.search(r"TIN\s*(?:NO\.?|NUMBER)?\s*[:\-]\s*(?:\r?\n|$)", text or "", re.I)
+        or re.search(r"TIN\s*:\s*KIGALI", text or "", re.I)
+        or re.search(r"^\s*TIN\s*(?:NO\.?|NUMBER)?\s*[:\-]?\s*$", text or "", re.I | re.M)
+    )
+    has_tin_label = bool(re.search(r"(?:TIN|NIF)\s*(?:NO\.?|NUMBER)?\s*[:\-]", text or "", re.I))
+    expects_tin = (
+        field_checks.get("tin") == "required"
+        or bool(valid_tins)
+        or blank_tin
+        or has_tin_label
+    )
+    expects_date = (
+        field_checks.get("date") == "required"
+        or any(str(f).lower() == "date" for f in template.get("required_fields", []))
+    )
+
+    def tin_ok(tin: str) -> bool:
+        if re.fullmatch(r"\d{9}", tin or ""):
+            return True
+        return tin in valid_tins
+
+    # Format check — 9-digit Rwanda TIN, or this paper type's listed partner ID/NIF
+    for tin in found_tins:
+        if not tin_ok(tin):
+            issues.append({
+                "severity": "CRITICAL",
+                "check": "TIN",
+                "message": f"TIN/NIF '{tin}' is not a valid format (expected 9-digit Rwanda TIN or listed partner ID)",
+            })
+
+    if expects_tin and not found_tins:
+        if blank_tin:
+            issues.append({
+                "severity": "HIGH",
+                "check": "TIN",
+                "message": "TIN field is blank — Rwanda TIN must be exactly 9 digits",
+            })
+        elif valid_tins:
+            issues.append({
+                "severity": "HIGH",
+                "check": "TIN",
+                "message": f"TIN number not found — expected for this {template.get('name', doc_type)} (e.g. {', '.join(valid_tins)})",
+            })
         else:
-            for tin in found_tins:
-                if tin not in ALL_VALID_TINS:
-                    issues.append({"severity": "CRITICAL", "check": "TIN", "message": f"Invalid TIN '{tin}'"})
-                elif tin not in valid_tins:
-                    issues.append({"severity": "HIGH", "check": "TIN", "message": f"TIN '{tin}' wrong for this document type"})
+            issues.append({
+                "severity": "HIGH",
+                "check": "TIN",
+                "message": f"TIN number not found on this {template.get('name', doc_type)} — Rwanda TIN must be exactly 9 digits",
+            })
+    elif expects_tin and found_tins:
+        for tin in found_tins:
+            if not tin_ok(tin):
+                continue
+            if valid_tins and tin not in valid_tins:
+                issues.append({"severity": "HIGH", "check": "TIN", "message": f"TIN '{tin}' wrong for this document type"})
+            elif tin not in ALL_VALID_TINS and tin not in valid_tins:
+                issues.append({"severity": "CRITICAL", "check": "TIN", "message": f"Invalid TIN '{tin}'"})
+
+    dates = fields.get("dates") or []
+    if expects_date and not dates:
+        issues.append({
+            "severity": "HIGH",
+            "check": "Date",
+            "message": f"No date found on this {template.get('name', doc_type)}",
+        })
 
     missing = []
     for field in template.get("required_fields", []):
+        if str(field).lower() == "date":
+            if dates:
+                continue
+            missing.append(field)
+            continue
         in_text = field.upper() in text_upper
         fuzzy_match = any(_fuzz_partial_ratio(field.upper(), line) > 80 for line in text_upper.split("\n"))
         if not in_text and not fuzzy_match:

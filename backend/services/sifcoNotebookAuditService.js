@@ -30,10 +30,12 @@ var DEFAULT_KNOWN = {
 
 var cachedConfig = null;
 
+var DEFAULT_TIN_RULE = { digits: 9, pattern: '^\\d{9}$', message: 'TIN number must be exactly 9 digits (Rwanda TIN format)' };
+
 function loadConfig() {
   if (cachedConfig) return cachedConfig;
   if (!fs.existsSync(LABELS_PATH)) {
-    cachedConfig = { templates: {}, known: DEFAULT_KNOWN };
+    cachedConfig = { templates: {}, known: DEFAULT_KNOWN, validationRules: { tin: DEFAULT_TIN_RULE } };
     return cachedConfig;
   }
   try {
@@ -41,9 +43,10 @@ function loadConfig() {
     cachedConfig = {
       templates: parsed.templates || {},
       known: parsed.known_values || DEFAULT_KNOWN,
+      validationRules: Object.assign({ tin: DEFAULT_TIN_RULE }, parsed.validation_rules || {}),
     };
   } catch (e) {
-    cachedConfig = { templates: {}, known: DEFAULT_KNOWN };
+    cachedConfig = { templates: {}, known: DEFAULT_KNOWN, validationRules: { tin: DEFAULT_TIN_RULE } };
   }
   return cachedConfig;
 }
@@ -116,9 +119,11 @@ function extractFields(text) {
   var textUpper = (text || '').toUpperCase();
   var fields = {};
 
+  // Capture full digit runs after TIN/NIF so wrong lengths can be flagged
+  // (Rwanda TIN must be exactly 9 digits).
   fields.tin_numbers = unique(
-    (textUpper.match(/(?:TIN|NIF)\s*(?:NO\.?|NUMBER)?\s*[:\-]?\s*(\d{6,12})/g) || [])
-      .map(function (m) { return m.replace(/.*?(\d{6,12})$/, '$1'); })
+    (textUpper.match(/(?:TIN|NIF)\s*(?:NO\.?|NUMBER)?\s*[:\-]?\s*(\d+)/g) || [])
+      .map(function (m) { return m.replace(/.*?(\d+)$/, '$1'); })
   );
 
   fields.bl_numbers = unique(
@@ -179,12 +184,45 @@ function extractFields(text) {
   var totalMatch = textUpper.match(/TOTAL\s*(?:\/\s*USD|\\)?\s*[:\s]*(\d[\d,\.]*)/);
   fields.total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : null;
 
-  fields.dates = unique((text.match(/\b(\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4})\b/g) || []));
+  fields.dates = extractDocumentDates(text);
 
   fields.packing_lines = extractPackingListLines(text);
   fields.invoice_lines = extractInvoiceAmountLines(text);
 
   return fields;
+}
+
+/** Collect date values from document body (DD/MM/YYYY, dots, spaces, etc.). */
+function extractDocumentDates(text) {
+  var raw = text || '';
+  var found = [];
+  var patterns = [
+    /\b(\d{1,2}\s*[./\-]\s*\d{1,2}\s*[./\-]\s*\d{2,4})\b/g,
+    /\bDATE\s*[:\-]?\s*(\d{1,2}\s*[./\-]\s*\d{1,2}\s*[./\-]\s*\d{2,4})\b/gi,
+  ];
+  patterns.forEach(function (re) {
+    var m;
+    while ((m = re.exec(raw)) !== null) {
+      found.push(m[1].replace(/\s+/g, ''));
+    }
+  });
+  return unique(found);
+}
+
+/** True when the document has a real date value (not just a blank "Date:" label). */
+function hasDocumentDate(text, fields) {
+  if (fields && fields.dates && fields.dates.length) return true;
+  return extractDocumentDates(text).length > 0;
+}
+
+/** True when a TIN/NIF label is present but empty (common on packing lists). */
+function hasBlankTinField(text) {
+  var t = text || '';
+  if (/TIN\s*:\s*KIGALI/im.test(t)) return true;
+  if (/TIN\s*(?:NO\.?|NUMBER)?\s*[:\-]\s*(?:\r?\n|$)/im.test(t)) return true;
+  // Label on its own line, value missing on same line
+  if (/^\s*TIN\s*(?:NO\.?|NUMBER)?\s*[:\-]?\s*$/im.test(t)) return true;
+  return false;
 }
 
 function extractPackingListLines(text) {
@@ -234,8 +272,41 @@ function isValidInvoiceFormat(invoiceNo, docType) {
   return false;
 }
 
-function isValidTinFormat(tin) {
-  return /^\d{6,12}$/.test(tin || '');
+function tinRule() {
+  var rules = loadConfig().validationRules || {};
+  return rules.tin || DEFAULT_TIN_RULE;
+}
+
+/** Rwanda TIN must be exactly 9 digits; template-listed partner IDs (e.g. NIF) are also accepted. */
+function isValidTinFormat(tin, validTins) {
+  var digits = Number(tinRule().digits) || 9;
+  if (new RegExp('^\\d{' + digits + '}$').test(tin || '')) return true;
+  if (Array.isArray(validTins) && validTins.indexOf(tin) >= 0) return true;
+  return false;
+}
+
+function tinFormatMessage(tin, validTins) {
+  var digits = Number(tinRule().digits) || 9;
+  if (Array.isArray(validTins) && validTins.length) {
+    return "TIN/NIF '" + tin + "' is not a valid format (expected " + digits +
+      "-digit Rwanda TIN, or this paper type's listed partner ID)";
+  }
+  return "TIN '" + tin + "' is not a valid format (expected exactly " + digits + ' digits)';
+}
+
+function templateExpectsTin(template, text) {
+  if (fieldCheckLevel(template, 'tin') === 'required') return true;
+  if ((template.valid_tins || []).length) return true;
+  // If the paper prints a TIN/NIF box, validate it even when the template has no valid_tins list
+  if (hasBlankTinField(text) || /(?:TIN|NIF)\s*(?:NO\.?|NUMBER)?\s*[:\-]/i.test(text || '')) return true;
+  return false;
+}
+
+function templateExpectsDate(template) {
+  if (fieldCheckLevel(template, 'date') === 'required') return true;
+  return (template.required_fields || []).some(function (f) {
+    return String(f).toLowerCase() === 'date';
+  });
 }
 
 function normalizePortName(name) {
@@ -323,32 +394,57 @@ function checkDocument(text, docType, fields) {
     return [{ severity: 'CRITICAL', check: 'Type', message: 'Document type unknown' }];
   }
 
-  var tinLevel = fieldCheckLevel(template, 'tin');
   var validTins = template.valid_tins || [];
   var foundTins = fields.tin_numbers || [];
-  if (tinLevel !== 'off') {
+  var blankTin = hasBlankTinField(text);
+  var expectsTin = templateExpectsTin(template, text);
+  var tinLevel = fieldCheckLevel(template, 'tin');
+  if (tinLevel === 'off' && expectsTin) tinLevel = 'required';
+
+  // Format check for any TIN/NIF values found (9-digit Rwanda TIN, or listed partner ID).
+  foundTins.forEach(function (tin) {
+    if (!isValidTinFormat(tin, validTins)) {
+      issues.push({
+        severity: 'CRITICAL',
+        check: 'TIN',
+        message: tinFormatMessage(tin, validTins),
+      });
+    }
+  });
+
+  if (expectsTin && tinLevel !== 'off') {
     if (!foundTins.length) {
-      var blankTin = /TIN\s*:\s*(?:\n|$|\r)/im.test(text || '') || /TIN\s*:\s*KIGALI/im.test(text || '');
       if (blankTin) {
-        pushFieldIssue(issues, tinLevel, 'TIN', 'TIN field is blank on this document type');
+        issues.push({
+          severity: 'HIGH',
+          check: 'TIN',
+          message: 'TIN field is blank — Rwanda TIN must be exactly 9 digits',
+        });
+      } else if (validTins.length) {
+        issues.push({
+          severity: 'HIGH',
+          check: 'TIN',
+          message: 'TIN number not found — expected for this ' + (template.name || docType) +
+            ' (e.g. ' + validTins.join(' or ') + ')',
+        });
       } else {
-        pushFieldIssue(issues, tinLevel, 'TIN', 'TIN number not found in document');
+        issues.push({
+          severity: 'HIGH',
+          check: 'TIN',
+          message: 'TIN number not found on this ' + (template.name || docType) +
+            ' — Rwanda TIN must be exactly 9 digits',
+        });
       }
     } else {
       foundTins.forEach(function (tin) {
-        if (!isValidTinFormat(tin)) {
-          issues.push({ severity: 'CRITICAL', check: 'TIN', message: "TIN '" + tin + "' is not a valid format (expected 6–12 digits)" });
-        } else if (tinLevel === 'required' && validTins.length && validTins.indexOf(tin) < 0) {
+        if (!isValidTinFormat(tin, validTins)) return;
+        if (validTins.length && validTins.indexOf(tin) < 0) {
           pushFieldIssue(issues, 'warn', 'TIN', "TIN '" + tin + "' is valid but not the usual TIN for this paper type");
-        } else if (tinLevel === 'required' && !allTins[tin]) {
+        } else if (!validTins.length && !allTins[tin]) {
           pushFieldIssue(issues, 'warn', 'TIN', "TIN '" + tin + "' is not in the known SIFCO partner list — verify manually");
         }
       });
     }
-  }
-
-  if (docType === 'PACKING_LIST') {
-    /* packing calculations handled by documentCalculationService below */
   }
 
   var invoiceLevel = fieldCheckLevel(template, 'invoice_no');
@@ -395,6 +491,8 @@ function checkDocument(text, docType, fields) {
   var missing = (template.required_fields || []).filter(function (field) {
     if (field.toLowerCase() === 'consignee' && fields.consignee) return false;
     if (field.toLowerCase() === 'consigne' && fields.consignee) return false;
+    // Date: use extracted values — never require the bare word "Date" alone.
+    if (field.toLowerCase() === 'date') return !hasDocumentDate(text, fields);
     return !fieldPresent(textUpper, field);
   });
   if (missing.length) {
@@ -462,13 +560,34 @@ function checkDocument(text, docType, fields) {
     }
   });
 
-  if (fieldCheckLevel(template, 'date') !== 'off' && (!fields.dates || !fields.dates.length)) {
-    pushFieldIssue(issues, fieldCheckLevel(template, 'date'), 'Date', 'No date found in document');
+  // Date check — only for paper types that include a date field
+  if (templateExpectsDate(template) && !hasDocumentDate(text, fields)) {
+    var dateLevel = fieldCheckLevel(template, 'date') === 'off' ? 'required' : fieldCheckLevel(template, 'date');
+    pushFieldIssue(issues, dateLevel, 'Date', 'No date found on this ' + (template.name || docType));
   }
 
   var critical = criticalFindings.runCriticalChecks(text, docType, fields, template.field_checks || {});
   fields = critical.fields;
   issues = issues.concat(critical.issues);
+
+  // Drop false "missing date" findings when a date value is clearly present.
+  if (hasDocumentDate(text, fields)) {
+    issues = issues.filter(function (i) {
+      if (!i) return false;
+      var blob = ((i.check || '') + ' ' + (i.message || '')).toLowerCase();
+      if (i.check === 'Date' && /no date found/i.test(i.message || '')) return false;
+      if (i.check === 'Required Fields' && /missing:\s*date\b/i.test(i.message || '')) {
+        // Keep the issue only if other fields remain after removing date
+        var rest = String(i.message || '').replace(/missing:\s*/i, '').split(/,\s*/)
+          .map(function (s) { return s.trim(); })
+          .filter(function (s) { return s && s.toLowerCase() !== 'date'; });
+        if (!rest.length) return false;
+        i.message = 'Missing: ' + rest.join(', ');
+      }
+      if (/missing area:\s*date\b/i.test(blob) && !/tin/i.test(blob)) return false;
+      return true;
+    });
+  }
 
   return issues.filter(function (i) { return i.severity !== 'INFO'; });
 }
@@ -654,7 +773,7 @@ function auditText(text) {
     status: status,
     fields: fields,
     issues: issues,
-    complianceScore: complianceScoreFromStatus(status, issues, issuesToMissingFields(issues)),
+    complianceScore: complianceScoreFromStatus(status, issues, issuesToMissingFields(issues, text)),
     message: buildMessage(classification, status, issues),
   };
 }
@@ -685,7 +804,8 @@ function issuesToViolations(issues) {
   });
 }
 
-function issuesToMissingFields(issues) {
+function issuesToMissingFields(issues, documentText) {
+  var hasDate = documentText ? hasDocumentDate(documentText, { dates: extractDocumentDates(documentText) }) : false;
   var missing = [];
   (issues || []).forEach(function (i) {
     var sev = i.severity || 'MEDIUM';
@@ -698,11 +818,15 @@ function issuesToMissingFields(issues) {
       var match = i.message.match(/Missing:\s*(.+)/i);
       if (match) {
         match[1].split(/,\s*/).forEach(function (f) {
-          var areaLabel = 'Missing area: ' + f.trim();
-          if (f && missing.indexOf(areaLabel) < 0) missing.push(areaLabel);
+          var name = (f || '').trim();
+          // Never surface false "Missing area: date" when a date value exists in the document
+          if (hasDate && /^date$/i.test(name)) return;
+          var areaLabel = 'Missing area: ' + name;
+          if (name && missing.indexOf(areaLabel) < 0) missing.push(areaLabel);
         });
       }
     } else if (isSubstantiveGapIssue(i)) {
+      if (hasDate && i.check === 'Date') return;
       var label = 'Missing area: ' + i.check + (i.message ? ' — ' + i.message : '');
       if (missing.indexOf(label) < 0) missing.push(label);
     }
@@ -735,6 +859,9 @@ module.exports = {
   clearCache: clearCache,
   classifyDocument: classifyDocument,
   extractFields: extractFields,
+  hasDocumentDate: hasDocumentDate,
+  hasBlankTinField: hasBlankTinField,
+  isValidTinFormat: isValidTinFormat,
   checkDocument: checkDocument,
   auditText: auditText,
   issuesToViolations: issuesToViolations,

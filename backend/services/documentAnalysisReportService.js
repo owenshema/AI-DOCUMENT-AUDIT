@@ -128,7 +128,8 @@ function renderAnnotatedPdfBody(doc, ctx, startY) {
   const complianceScore = Number(results.compliance_score ?? meta.latestComplianceScore ?? 0);
   const overallScore = Number(results.overall_audit_score ?? meta.latestOverallAuditScore ?? complianceScore);
   const documentStatus = document.status || meta.latestAuditDecision?.status || 'in_progress';
-  const rawMarkup = meta.auditMarkup || buildAuditMarkup(analysis, documentStatus);
+  const rawMarkup = meta.auditMarkup
+    || buildAuditMarkup(analysis, documentStatus, document.extractedText || '');
   const markup = (rawMarkup || []).map(item => normalizeMarkupItem(item, documentStatus));
 
   let y = startY;
