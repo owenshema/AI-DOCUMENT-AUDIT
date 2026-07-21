@@ -18,7 +18,7 @@ except ImportError:
 configure_tesseract()
 
 # Cap pages so a huge scanned PDF can't hang the audit. Override with env var.
-MAX_PDF_PAGES = int(os.environ.get("OCR_MAX_PDF_PAGES", "15"))
+MAX_PDF_PAGES = int(os.environ.get("OCR_MAX_PDF_PAGES", "5"))
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp")
 
 
@@ -46,11 +46,11 @@ def ocr_file(input_path: str) -> str:
     if is_pdf:
         from pdf2image import convert_from_path
         try:
-            pages = convert_from_path(input_path, dpi=200, first_page=1, last_page=MAX_PDF_PAGES)
+            pages = convert_from_path(input_path, dpi=150, first_page=1, last_page=MAX_PDF_PAGES)
         except Exception:
             # Fall back to a lower DPI / first page only if full conversion fails.
             try:
-                pages = convert_from_path(input_path, dpi=150, first_page=1, last_page=1)
+                pages = convert_from_path(input_path, dpi=120, first_page=1, last_page=1)
             except Exception:
                 pages = []
         texts = []

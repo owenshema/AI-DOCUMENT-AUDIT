@@ -146,15 +146,15 @@ function computeOverallAuditScore(auditResult) {
 }
 
 function averageOverallScore(analyses) {
-  var passing = (analyses || []).filter(function (a) {
-    return isPassingAuditResults(a.results);
-  });
-
-  var scores = passing
+  var scores = (analyses || [])
     .map(function (a) {
-      var stored = a.results && a.results.overall_audit_score;
-      if (typeof stored === 'number') return stored;
-      return computeOverallAuditScore(a.results || {}).overall_audit_score;
+      var results = a.results || {};
+      if (typeof results.overall_audit_score === 'number') return results.overall_audit_score;
+      if (typeof results.compliance_score === 'number') return results.compliance_score;
+      if (isPassingAuditResults(results)) {
+        return computeOverallAuditScore(results).overall_audit_score;
+      }
+      return null;
     })
     .filter(function (n) { return typeof n === 'number' && !isNaN(n); });
 

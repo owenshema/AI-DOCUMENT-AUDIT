@@ -4,6 +4,13 @@ const { Op } = require('sequelize');
 const { normalizeRole } = require('../utils/roles');
 const { parseDeviceFromUserAgent } = require('../utils/loginContext');
 
+/** Real pipeline statuses stored on documents (DB may use any of these). */
+var PENDING_AUDIT_STATUSES = [
+  'uploaded', 'pending', 'submitted', 'in_review', 'in_progress', 'draft', 'changes_requested',
+];
+var COMPLETED_DOC_STATUSES = ['approved', 'completed', 'archived'];
+var REJECTED_DOC_STATUSES = ['rejected', 'revision_required', 'returned', 'changes_requested'];
+
 const REPORT_META = {
   my_documents_status: { title: 'My uploads & status', description: 'All documents you uploaded and their current audit status' },
   upload_history: { title: 'Upload history', description: 'Timeline of all uploads made, including file size and date' },
@@ -80,6 +87,30 @@ async function loadAnalyses(models, user, ctx, limit) {
   });
 }
 
+/** Analyses performed by a specific auditor (Task table is often empty). */
+async function loadAnalysesByPerformer(models, userId, ctx, limit) {
+  return models.DocumentAnalysis.findAll({
+    where: Object.assign({ performedBy: userId }, fieldInPeriod('createdAt', ctx)),
+    include: [{ model: models.Document, attributes: ['id', 'title', 'status', 'category', 'uploadedBy'], required: false }],
+    order: [['createdAt', 'DESC']],
+    limit: limit || 500,
+  });
+}
+
+/** Latest analysis per document id. */
+async function loadLatestAnalysesByDocs(models, docIds) {
+  var latestByDoc = {};
+  if (!docIds.length) return latestByDoc;
+  var analyses = await models.DocumentAnalysis.findAll({
+    where: { documentId: { [Op.in]: docIds } },
+    order: [['createdAt', 'DESC']],
+  });
+  analyses.forEach(function (a) {
+    if (!latestByDoc[a.documentId]) latestByDoc[a.documentId] = a;
+  });
+  return latestByDoc;
+}
+
 function violationsFromAnalysis(a) {
   var res = a.results || {};
   var list = Array.isArray(res.violations) ? res.violations : [];
@@ -97,6 +128,8 @@ function complianceFromAnalysis(a) {
   var res = a.results || {};
   if (res.compliance_score != null) return Number(res.compliance_score);
   if (res.complianceScore != null) return Number(res.complianceScore);
+  if (res.overall_audit_score != null) return Number(res.overall_audit_score);
+  if (res.overallAuditScore != null) return Number(res.overallAuditScore);
   if (a.confidence != null) return Math.round(Number(a.confidence) * 100);
   return null;
 }
@@ -484,18 +517,10 @@ async function buildMyDocumentsStatus(models, user, ctx) {
   });
   // Enforce selected dates in memory so UI never shows out-of-range uploads
   docs = filterRowsInPeriod(docs, 'uploadedAt', ctx).slice(0, 100);
-  var docIds = docs.map(function (d) { return d.id; });
-  var analyses = docIds.length
-    ? await models.DocumentAnalysis.findAll({
-      where: { documentId: { [Op.in]: docIds } },
-      order: [['createdAt', 'DESC']],
-    })
-    : [];
-  var latestByDoc = {};
-  analyses.forEach(function (a) {
-    if (!latestByDoc[a.documentId]) latestByDoc[a.documentId] = a;
-  });
-  var pending = docs.filter(function (d) { return /pending|uploaded|in_review|submitted/i.test(d.status); }).length;
+  var latestByDoc = await loadLatestAnalysesByDocs(models, docs.map(function (d) { return d.id; }));
+  var pending = docs.filter(function (d) {
+    return PENDING_AUDIT_STATUSES.indexOf(String(d.status || '').toLowerCase()) >= 0;
+  }).length;
   var audited = docs.filter(function (d) { return latestByDoc[d.id]; }).length;
   return {
     summary: { total: docs.length, pending: pending, audited: audited },
@@ -581,9 +606,10 @@ async function buildAuditFindings(models, user, ctx) {
 }
 
 async function buildPendingReview(models, user, ctx) {
-  var pendingStatuses = ['uploaded', 'in_review', 'in_progress', 'submitted', 'pending', 'draft'];
   var docs = await models.Document.findAll({
-    where: Object.assign({}, ctx.where, fieldInPeriod('uploadedAt', ctx), { status: { [Op.in]: pendingStatuses } }),
+    where: Object.assign({}, ctx.where, fieldInPeriod('uploadedAt', ctx), {
+      status: { [Op.in]: PENDING_AUDIT_STATUSES },
+    }),
     order: [['uploadedAt', 'ASC']],
     limit: 100,
   });
@@ -603,11 +629,12 @@ async function buildPendingReview(models, user, ctx) {
 
 async function buildDocumentInventory(models, user, ctx) {
   var docs = await models.Document.findAll({
-    where: fieldInPeriod('uploadedAt', ctx),
+    where: Object.assign({}, ctx.where || {}, fieldInPeriod('uploadedAt', ctx)),
     order: [['uploadedAt', 'DESC']],
-    limit: 150,
+    limit: 200,
   });
   var owners = await loadUsersMap(models, docs.map(function (d) { return d.uploadedBy; }).filter(Boolean));
+  var latestByDoc = await loadLatestAnalysesByDocs(models, docs.map(function (d) { return d.id; }));
   return {
     summary: { total: docs.length },
     columns: [
@@ -615,14 +642,18 @@ async function buildDocumentInventory(models, user, ctx) {
       { key: 'owner', label: 'Owner' },
       { key: 'category', label: 'Type' },
       { key: 'status', label: 'Status' },
+      { key: 'auditScore', label: 'Audit score' },
       { key: 'uploadedAt', label: 'Uploaded' },
     ],
     rows: docs.map(function (d) {
+      var a = latestByDoc[d.id];
+      var score = a ? complianceFromAnalysis(a) : (d.metadata && d.metadata.latestComplianceScore);
       return {
         title: d.title,
         owner: owners[d.uploadedBy] || '—',
         category: d.category,
         status: d.status,
+        auditScore: score != null ? score + '%' : 'Not audited',
         uploadedAt: fmtDate(d.uploadedAt),
       };
     }),
@@ -631,7 +662,7 @@ async function buildDocumentInventory(models, user, ctx) {
 
 async function buildPipelineStatus(models, user, ctx) {
   var docs = await models.Document.findAll({
-    where: fieldInPeriod('uploadedAt', ctx),
+    where: Object.assign({}, ctx.where || {}, fieldInPeriod('uploadedAt', ctx)),
     attributes: ['status'],
   });
   var counts = {};
@@ -651,10 +682,10 @@ async function buildPipelineStatus(models, user, ctx) {
 async function buildOverdueDocuments(models, user, ctx) {
   var cutoff = new Date(Date.now() - 7 * 86400000);
   var docs = await models.Document.findAll({
-    where: {
-      status: { [Op.in]: ['uploaded', 'in_review', 'in_progress', 'submitted', 'pending'] },
+    where: Object.assign({}, ctx.where || {}, {
+      status: { [Op.in]: PENDING_AUDIT_STATUSES },
       uploadedAt: { [Op.lt]: cutoff },
-    },
+    }),
     order: [['uploadedAt', 'ASC']],
     limit: 100,
   });
@@ -676,21 +707,30 @@ async function buildOverdueDocuments(models, user, ctx) {
 async function buildRejectionLog(models, user, ctx) {
   var docs = await models.Document.findAll({
     where: Object.assign(
-      { status: { [Op.in]: ['rejected', 'revision_required', 'returned'] } },
+      { status: { [Op.in]: REJECTED_DOC_STATUSES } },
       fieldInPeriod('updatedAt', ctx)
     ),
     order: [['updatedAt', 'DESC']],
     limit: 100,
   });
+  var latestByDoc = await loadLatestAnalysesByDocs(models, docs.map(function (d) { return d.id; }));
   return {
     summary: { rejected: docs.length },
     columns: [
       { key: 'title', label: 'Document' },
       { key: 'status', label: 'Outcome' },
+      { key: 'auditScore', label: 'Audit score' },
       { key: 'updatedAt', label: 'Last updated' },
     ],
     rows: docs.map(function (d) {
-      return { title: d.title, status: d.status, updatedAt: fmtDate(d.updatedAt) };
+      var a = latestByDoc[d.id];
+      var score = a ? complianceFromAnalysis(a) : null;
+      return {
+        title: d.title,
+        status: d.status,
+        auditScore: score != null ? score + '%' : '—',
+        updatedAt: fmtDate(d.updatedAt),
+      };
     }),
   };
 }
@@ -743,11 +783,14 @@ async function buildSubmissionTrend(models, user, ctx) {
 }
 
 async function buildAuditQueue(models, user, ctx) {
+  var role = normalizeRole(user.role);
   var rows = [];
-  if (user.role === 'auditor' || user.role === 'administrator') {
-    var taskWhere = user.role === 'auditor' ? { assignedTo: user.id } : {};
+  if (role === 'auditor' || role === 'administrator') {
+    var taskWhere = role === 'auditor' ? { assignedTo: user.id } : {};
     var tasks = await models.Task.findAll({
-      where: Object.assign({}, taskWhere, fieldInPeriod('createdAt', ctx), { status: { [Op.in]: ['pending', 'in_progress'] } }),
+      where: Object.assign({}, taskWhere, fieldInPeriod('createdAt', ctx), {
+        status: { [Op.in]: ['pending', 'in_progress'] },
+      }),
       order: [['dueDate', 'ASC']],
       limit: 100,
     });
@@ -769,15 +812,14 @@ async function buildAuditQueue(models, user, ctx) {
     });
   }
   if (!rows.length) {
+    // Tasks table is often empty — queue = documents still awaiting audit decision.
     var pendingDocs = await models.Document.findAll({
       where: Object.assign(
-        {
-          status: { [Op.in]: ['uploaded', 'in_review', 'submitted', 'pending'] },
-        },
+        { status: { [Op.in]: PENDING_AUDIT_STATUSES } },
         fieldInPeriod('uploadedAt', ctx)
       ),
       order: [['uploadedAt', 'ASC']],
-      limit: 50,
+      limit: 100,
     });
     rows = pendingDocs.map(function (d) {
       return {
@@ -805,19 +847,10 @@ async function buildAuditQueue(models, user, ctx) {
 async function buildCompletionRate(models, user, ctx) {
   var analyses;
   if (normalizeRole(user.role) === 'auditor') {
-    var tasks = await models.Task.findAll({
-      where: Object.assign({ assignedTo: user.id, status: 'completed' }, fieldInPeriod('completedAt', ctx)),
-      attributes: ['documentId'],
-    });
-    var docIds = tasks.map(function (t) { return t.documentId; }).filter(Boolean);
-    analyses = docIds.length
-      ? await models.DocumentAnalysis.findAll({
-        where: Object.assign({ documentId: { [Op.in]: docIds } }, fieldInPeriod('createdAt', ctx)),
-        include: [{ model: models.Document, attributes: ['id', 'title', 'status', 'category', 'uploadedBy'], required: false }],
-        order: [['createdAt', 'DESC']],
-        limit: 500,
-      })
-      : [];
+    analyses = await loadAnalysesByPerformer(models, user.id, ctx, 500);
+    if (!analyses.length) {
+      analyses = await loadAnalyses(models, user, ctx, 500);
+    }
   } else {
     analyses = await loadAnalyses(models, user, ctx, 500);
   }
@@ -826,9 +859,9 @@ async function buildCompletionRate(models, user, ctx) {
     var res = a.results || {};
     var score = complianceFromAnalysis(a);
     var docStatus = a.Document && a.Document.status;
-    if (res.organization_match === false || score <= 20) counts.rejected++;
-    else if (score >= 90 || docStatus === 'approved') counts.approved++;
-    else if (score >= 60 || /flag|warning/i.test(res.risk_level || '')) counts.flagged++;
+    if (res.organization_match === false || (score != null && score <= 20)) counts.rejected++;
+    else if ((score != null && score >= 90) || COMPLETED_DOC_STATUSES.indexOf(String(docStatus || '').toLowerCase()) >= 0) counts.approved++;
+    else if ((score != null && score >= 60) || /flag|warning/i.test(res.risk_level || '')) counts.flagged++;
     else counts.pending++;
   });
   var total = analyses.length || 1;
@@ -851,10 +884,12 @@ async function buildTimeToAudit(models, user, ctx) {
   var analyses = await loadAnalyses(models, user, ctx, 200);
   var byType = {};
   analyses.forEach(function (a) {
-    if (!a.completedAt) return;
+    var endAt = a.completedAt || a.updatedAt || a.createdAt;
+    var startAt = a.createdAt;
+    if (!endAt || !startAt) return;
     var cat = (a.Document && a.Document.category) || (a.results && a.results.document_type) || 'general';
-    var ms = new Date(a.completedAt) - new Date(a.createdAt);
-    if (ms < 0) return;
+    var ms = new Date(endAt) - new Date(startAt);
+    if (ms < 0) ms = 0;
     if (!byType[cat]) byType[cat] = { totalMs: 0, count: 0 };
     byType[cat].totalMs += ms;
     byType[cat].count++;
@@ -993,16 +1028,31 @@ async function buildActivityReport(models, user, ctx) {
 }
 
 async function buildWorkloadHistory(models, user, ctx) {
-  var taskWhere = Object.assign({ assignedTo: user.id, status: 'completed' }, fieldInPeriod('completedAt', ctx));
-  var tasks = await models.Task.findAll({ where: taskWhere, attributes: ['completedAt'] });
+  // Prefer completed tasks; fall back to AI analyses performed by this user.
+  var tasks = await models.Task.findAll({
+    where: Object.assign({ assignedTo: user.id, status: 'completed' }, fieldInPeriod('completedAt', ctx)),
+    attributes: ['completedAt'],
+  });
   var buckets = {};
+  var completed = tasks.length;
   tasks.forEach(function (t) {
     var dt = new Date(t.completedAt);
     var key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
     buckets[key] = (buckets[key] || 0) + 1;
   });
+
+  if (!completed) {
+    var analyses = await loadAnalysesByPerformer(models, user.id, ctx, 500);
+    completed = analyses.length;
+    analyses.forEach(function (a) {
+      var dt = new Date(a.completedAt || a.createdAt);
+      var key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+      buckets[key] = (buckets[key] || 0) + 1;
+    });
+  }
+
   return {
-    summary: { completed: tasks.length },
+    summary: { completed: completed },
     columns: [{ key: 'period', label: 'Period' }, { key: 'completed', label: 'Audits completed' }],
     rows: Object.keys(buckets).sort().map(function (p) {
       return { period: p, completed: buckets[p] };
@@ -1011,11 +1061,11 @@ async function buildWorkloadHistory(models, user, ctx) {
 }
 
 async function buildAllUsers(models, user, ctx) {
+  // Directory report: always list current users (do not filter by registration date).
   var users = await models.User.findAll({
-    where: fieldInPeriod('createdAt', ctx),
     attributes: ['fullName', 'email', 'role', 'isActive', 'lastLogin', 'createdAt'],
     order: [['fullName', 'ASC']],
-    limit: 200,
+    limit: 500,
   });
   return {
     summary: { totalUsers: users.length },
@@ -1099,37 +1149,66 @@ async function buildSystemAuditSummary(models, user, ctx) {
   var periodAnalyses = fieldInPeriod('createdAt', ctx);
   var totalDocs = await models.Document.count({ where: periodDocs });
   var pending = await models.Document.count({
-    where: Object.assign({}, periodDocs, { status: { [Op.in]: ['uploaded', 'in_review', 'pending', 'submitted'] } }),
+    where: Object.assign({}, periodDocs, { status: { [Op.in]: PENDING_AUDIT_STATUSES } }),
   });
   var completed = await models.Document.count({
-    where: Object.assign({}, periodDocs, { status: { [Op.in]: ['approved', 'completed'] } }),
+    where: Object.assign({}, periodDocs, { status: { [Op.in]: COMPLETED_DOC_STATUSES } }),
+  });
+  var rejected = await models.Document.count({
+    where: Object.assign({}, periodDocs, { status: { [Op.in]: REJECTED_DOC_STATUSES } }),
   });
   var analyses = await models.DocumentAnalysis.count({
     where: Object.assign({}, periodAnalyses, { status: 'completed' }),
   });
+  var analysisRows = await models.DocumentAnalysis.findAll({
+    where: Object.assign({}, periodAnalyses, { status: 'completed' }),
+    attributes: ['results'],
+    limit: 1000,
+  });
+  var scores = analysisRows.map(complianceFromAnalysis).filter(function (s) { return s != null; });
+  var avgScore = scores.length ? Math.round(scores.reduce(function (s, v) { return s + v; }, 0) / scores.length) : 0;
   return {
-    summary: { totalDocs: totalDocs, pending: pending, completed: completed, analyses: analyses },
+    summary: { totalDocs: totalDocs, pending: pending, completed: completed, analyses: analyses, avgScore: avgScore },
     columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Value' }],
     rows: [
       { metric: 'Documents in period', value: totalDocs },
       { metric: 'Pending audit', value: pending },
-      { metric: 'Completed', value: completed },
+      { metric: 'Approved / completed', value: completed },
+      { metric: 'Rejected / changes requested', value: rejected },
       { metric: 'AI analyses run', value: analyses },
+      { metric: 'Average compliance score', value: avgScore + '%' },
     ],
   };
 }
 
 async function buildAuditorPerformance(models, user, ctx) {
-  var auditors = await models.User.findAll({ where: { role: 'auditor' }, attributes: ['id', 'fullName', 'email'] });
+  var auditors = await models.User.findAll({
+    where: { role: { [Op.in]: ['auditor', 'AUDITOR'] } },
+    attributes: ['id', 'fullName', 'email'],
+  });
   var rows = [];
   for (var i = 0; i < auditors.length; i++) {
     var a = auditors[i];
-    var completed = await models.Task.count({ where: Object.assign({ assignedTo: a.id, status: 'completed' }, fieldInPeriod('completedAt', ctx)) });
-    var pending = await models.Task.count({ where: { assignedTo: a.id, status: { [Op.in]: ['pending', 'in_progress'] } } });
+    var completedTasks = await models.Task.count({
+      where: Object.assign({ assignedTo: a.id, status: 'completed' }, fieldInPeriod('completedAt', ctx)),
+    });
+    var pendingTasks = await models.Task.count({
+      where: { assignedTo: a.id, status: { [Op.in]: ['pending', 'in_progress'] } },
+    });
+    var analyses = await loadAnalysesByPerformer(models, a.id, ctx, 500);
+    var completed = completedTasks || analyses.length;
+    var pending = pendingTasks;
+    if (!pendingTasks && !completedTasks) {
+      // No task rows — pending = documents still in audit pipeline org-wide for context.
+      pending = await models.Document.count({ where: { status: { [Op.in]: PENDING_AUDIT_STATUSES } } });
+    }
+    var scores = analyses.map(complianceFromAnalysis).filter(function (s) { return s != null; });
+    var avg = scores.length ? Math.round(scores.reduce(function (s, v) { return s + v; }, 0) / scores.length) : null;
     rows.push({
       auditor: a.fullName || a.email,
       completed: completed,
       pending: pending,
+      avgScore: avg != null ? avg + '%' : '—',
       slaCompliance: completed + pending > 0 ? Math.round((completed / (completed + pending)) * 100) + '%' : '—',
     });
   }
@@ -1139,6 +1218,7 @@ async function buildAuditorPerformance(models, user, ctx) {
       { key: 'auditor', label: 'Auditor' },
       { key: 'completed', label: 'Completed' },
       { key: 'pending', label: 'Pending' },
+      { key: 'avgScore', label: 'Avg score' },
       { key: 'slaCompliance', label: 'SLA compliance' },
     ],
     rows: rows,
@@ -1157,19 +1237,39 @@ async function buildDocumentCompliance(models, user, ctx) {
   var scores = analyses.map(complianceFromAnalysis).filter(function (s) { return s != null; });
   var avg = scores.length ? Math.round(scores.reduce(function (s, v) { return s + v; }, 0) / scores.length) : 0;
   var pass = scores.filter(function (s) { return s >= 80; }).length;
-  var flagged = analyses.filter(function (a) {
-    var s = complianceFromAnalysis(a);
-    return s != null && s >= 60 && s < 80;
-  }).length;
+  var flagged = scores.filter(function (s) { return s >= 60 && s < 80; }).length;
+  var failed = scores.filter(function (s) { return s < 60; }).length;
+  var detailRows = analyses.slice(0, 100).map(function (a) {
+    var score = complianceFromAnalysis(a);
+    return {
+      document: (a.Document && a.Document.title) || a.documentId,
+      status: (a.Document && a.Document.status) || a.status,
+      score: score != null ? score + '%' : '—',
+      risk: (a.results && a.results.risk_level) || '—',
+      date: fmtDate(a.createdAt),
+    };
+  });
   return {
-    summary: { avgScore: avg, passRate: scores.length ? Math.round((pass / scores.length) * 100) + '%' : '0%', audits: analyses.length },
-    columns: [{ key: 'metric', label: 'Metric' }, { key: 'value', label: 'Value' }],
-    rows: [
-      { metric: 'Average compliance score', value: avg + '%' },
-      { metric: 'Pass rate (≥80%)', value: scores.length ? Math.round((pass / scores.length) * 100) + '%' : '0%' },
-      { metric: 'Flagged (60–79%)', value: flagged },
-      { metric: 'Audits in period', value: analyses.length },
+    summary: {
+      avgScore: avg,
+      passRate: scores.length ? Math.round((pass / scores.length) * 100) + '%' : '0%',
+      audits: analyses.length,
+    },
+    columns: [
+      { key: 'document', label: 'Document' },
+      { key: 'status', label: 'Status' },
+      { key: 'score', label: 'Compliance score' },
+      { key: 'risk', label: 'Risk' },
+      { key: 'date', label: 'Audited' },
     ],
+    rows: detailRows.length
+      ? detailRows
+      : [
+        { document: 'Average compliance score', status: '—', score: avg + '%', risk: '—', date: '—' },
+        { document: 'Pass rate (≥80%)', status: '—', score: scores.length ? Math.round((pass / scores.length) * 100) + '%' : '0%', risk: '—', date: '—' },
+        { document: 'Flagged (60–79%)', status: '—', score: String(flagged), risk: '—', date: '—' },
+        { document: 'Below 60%', status: '—', score: String(failed), risk: '—', date: '—' },
+      ],
   };
 }
 
@@ -1254,10 +1354,20 @@ async function buildAiConfidence(models, user, ctx) {
 }
 
 const ACCESS_MAP = {
-  client: ['my_documents_status', 'activity_report'],
-  document_manager: ['my_documents_status', 'activity_report'],
-  auditor: ['my_audit_queue', 'audit_completion_rate', 'activity_report'],
-  administrator: ['activity_report', 'user_activity', 'all_users', 'document_inventory'],
+  client: ['my_documents_status', 'activity_report', 'upload_history', 'audit_findings_received'],
+  document_manager: [
+    'my_documents_status', 'activity_report', 'upload_history', 'pending_review',
+    'pipeline_status', 'document_compliance',
+  ],
+  auditor: [
+    'my_audit_queue', 'audit_completion_rate', 'activity_report', 'common_findings',
+    'document_compliance', 'workload_history', 'time_to_audit',
+  ],
+  administrator: [
+    'activity_report', 'user_activity', 'all_users', 'document_inventory',
+    'document_compliance', 'system_audit_summary', 'auditor_performance',
+    'pipeline_status', 'system_health', 'ai_confidence_scores', 'inactive_users',
+  ],
 };
 
 function canAccessReport(reportId, role) {

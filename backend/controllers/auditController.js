@@ -120,9 +120,23 @@ const generateAuditReport = async (req, res) => {
     const totalAnalyses  = allAnalyses.length;
     const totalChecks    = complianceChecks.length;
 
-    const passedChecks   = complianceChecks.filter(c => c.status === 'passed').length;
-    const failedChecks   = complianceChecks.filter(c => c.status === 'failed').length;
-    const passRate       = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
+    const passedChecks   = complianceChecks.filter(c => c.status === 'passed' || c.status === 'COMPLIANT').length;
+    const failedChecks   = complianceChecks.filter(c => c.status === 'failed' || c.status === 'NON_COMPLIANT').length;
+    let passRate         = totalChecks > 0 ? Math.round((passedChecks / totalChecks) * 100) : 0;
+
+    // When compliance_checks is empty, derive pass rate from AI analysis scores.
+    if (totalChecks === 0 && allAnalyses.length > 0) {
+      const scored = allAnalyses.map((a) => {
+        const res = a.results || {};
+        if (res.compliance_score != null) return Number(res.compliance_score);
+        if (res.overall_audit_score != null) return Number(res.overall_audit_score);
+        return null;
+      }).filter((n) => n != null && !Number.isNaN(n));
+      if (scored.length) {
+        const passed = scored.filter((s) => s >= 70).length;
+        passRate = Math.round((passed / scored.length) * 100);
+      }
+    }
 
     // Risk levels from riskFactors.level or results.risk_level
     const getRisk = a => a.riskFactors?.level || a.results?.risk_level || 'low';

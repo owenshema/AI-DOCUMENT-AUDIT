@@ -271,13 +271,23 @@ const analyzeDocument = async (req, res) => {
     const document = await Document.findByPk(documentId);
     if (!document) return res.status(404).json({ error: 'Document not found' });
 
-    // Always re-extract from file so audit uses full document text (not stale sparse cache)
+    // Prefer cached text — re-OCR on every audit is the main delay for scans/photos.
+    // Pass forceReextract=true to refresh from disk.
+    const forceReextract = req.body?.forceReextract === true || req.query?.forceReextract === '1';
     let textToAnalyze = null;
+    const cachedText = (document.extractedText || '').trim();
     const filePath = resolveExistingPath(document.filePath);
-    if (filePath) {
+
+    if (!forceReextract && cachedText.length >= 80) {
+      textToAnalyze = cachedText;
+    } else if (filePath) {
       textToAnalyze = await extractTextFromFile(filePath, document.mimeType);
       if (textToAnalyze) {
-        await document.update({ extractedText: textToAnalyze.slice(0, 10000), ocrProcessed: true });
+        // Keep enough text for audits without blocking on a huge DB write
+        await document.update({
+          extractedText: textToAnalyze.slice(0, 50000),
+          ocrProcessed: true,
+        });
       } else {
         console.warn('[analyze] text extraction returned empty for', document.fileName || document.id);
       }
@@ -530,10 +540,10 @@ const bulkAnalyze = async (req, res) => {
         const doc = await Document.findByPk(docId);
         if (!doc) { results.push({ documentId: docId, status: 'not_found' }); continue; }
 
-        let text = null;
-        if (doc.filePath) {
+        let text = (doc.extractedText || '').trim().length >= 80 ? doc.extractedText : null;
+        if (!text && doc.filePath) {
           text = await extractTextFromFile(doc.filePath, doc.mimeType);
-          if (text) await doc.update({ extractedText: text.slice(0, 10000) });
+          if (text) await doc.update({ extractedText: text.slice(0, 50000), ocrProcessed: true });
         }
         if (!text) text = doc.extractedText;
         if (!text || text.trim().length < 25) {

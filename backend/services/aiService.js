@@ -168,12 +168,16 @@ function applyIntegrityGapsToScore(ruleResult, documentText, forgeryResult, cont
 }
 
 async function auditDocument(documentText, policyRules = [], context = {}) {
-  const ruleResult = runAudit(documentText, context);
-
-  const forgeryResult = await require('./forgeryDetectionService').analyzeDocument(documentText, {
+  // Start slow I/O (forgery Python + AI detect) immediately while ML audit runs in-process.
+  const forgeryPromise = require('./forgeryDetectionService').analyzeDocument(documentText, {
     filePath: context.filePath,
     imagePath: context.imagePath,
   });
+  const aiDetectionPromise = require('./aiContentDetectionService').detectAiContent(documentText)
+    .catch(function () { return null; });
+
+  const ruleResult = runAudit(documentText, context);
+  const forgeryResult = await forgeryPromise;
 
   ruleResult.document_inspection = ruleResult.document_inspection || {};
   ruleResult.document_inspection.forgery_analysis = forgeryResult;
@@ -306,15 +310,17 @@ async function auditDocument(documentText, policyRules = [], context = {}) {
   // Real AI-generated content detection (Sapling API, heuristic fallback).
   // Drives the "Authenticity" metric = 100 - ai_generated_percentage.
   try {
-    const aiDetection = await require('./aiContentDetectionService').detectAiContent(documentText);
-    ruleResult.ai_generated_percentage = aiDetection.ai_generated_percentage;
-    ruleResult.ai_threshold_exceeded = aiDetection.ai_threshold_exceeded;
-    ruleResult.ai_detection = {
-      assessed: aiDetection.assessed,
-      source: aiDetection.source,
-      threshold_percent: aiDetection.threshold,
-      detail: aiDetection.detail,
-    };
+    const aiDetection = await aiDetectionPromise;
+    if (aiDetection) {
+      ruleResult.ai_generated_percentage = aiDetection.ai_generated_percentage;
+      ruleResult.ai_threshold_exceeded = aiDetection.ai_threshold_exceeded;
+      ruleResult.ai_detection = {
+        assessed: aiDetection.assessed,
+        source: aiDetection.source,
+        threshold_percent: aiDetection.threshold,
+        detail: aiDetection.detail,
+      };
+    }
   } catch (e) {
     // Never let detection break an audit; leave engine default in place.
   }

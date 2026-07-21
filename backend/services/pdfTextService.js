@@ -97,7 +97,7 @@ async function extractOcrText(filePath, desiredExt) {
       try {
         var result = await execFileAsync(cmd[0], cmd.slice(1).concat([OCR_SCRIPT, ocrPath]), {
           cwd: cwd,
-          timeout: 120000,
+          timeout: 60000,
           maxBuffer: 10 * 1024 * 1024,
         });
         var text = (result.stdout || '').trim();

@@ -18,6 +18,7 @@ public class ComplianceService {
     private final ComplianceCheckRepository complianceCheckRepository;
     private final PolicyRepository policyRepository;
     private final DocumentRepository documentRepository;
+    private final DocumentAnalysisRepository documentAnalysisRepository;
 
     @Transactional(readOnly = true)
     public Page<ComplianceCheck> getAll(int page, int size) {
@@ -79,6 +80,19 @@ public class ComplianceService {
         long nonCompliant = complianceCheckRepository.countNonCompliant();
         long total = compliant + nonCompliant;
         double score = total > 0 ? (double) compliant / total * 100 : 0;
+
+        if (total == 0) {
+            Double avg = documentAnalysisRepository.averageComplianceScore();
+            long passed = documentAnalysisRepository.countPassingCompliance(70);
+            long scored = documentAnalysisRepository.countScoredAnalyses();
+            if (avg != null && scored > 0) {
+                score = avg;
+                compliant = passed;
+                nonCompliant = Math.max(0, scored - passed);
+                total = scored;
+            }
+        }
+
         return Map.of(
                 "complianceScore", Math.round(score * 10.0) / 10.0,
                 "compliant", compliant,

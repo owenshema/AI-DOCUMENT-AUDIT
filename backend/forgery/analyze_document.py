@@ -133,12 +133,15 @@ def detect_logo(img_np):
 
 def extract_text_and_check_fields(img_np, fallback_text=""):
     raw_text = (fallback_text or "").lower()
+    used_ocr = False
 
-    if TESSERACT_OK and pytesseract is not None:
+    # Skip Tesseract when Node already extracted usable text (biggest OCR win).
+    if len(raw_text.strip()) < 150 and TESSERACT_OK and pytesseract is not None:
         gray = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
         _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
         ocr_img = Image.fromarray(thresh)
         raw_text = pytesseract.image_to_string(ocr_img, config="--psm 6").lower()
+        used_ocr = True
 
     found_fields = {}
     missing_fields = []
@@ -158,7 +161,7 @@ def extract_text_and_check_fields(img_np, fallback_text=""):
         "dates_found": dates[:3],
         "text_length": len(raw_text),
         "raw_text_preview": raw_text[:200],
-        "ocr_engine": "tesseract" if TESSERACT_OK else "fallback",
+        "ocr_engine": "tesseract" if used_ocr else ("fallback" if raw_text else ("tesseract" if TESSERACT_OK else "fallback")),
     }
 
 
@@ -210,10 +213,11 @@ def analyze_document_image(img_path, fallback_text=""):
 def pdf_first_page_to_image(pdf_path, out_path):
     from pdf2image import convert_from_path
 
-    pages = convert_from_path(pdf_path, dpi=200, first_page=1, last_page=1)
+    # 120 DPI is enough for stamp/logo/signature heuristics after 1024 resize.
+    pages = convert_from_path(pdf_path, dpi=120, first_page=1, last_page=1)
     img = pages[0].convert("RGB").resize((1024, 1024), Image.LANCZOS)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
-    img.save(out_path, "JPEG", quality=95)
+    img.save(out_path, "JPEG", quality=85)
     return out_path
 
 
@@ -254,7 +258,7 @@ def prepare_image_path(input_path, temp_dir=None):
         img = Image.open(input_path).convert("RGB").resize((1024, 1024), Image.LANCZOS)
         os.makedirs(temp_dir, exist_ok=True)
         out_path = os.path.join(temp_dir, base + "_1024.jpg")
-        img.save(out_path, "JPEG", quality=95)
+        img.save(out_path, "JPEG", quality=85)
         return out_path
 
     if is_pdf:
@@ -273,11 +277,23 @@ def preprocess_for_onnx(image_path):
     return np.expand_dims(arr, axis=0)
 
 
-def run_onnx(image_path):
+_onnx_session = None
+
+
+def get_onnx_session():
+    global _onnx_session
     if ort is None or not os.path.isfile(ONNX_PATH):
         return None
+    if _onnx_session is None:
+        _onnx_session = ort.InferenceSession(ONNX_PATH, providers=["CPUExecutionProvider"])
+    return _onnx_session
 
-    session = ort.InferenceSession(ONNX_PATH, providers=["CPUExecutionProvider"])
+
+def run_onnx(image_path):
+    session = get_onnx_session()
+    if session is None:
+        return None
+
     input_name = session.get_inputs()[0].name
     logits = session.run(None, {input_name: preprocess_for_onnx(image_path)})[0][0]
     probs = 1.0 / (1.0 + np.exp(-logits))
@@ -291,10 +307,10 @@ def run_onnx(image_path):
     return dl_result
 
 
-def predict_document(input_path, fallback_text=""):
+def predict_document(input_path, fallback_text="", skip_onnx=False):
     img_path = prepare_image_path(input_path)
     rule_result = analyze_document_image(img_path, fallback_text=fallback_text)
-    dl_result = run_onnx(img_path)
+    dl_result = None if skip_onnx else run_onnx(img_path)
 
     combined_risk = dict(rule_result["forgery_risk"])
     if dl_result and dl_result.get("high_forgery_risk", {}).get("prob", 0) > DL_RISK_THRESHOLD:
@@ -370,13 +386,23 @@ def main():
     parser.add_argument("path", help="PDF or image path")
     parser.add_argument("--json", action="store_true", help="Print JSON result")
     parser.add_argument("--fallback-text", default="", help="PDF text fallback when OCR unavailable")
+    parser.add_argument("--fallback-text-file", default="", help="Path to UTF-8 text file used as OCR fallback")
+    parser.add_argument("--skip-onnx", action="store_true", help="Skip deep-learning model (faster)")
     args = parser.parse_args()
 
     if not os.path.exists(args.path):
         print(json.dumps({"error": f"File not found: {args.path}"}))
         return 1
 
-    result = predict_document(args.path, fallback_text=args.fallback_text)
+    fallback_text = args.fallback_text or ""
+    if args.fallback_text_file and os.path.isfile(args.fallback_text_file):
+        try:
+            with open(args.fallback_text_file, "r", encoding="utf-8", errors="ignore") as fh:
+                fallback_text = fh.read()
+        except OSError:
+            pass
+
+    result = predict_document(args.path, fallback_text=fallback_text, skip_onnx=bool(args.skip_onnx))
     payload = to_api_payload(result)
 
     if args.json:

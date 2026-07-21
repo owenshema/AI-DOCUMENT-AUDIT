@@ -14,9 +14,17 @@ public interface ComplianceCheckRepository extends JpaRepository<ComplianceCheck
     List<ComplianceCheck> findByPolicyId(String policyId);
     List<ComplianceCheck> findByStatus(ComplianceCheck.CheckStatus status);
 
-    @Query(value = "SELECT COUNT(*) FROM compliance_checks WHERE status = 'COMPLIANT'", nativeQuery = true)
+    /** Accepts both Node (`passed`) and Spring (`COMPLIANT`) status vocabularies. */
+    @Query(value = """
+            SELECT COUNT(*) FROM compliance_checks
+            WHERE UPPER(status) IN ('COMPLIANT', 'PASSED')
+            """, nativeQuery = true)
     long countCompliant();
 
-    @Query(value = "SELECT COUNT(*) FROM compliance_checks WHERE status = 'NON_COMPLIANT'", nativeQuery = true)
+    /** Accepts both Node (`failed`) and Spring (`NON_COMPLIANT`) status vocabularies. */
+    @Query(value = """
+            SELECT COUNT(*) FROM compliance_checks
+            WHERE UPPER(status) IN ('NON_COMPLIANT', 'FAILED')
+            """, nativeQuery = true)
     long countNonCompliant();
 }

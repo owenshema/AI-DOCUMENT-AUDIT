@@ -98,6 +98,27 @@ const getDashboard = async (req, res) => {
         ],
       });
       avgComplianceScore = Math.round(complianceChecks[0]?.dataValues?.avgScore || 0);
+
+      // AI audits write to document_analyses; compliance_checks is often empty.
+      if (!avgComplianceScore) {
+        const { DocumentAnalysis } = req.app.locals.models;
+        const analysisWhere = await scopedAnalysisWhere(req.app.locals.models, userId, role);
+        const analyses = await DocumentAnalysis.findAll({
+          where: analysisWhere,
+          attributes: ['results'],
+        });
+        const scores = analyses
+          .map((a) => {
+            const res = a.results || {};
+            if (res.compliance_score != null) return Number(res.compliance_score);
+            if (res.overall_audit_score != null) return Number(res.overall_audit_score);
+            return null;
+          })
+          .filter((n) => n != null && !Number.isNaN(n));
+        if (scores.length) {
+          avgComplianceScore = Math.round(scores.reduce((s, n) => s + n, 0) / scores.length);
+        }
+      }
     } catch (error) {
       console.error('Error calculating compliance score:', error);
     }
@@ -160,6 +181,8 @@ const getDashboardMetrics = async (req, res) => {
       ? Math.round((passedChecks / totalComplianceChecks) * 100)
       : 0;
 
+    // Prefer live AI analysis pass rate when compliance_checks has no rows
+    // (analyses are the source of truth after document audits).
     if (totalComplianceChecks === 0) {
       const analyses = await DocumentAnalysis.findAll({
         where: analysisWhere,
@@ -167,8 +190,8 @@ const getDashboardMetrics = async (req, res) => {
       });
       if (analyses.length > 0) {
         const passedAnalyses = analyses.filter(a => {
-          const score = a.results?.compliance_score;
-          if (score != null) return score >= 70;
+          const score = a.results?.compliance_score ?? a.results?.overall_audit_score;
+          if (score != null) return Number(score) >= 70;
           const risk = a.riskFactors?.level || a.results?.risk_level;
           return risk === 'low';
         }).length;
@@ -292,7 +315,7 @@ const getAuditTrend = async (req, res) => {
 
 const getComplianceOverview = async (req, res) => {
   try {
-    const { ComplianceCheck, Document } = req.app.locals.models;
+    const { ComplianceCheck, Document, DocumentAnalysis } = req.app.locals.models;
     const options = {};
     if (normalizeRole(req.user?.role) === 'client') {
       options.include = [{
@@ -304,20 +327,52 @@ const getComplianceOverview = async (req, res) => {
     }
 
     const allChecks = await ComplianceCheck.findAll(options);
-    const passedCount = allChecks.filter(c => c.status === 'passed').length;
-    const failedCount = allChecks.filter(c => c.status === 'failed').length;
-    const warningCount = allChecks.filter(c => c.status === 'warning').length;
+    const passedCount = allChecks.filter(c => c.status === 'passed' || c.status === 'COMPLIANT').length;
+    const failedCount = allChecks.filter(c => c.status === 'failed' || c.status === 'NON_COMPLIANT').length;
+    const warningCount = allChecks.filter(c => c.status === 'warning' || c.status === 'PARTIALLY_COMPLIANT').length;
+
+    if (allChecks.length > 0) {
+      return res.json({
+        overallScore: Math.round(allChecks.reduce((sum, c) => sum + (c.complianceScore || 0), 0) / allChecks.length),
+        statusDistribution: {
+          passed: passedCount,
+          failed: failedCount,
+          warning: warningCount,
+        },
+        totalChecksPerformed: allChecks.length,
+        source: 'compliance_checks',
+      });
+    }
+
+    // Fall back to AI analysis scores stored on document_analyses
+    const analysisWhere = await scopedAnalysisWhere(req.app.locals.models, req.user?.id, req.user?.role);
+    const analyses = await DocumentAnalysis.findAll({
+      where: analysisWhere,
+      attributes: ['results'],
+    });
+    const scores = analyses
+      .map((a) => {
+        const res = a.results || {};
+        if (res.compliance_score != null) return Number(res.compliance_score);
+        if (res.overall_audit_score != null) return Number(res.overall_audit_score);
+        return null;
+      })
+      .filter((n) => n != null && !Number.isNaN(n));
+    const passed = scores.filter((s) => s >= 70).length;
+    const failed = scores.filter((s) => s < 60).length;
+    const warning = scores.filter((s) => s >= 60 && s < 70).length;
 
     res.json({
-      overallScore: allChecks.length > 0
-        ? Math.round(allChecks.reduce((sum, c) => sum + (c.complianceScore || 0), 0) / allChecks.length)
+      overallScore: scores.length
+        ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length)
         : 0,
       statusDistribution: {
-        passed: passedCount,
-        failed: failedCount,
-        warning: warningCount,
+        passed,
+        failed,
+        warning,
       },
-      totalChecksPerformed: allChecks.length,
+      totalChecksPerformed: scores.length,
+      source: 'document_analyses',
     });
   } catch (error) {
     console.error('Get compliance overview error:', error);

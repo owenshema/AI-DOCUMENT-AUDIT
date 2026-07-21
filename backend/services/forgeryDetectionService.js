@@ -115,7 +115,7 @@ function analyzeText(documentText) {
 function writeTempText(documentText) {
   var tempDir = path.join(FORGERY_DIR, '..', 'data', 'audit_temp');
   fs.mkdirSync(tempDir, { recursive: true });
-  var tempPath = path.join(tempDir, 'fallback_text_' + Date.now() + '.txt');
+  var tempPath = path.join(tempDir, 'fallback_text_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.txt');
   fs.writeFileSync(tempPath, documentText || '', 'utf8');
   return tempPath;
 }
@@ -126,17 +126,23 @@ function runColabAnalysis(filePath, documentText) {
     return Promise.reject(new Error('file_not_found'));
   }
 
+  var text = (documentText || '').trim();
   var args = ['-3.12', ANALYZE_SCRIPT, resolved, '--json'];
   var tempTextPath = null;
 
-  if (documentText && documentText.trim()) {
-    tempTextPath = writeTempText(documentText);
-    args.push('--fallback-text', documentText.slice(0, 50000));
+  // Prefer a temp file over stuffing tens of KB onto argv (slow + fragile on Windows).
+  if (text) {
+    tempTextPath = writeTempText(text.slice(0, 100000));
+    args.push('--fallback-text-file', tempTextPath);
+    // Skip heavy ONNX reload when we already have usable document text.
+    if (text.length >= 200) {
+      args.push('--skip-onnx');
+    }
   }
 
   return execFileAsync('py', args, {
     cwd: FORGERY_DIR,
-    timeout: 180000,
+    timeout: 90000,
     maxBuffer: 4 * 1024 * 1024,
   }).then(function (result) {
     if (tempTextPath && fs.existsSync(tempTextPath)) {
@@ -147,6 +153,11 @@ function runColabAnalysis(filePath, documentText) {
     } catch (parseErr) {
       throw new Error('invalid_forgery_json');
     }
+  }).catch(function (err) {
+    if (tempTextPath && fs.existsSync(tempTextPath)) {
+      try { fs.unlinkSync(tempTextPath); } catch (e) { /* ignore */ }
+    }
+    throw err;
   });
 }
 
