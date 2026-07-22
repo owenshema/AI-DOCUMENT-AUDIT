@@ -17,7 +17,6 @@ const REPORT_META = {
   audit_findings_received: { title: 'Audit findings received', description: 'Summary of findings returned on their documents' },
   pending_review: { title: 'Pending review', description: 'Documents awaiting auditor assignment or action' },
   document_inventory: { title: 'Document inventory', description: 'Full list of all documents, owners, and current status' },
-  pipeline_status: { title: 'Pipeline status', description: 'Documents at each audit stage — pending, in-review, completed' },
   overdue_documents: { title: 'Overdue documents', description: 'Docs breaching SLA or stuck without auditor action' },
   rejection_revision_log: { title: 'Rejection & revision log', description: 'Documents returned for revision and resubmission counts' },
   version_history: { title: 'Version history', description: 'Revision trail across all document versions' },
@@ -462,7 +461,6 @@ async function buildReport(reportId, models, user, query) {
     audit_findings_received: buildAuditFindings,
     pending_review: buildPendingReview,
     document_inventory: buildDocumentInventory,
-    pipeline_status: buildPipelineStatus,
     overdue_documents: buildOverdueDocuments,
     rejection_revision_log: buildRejectionLog,
     version_history: buildVersionHistory,
@@ -656,25 +654,6 @@ async function buildDocumentInventory(models, user, ctx) {
         auditScore: score != null ? score + '%' : 'Not audited',
         uploadedAt: fmtDate(d.uploadedAt),
       };
-    }),
-  };
-}
-
-async function buildPipelineStatus(models, user, ctx) {
-  var docs = await models.Document.findAll({
-    where: Object.assign({}, ctx.where || {}, fieldInPeriod('uploadedAt', ctx)),
-    attributes: ['status'],
-  });
-  var counts = {};
-  docs.forEach(function (d) {
-    var s = d.status || 'unknown';
-    counts[s] = (counts[s] || 0) + 1;
-  });
-  return {
-    summary: { stages: Object.keys(counts).length, total: docs.length },
-    columns: [{ key: 'stage', label: 'Stage' }, { key: 'count', label: 'Documents' }],
-    rows: Object.keys(counts).sort().map(function (stage) {
-      return { stage: stage, count: counts[stage] };
     }),
   };
 }
@@ -1357,7 +1336,7 @@ const ACCESS_MAP = {
   client: ['my_documents_status', 'activity_report', 'upload_history', 'audit_findings_received'],
   document_manager: [
     'my_documents_status', 'activity_report', 'upload_history', 'pending_review',
-    'pipeline_status', 'document_compliance',
+    'document_compliance',
   ],
   auditor: [
     'my_audit_queue', 'audit_completion_rate', 'activity_report', 'common_findings',
@@ -1366,7 +1345,7 @@ const ACCESS_MAP = {
   administrator: [
     'activity_report', 'user_activity', 'all_users', 'document_inventory',
     'document_compliance', 'system_audit_summary', 'auditor_performance',
-    'pipeline_status', 'system_health', 'ai_confidence_scores', 'inactive_users',
+    'system_health', 'ai_confidence_scores', 'inactive_users',
   ],
 };
 

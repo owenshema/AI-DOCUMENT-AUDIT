@@ -37,24 +37,28 @@ async function buildMarkedDocumentPdf(filePath, extractedText, markup) {
     return { height, width, lpp: linesPerPage(height) };
   });
 
-  // Marks with no line match — legend block on page 1
-  const unplaced = positioned.filter(m => m.lineIndex == null);
-  if (unplaced.length && pages[0]) {
+  // Always put a marks legend at the top of page 1 so mistakes are visible first.
+  if (positioned.length && pages[0]) {
     const p0 = pages[0];
     const { height, width } = p0.getSize();
     let y = height - 28;
-    p0.drawText('AUDIT MISTAKES (see marks below)', {
+    p0.drawText(`AUDIT MARKS (${positioned.length}) — see red X on document`, {
       x: 36, y, size: 9, font, color: MARK_COLOR,
     });
-    y -= 14;
-    unplaced.slice(0, 6).forEach((m, i) => {
+    y -= 12;
+    positioned.slice(0, 8).forEach((m, i) => {
       drawCrossMark(p0, font, 36, y, 12);
       p0.drawText(`${i + 1}. ${String(m.text).slice(0, 72)}`, {
         x: 52, y: y - 2, size: 7, font, color: MARK_COLOR,
         maxWidth: width - 70,
       });
-      y -= 12;
+      y -= 11;
     });
+    if (positioned.length > 8) {
+      p0.drawText(`… and ${positioned.length - 8} more (inline below)`, {
+        x: 52, y: y - 2, size: 7, font, color: MARK_COLOR,
+      });
+    }
   }
 
   positioned.forEach((mark, markIdx) => {
@@ -193,6 +197,23 @@ async function buildMarkedTextPdf(extractedText, markup, title = 'Document') {
     doc.fontSize(8).fillColor('#dc2626').text('Red X marks indicate mistakes found during audit.');
     doc.moveDown(0.5);
 
+    // Marks summary always at the top of the document
+    const allMarks = [
+      ...(view.markup || []).filter(m => m.lineIndex != null),
+      ...(view.unplacedMarks || []),
+    ];
+    if (allMarks.length) {
+      doc.fontSize(11).fillColor('#dc2626').text(`AUDIT MARKS (${allMarks.length}) — listed at top of document`);
+      doc.moveDown(0.3);
+      allMarks.forEach((m, i) => {
+        const lineHint = m.lineIndex != null ? ` [line ${m.lineIndex + 1}]` : '';
+        doc.fontSize(9).fillColor('#dc2626').text(`X  ${i + 1}. ${String(m.text).slice(0, 100)}${lineHint}`);
+      });
+      doc.moveDown(0.8);
+      doc.fontSize(9).fillColor('#374151').text('Document text with inline marks:');
+      doc.moveDown(0.3);
+    }
+
     view.lines.forEach(row => {
       if (row.hasMark) {
         doc.fontSize(10).fillColor('#dc2626').text(`X  ${row.text || ''}`);
@@ -203,15 +224,6 @@ async function buildMarkedTextPdf(extractedText, markup, title = 'Document') {
         doc.fontSize(9).fillColor('#374151').text(row.text || ' ');
       }
     });
-
-    if (view.unplacedMarks.length) {
-      doc.addPage();
-      doc.fontSize(11).fillColor('#dc2626').text('Additional issues (not tied to a line)');
-      doc.moveDown(0.5);
-      view.unplacedMarks.forEach((m, i) => {
-        doc.fontSize(9).fillColor('#dc2626').text(`X  ${i + 1}. ${m.text}`);
-      });
-    }
 
     doc.end();
   });

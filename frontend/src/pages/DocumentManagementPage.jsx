@@ -946,32 +946,16 @@ export default function DocumentManagementPage() {
               </button>
             </div>
 
+            <div className="mb-4">
+              <p className={`mb-2 text-xs font-semibold ${text}`}>Document with red ✕ marks</p>
+              <AnnotatedDocumentPreview documentId={reviewDoc.id} isDarkMode={isDarkMode} />
+            </div>
+
             {reviewDoc.metadata?.statusReason && (
               <p className={`mb-3 rounded-xl border px-3 py-2 text-xs ${isDarkMode ? 'border-blue-400/30 bg-blue-600/10 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-900'}`}>
                 Auditor note: {reviewDoc.metadata.statusReason}
               </p>
             )}
-
-            <div className="mb-4 space-y-2">
-              <p className={`text-xs font-semibold text-red-400`}>Mistakes marked in red ({reviewDoc.auditMarkup?.length || 0})</p>
-              {(reviewDoc.auditMarkup || []).length === 0 ? (
-                <p className={`text-xs ${sub}`}>No mistakes flagged — document passed audit.</p>
-              ) : (
-                <ul className="max-h-48 space-y-2 overflow-y-auto">
-                  {reviewDoc.auditMarkup.map(item => (
-                    <li key={item.id} className={`rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300`}>
-                      <span className="font-semibold uppercase text-[10px] text-red-400">{item.type?.replace(/_/g, ' ')} · {item.severity}</span>
-                      <p className="mt-1">{item.text}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="mb-4">
-              <p className={`mb-2 text-xs font-semibold ${text}`}>Document with red ✕ marks</p>
-              <AnnotatedDocumentPreview documentId={reviewDoc.id} isDarkMode={isDarkMode} />
-            </div>
 
             <div className="mb-4 flex flex-wrap gap-2">
               <button onClick={() => handleDownloadMarkedDocument(reviewDoc)} disabled={exportingId === reviewDoc.id}

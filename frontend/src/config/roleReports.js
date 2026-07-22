@@ -50,7 +50,7 @@ export const ACCESS_BY_ROLE = {
   client: [CLIENT_REPORT_ID, 'activity_report', 'upload_history', 'audit_findings_received'],
   document_manager: [
     CLIENT_REPORT_ID, 'activity_report', 'upload_history', 'pending_review',
-    'pipeline_status', 'document_compliance',
+    'document_compliance',
   ],
   auditor: [
     'my_audit_queue', 'audit_completion_rate', 'activity_report', 'common_findings',
@@ -59,7 +59,7 @@ export const ACCESS_BY_ROLE = {
   administrator: [
     'activity_report', 'user_activity', 'all_users', 'document_inventory',
     'document_compliance', 'system_audit_summary', 'auditor_performance',
-    'pipeline_status', 'system_health', 'ai_confidence_scores', 'inactive_users',
+    'system_health', 'ai_confidence_scores', 'inactive_users',
   ],
 };
 
@@ -112,12 +112,6 @@ export const ROLE_REPORTS = [
     section: 'document_manager',
     title: 'Pending review',
     description: 'Your documents still awaiting auditor action',
-  },
-  {
-    id: 'pipeline_status',
-    section: 'document_manager',
-    title: 'Pipeline status',
-    description: 'Documents at each audit stage',
   },
   {
     id: 'document_compliance',
@@ -175,12 +169,6 @@ export const ROLE_REPORTS = [
     section: 'administrator',
     title: 'Auditor performance',
     description: 'Completed audits and average scores per auditor',
-  },
-  {
-    id: 'pipeline_status',
-    section: 'administrator',
-    title: 'Pipeline status',
-    description: 'Documents at each audit stage',
   },
   {
     id: 'ai_confidence_scores',
