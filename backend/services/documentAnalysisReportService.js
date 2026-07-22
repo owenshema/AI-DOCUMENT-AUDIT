@@ -184,6 +184,45 @@ function renderAnnotatedPdfBody(doc, ctx, startY) {
     y += 22;
   };
 
+  // ── Mistakes first (top of annotated report) ──
+  if (annotated) {
+    doc.fontSize(14).font('Helvetica-Bold').fillColor('#dc2626').text('AUDIT MARKS', 50, y);
+    y += 16;
+    doc.fontSize(8).font('Helvetica').fillColor(muted)
+      .text('Listed at the top of this report — review before release.', 50, y);
+    y += 14;
+    doc.fontSize(9).font('Helvetica').fillColor(body)
+      .text(markup.length ? `${markup.length} item(s) marked for review` : 'No mistakes flagged.', 50, y);
+    y += 18;
+
+    if (!markup.length) {
+      writeText('Document passed audit checks with no marked mistakes.', {
+        fontSize: 9,
+        color: body,
+        spacing: 8,
+      });
+    } else {
+      markup.forEach((item, i) => {
+        ensureSpace(56);
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#dc2626')
+          .text(`X  ${i + 1}. ${item.type.toUpperCase()} · ${item.severity}`, 50, y);
+        y += 13;
+        writeText(item.text, { fontSize: 9, font: 'Helvetica', color: body, spacing: 4 });
+        if (item.location) {
+          writeText(`Location: ${item.location}`, { fontSize: 8, color: muted, spacing: 4 });
+        }
+        if (item.status) {
+          writeText(`Status: ${item.status}`, { fontSize: 8, color: muted, spacing: 10 });
+        }
+        if (i < markup.length - 1) {
+          doc.moveTo(50, y).lineTo(545, y).strokeColor(line).lineWidth(0.5).stroke();
+          y += 10;
+        }
+      });
+    }
+    sectionRule();
+  }
+
   // ── Status (plain text, no colored banner) ──
   ensureSpace(28);
   doc.fontSize(10).font('Helvetica-Bold').fillColor(ink)
@@ -200,43 +239,10 @@ function renderAnnotatedPdfBody(doc, ctx, startY) {
   renderScoreRow('Overall audit score', overallScore);
   sectionRule();
 
-  // ── Mistakes only (annotated) ──
+  // ── Full analysis (non-annotated exports) ──
   if (annotated) {
-    doc.fontSize(11).font('Helvetica-Bold').fillColor(ink).text('Mistakes', 50, y);
-    y += 8;
-    doc.fontSize(8).font('Helvetica').fillColor(muted)
-      .text(markup.length ? `${markup.length} item(s) marked for review` : 'No mistakes flagged.', 50, y + 6);
-    y += 22;
-
-    if (!markup.length) {
-      writeText('Document passed audit checks with no marked mistakes.', {
-        fontSize: 9,
-        color: body,
-        spacing: 8,
-      });
-    } else {
-      markup.forEach((item, i) => {
-        ensureSpace(56);
-        doc.fontSize(9).font('Helvetica-Bold').fillColor(ink)
-          .text(`${i + 1}. ${item.type.toUpperCase()} · ${item.severity}`, 50, y);
-        y += 13;
-        writeText(item.text, { fontSize: 9, font: 'Helvetica', color: body, spacing: 4 });
-        if (item.location) {
-          writeText(`Location: ${item.location}`, { fontSize: 8, color: muted, spacing: 4 });
-        }
-        if (item.status) {
-          writeText(`Status: ${item.status}`, { fontSize: 8, color: muted, spacing: 10 });
-        }
-        if (i < markup.length - 1) {
-          doc.moveTo(50, y).lineTo(545, y).strokeColor(line).lineWidth(0.5).stroke();
-          y += 10;
-        }
-      });
-    }
     return y;
   }
-
-  // ── Full analysis (non-annotated exports) ──
   const sections = buildReportSections(document, analysis, ctx.auditorUser);
   doc.fontSize(11).font('Helvetica-Bold').fillColor(ink).text('Analysis', 50, y);
   y += 18;

@@ -15,7 +15,7 @@ const {
   documentNeedsAudit,
 } = require('../utils/documentAudit');
 const { buildAuditMarkup, managerReviewStatusFromAudit, attachMarkupPositions } = require('../services/auditMarkupService');
-const { buildMarkedDocumentPdf, buildMarkedTextView, buildMarkedTextPdf } = require('../services/documentMarkedPdfService');
+const { buildMarkedDownloadPdf, buildMarkedTextView } = require('../services/documentMarkedPdfService');
 
 const REQUEST_PENDING_PATH = '__CLIENT_REQUEST_PENDING__';
 
@@ -2094,20 +2094,19 @@ const downloadMarkedDocument = async (req, res) => {
     }
 
     const safeName = (document.title || document.fileName || 'document').replace(/[^a-z0-9_-]+/gi, '_').slice(0, 40);
-    const isPdf = (document.fileFormat || '').toUpperCase() === 'PDF'
-      || (document.fileName || '').toLowerCase().endsWith('.pdf');
 
-    if (isPdf && filePath) {
-      const pdfBytes = await buildMarkedDocumentPdf(filePath, text, markup);
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="marked_${safeName}.pdf"`);
-      return res.send(Buffer.from(pdfBytes));
-    }
-
-    const pdfBuffer = await buildMarkedTextPdf(text, markup, document.title || document.fileName);
+    // All document types: AUDIT MARKS page first, then original content.
+    const pdfBytes = await buildMarkedDownloadPdf({
+      filePath,
+      extractedText: text,
+      markup,
+      title: document.title || document.fileName,
+      mimeType: document.mimeType,
+      fileName: document.fileName,
+    });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="marked_${safeName}.pdf"`);
-    return res.send(pdfBuffer);
+    return res.send(Buffer.from(pdfBytes));
   } catch (error) {
     console.error('Download marked document error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate marked document' });
